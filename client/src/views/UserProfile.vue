@@ -2,19 +2,55 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { users } from '../api'
+import { useAuthStore } from '../stores'
 
 const route = useRoute()
+const authStore = useAuthStore()
 const user = ref(null)
 const photos = ref([])
 const loading = ref(false)
 const page = ref(1)
 const totalPages = ref(1)
 
+// 编辑资料相关状态
+const showEditModal = ref(false)
+const editForm = ref({
+  nickname: '',
+  bio: ''
+})
+const saving = ref(false)
+
 const hasMore = computed(() => page.value < totalPages.value)
 const isOwnProfile = computed(() => {
-  // 这个可以在其他地方判断
-  return false
+  return authStore.user && authStore.user.id === parseInt(route.params.id)
 })
+
+// 打开编辑弹窗
+const openEditModal = () => {
+  if (user.value) {
+    editForm.value = {
+      nickname: user.value.nickname || '',
+      bio: user.value.bio || ''
+    }
+    showEditModal.value = true
+  }
+}
+
+// 保存资料
+const saveProfile = async () => {
+  saving.value = true
+  try {
+    const res = await users.updateProfile(editForm.value)
+    user.value = { ...user.value, ...res.user }
+    authStore.user = { ...authStore.user, ...res.user }
+    showEditModal.value = false
+  } catch (e) {
+    console.error('保存失败', e)
+    alert(e.response?.data?.error || '保存失败')
+  } finally {
+    saving.value = false
+  }
+}
 
 const fetchUser = async () => {
   try {
@@ -87,12 +123,25 @@ onMounted(async () => {
           <p class="username">@{{ user.username }}</p>
           <p v-if="user.bio" class="bio">{{ user.bio }}</p>
           <div class="stats">
-            <span class="stat">
-              <strong>{{ user.photoCount || 0 }}</strong> 照片
-            </span>
-            <span class="stat">
-              加入于 {{ new Date(user.created_at).toLocaleDateString() }}
-            </span>
+            <div class="stat-item">
+              <strong>{{ user.photoCount || 0 }}</strong>
+              <span>公开照片</span>
+            </div>
+            <div v-if="isOwnProfile" class="stat-item">
+              <strong>{{ user.totalPhotoCount || 0 }}</strong>
+              <span>全部照片</span>
+            </div>
+            <div class="stat-item">
+              <strong>{{ user.favoriteCount || 0 }}</strong>
+              <span>被收藏</span>
+            </div>
+          </div>
+
+          <!-- 操作按钮 -->
+          <div v-if="isOwnProfile" class="profile-actions">
+            <button class="btn-edit" @click="openEditModal">编辑资料</button>
+            <router-link to="/admin" class="btn-link">管理照片</router-link>
+            <router-link to="/favorites" class="btn-link">我的收藏</router-link>
           </div>
         </div>
       </div>
@@ -135,6 +184,39 @@ onMounted(async () => {
         <button @click="loadMore" :disabled="loading">
           {{ loading ? '加载中...' : '加载更多' }}
         </button>
+      </div>
+
+      <!-- 编辑资料弹窗 -->
+      <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
+        <div class="modal-content">
+          <h2>编辑个人资料</h2>
+          <form @submit.prevent="saveProfile">
+            <div class="form-group">
+              <label>昵称</label>
+              <input
+                v-model="editForm.nickname"
+                type="text"
+                placeholder="显示名称"
+                maxlength="50"
+              />
+            </div>
+            <div class="form-group">
+              <label>个人简介</label>
+              <textarea
+                v-model="editForm.bio"
+                placeholder="介绍一下自己吧..."
+                maxlength="200"
+                rows="3"
+              ></textarea>
+            </div>
+            <div class="form-actions">
+              <button type="button" class="btn-cancel" @click="showEditModal = false">取消</button>
+              <button type="submit" class="btn-save" :disabled="saving">
+                {{ saving ? '保存中...' : '保存' }}
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   </div>
@@ -195,13 +277,145 @@ onMounted(async () => {
 
 .stats {
   display: flex;
-  gap: 24px;
+  gap: 32px;
+  margin-bottom: 20px;
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+.stat-item strong {
+  font-size: 1.5rem;
+  color: #333;
+}
+
+.stat-item span {
+  font-size: 0.85rem;
   color: #666;
 }
 
-.stat strong {
+.profile-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-edit {
+  padding: 8px 20px;
+  background: var(--secondary-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: opacity 0.2s;
+}
+
+.btn-edit:hover {
+  opacity: 0.9;
+}
+
+.btn-link {
+  padding: 8px 20px;
+  background: #f5f5f5;
   color: #333;
-  margin-right: 4px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 0.9rem;
+  transition: background 0.2s;
+}
+
+.btn-link:hover {
+  background: #eee;
+}
+
+/* 编辑弹窗样式 */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: #fff;
+  padding: 32px;
+  border-radius: 16px;
+  width: 90%;
+  max-width: 420px;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-content h2 {
+  margin-bottom: 24px;
+  font-size: 1.3rem;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.form-group input,
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  font-size: 1rem;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 24px;
+}
+
+.btn-cancel {
+  padding: 10px 20px;
+  background: #f5f5f5;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-save {
+  padding: 10px 24px;
+  background: var(--secondary-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.btn-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .divider {
