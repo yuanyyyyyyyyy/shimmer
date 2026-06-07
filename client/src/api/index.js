@@ -2,7 +2,7 @@ import axios from 'axios'
 
 const api = axios.create({
   baseURL: '/api',
-  timeout: 10000
+  timeout: 60000
 })
 
 // 请求拦截器
@@ -96,6 +96,15 @@ export const tags = {
   delete: (id) => api.delete(`/tags/${id}`),
   getPhotoTags: (photoId) => api.get(`/tags/photo/${photoId}`),
   setPhotoTags: (photoId, tagIds) => api.post(`/tags/photo/${photoId}`, { tagIds })
+}
+
+// AI
+export const ai = {
+  getConfig: () => api.get('/ai/config'),
+  saveConfig: (data) => api.post('/ai/config', data),
+  getOllamaModels: () => api.get('/ai/ollama/models'),
+  generateMetadata: (data) => api.post('/ai/metadata', data),
+  rewriteSearch: (q) => api.get('/ai/search', { params: { q } })
 }
 
 export default api

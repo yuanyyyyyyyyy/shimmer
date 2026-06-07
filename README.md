@@ -17,6 +17,7 @@
 - **暗房模式** - 沉浸式浏览照片，暗色背景突出主体
 - **时间线视图** - 按时间顺序浏览照片
 - **地图视图** - 按地理位置浏览照片
+- **智能 AI 助手** - 自动生成照片标题、心情和标签建议，增强搜索体验
 - **收藏功能** - 用户可收藏喜欢的照片
 - **响应式设计** - 完美适配桌面端和移动端
 
@@ -104,6 +105,43 @@ JWT_SECRET=your_jwt_secret
 PORT=3000
 FRONTEND_URL=http://localhost:5173
 UPLOAD_DIR=uploads
+
+# AI 配置
+AI_PROVIDER=ollama
+AI_MODEL=llama2
+AI_BASE_URL=http://127.0.0.1:11434
+AI_API_KEY=
+AI_TIMEOUT=10000
+```
+
+本项目默认支持本地 `ollama` 模型，也可扩展为远程模型提供者。
+
+### AI 本地部署（推荐）
+
+1. 安装 Ollama：
+   - macOS / Linux / Windows 请参考 https://ollama.com/docs/install
+2. 启动本地模型：
+
+```bash
+ollama run llama2
+```
+
+3. 确认模型运行在默认地址：
+
+```bash
+curl http://127.0.0.1:11434/v1/models
+```
+
+4. 启用项目 AI：
+
+在 `server/.env` 中设置：
+
+```env
+AI_PROVIDER=ollama
+AI_MODEL=llama2
+AI_BASE_URL=http://127.0.0.1:11434
+AI_API_KEY=
+AI_TIMEOUT=10000
 ```
 
 ### 4. 安装依赖
@@ -186,6 +224,11 @@ npm run dev
 - `POST /api/photos` - 上传照片（需认证）
 - `PUT /api/photos/:id` - 更新照片（需认证）
 - `DELETE /api/photos/:id` - 删除照片（需认证）
+
+### AI
+- `GET /api/ai/config` - 获取当前 AI 配置
+- `POST /api/ai/metadata` - 生成照片标题 / 心情 / 标签建议
+- `GET /api/ai/search?q=...` - 生成 AI 搜索词和标签建议
 
 ### 收藏
 - `GET /api/favorites` - 获取收藏列表

@@ -2,13 +2,18 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores'
-import { photos, upload, tags } from '../api'
+import { photos, upload, tags, ai } from '../api'
 import { success, error, confirm } from '../composables/useToast'
 import DragDropUpload from '../components/DragDropUpload.vue'
 import { extractExif } from '../composables/useExif'
 
 const router = useRouter()
 const authStore = useAuthStore()
+
+const aiConfig = ref({ enabled: false, provider: null, model: null, base_url: null, timeout: 0 })
+const aiForm = ref({ enabled: false, provider: '', model: '', base_url: '', api_key: '' })
+const aiSaveLoading = ref(false)
+const aiEnabled = computed(() => aiConfig.value.enabled)
 
 // 照片列表
 const photoList = ref([])
@@ -29,6 +34,8 @@ const selectedTags = ref([])
 const showForm = ref(false)
 const uploadMode = ref('single') // 'single' | 'batch'
 const editingPhoto = ref(null)
+const aiLoading = ref(false)
+const aiTags = ref([])
 const form = ref({
   title: '',
   mood: '',
@@ -56,9 +63,47 @@ onMounted(async () => {
     router.push('/my')
     return
   }
+  await loadAiConfig()
   loadPhotos()
   loadTags()
 })
+
+// 加载 AI 配置
+const loadAiConfig = async () => {
+  try {
+    const res = await ai.getConfig()
+    aiConfig.value = res.config || aiConfig.value
+    const config = aiConfig.value
+    aiForm.value = {
+      enabled: Boolean(config.enabled),
+      provider: config.provider || '',
+      model: config.model || '',
+      base_url: config.base_url || config.baseUrl || '',
+      api_key: config.apiKey || ''
+    }
+  } catch (e) {
+    console.error('加载 AI 配置失败:', e)
+  }
+}
+
+const saveAiConfig = async () => {
+  aiSaveLoading.value = true
+  try {
+    await ai.saveConfig({
+      enabled: aiForm.value.enabled,
+      provider: aiForm.value.provider || null,
+      model: aiForm.value.model || null,
+      base_url: aiForm.value.base_url || null,
+      api_key: aiForm.value.api_key || null
+    })
+    await loadAiConfig()
+    success('AI 配置已保存')
+  } catch (e) {
+    error(e.response?.data?.error || '保存 AI 配置失败')
+  } finally {
+    aiSaveLoading.value = false
+  }
+}
 
 // 加载标签
 const loadTags = async () => {
@@ -81,6 +126,44 @@ const createTag = async () => {
     success('标签创建成功')
   } catch (e) {
     error(e.response?.data?.error || '创建失败')
+  }
+}
+
+// AI 自动补全标题、心情和标签建议
+const generateAiMetadata = async () => {
+  if (!form.value.url) {
+    error('请先上传图片后再生成 AI 建议')
+    return
+  }
+
+  if (!aiEnabled.value) {
+    error('AI 未启用，请检查服务器 AI 设置')
+    return
+  }
+
+  aiLoading.value = true
+  aiTags.value = []
+
+  try {
+    const res = await ai.generateMetadata({
+      url: form.value.url,
+      location: form.value.location,
+      shot_date: form.value.shot_date
+    })
+
+    const metadata = res.metadata || {}
+    if (metadata.title) {
+      form.value.title = metadata.title
+    }
+    if (metadata.mood) {
+      form.value.mood = metadata.mood
+    }
+    aiTags.value = Array.isArray(metadata.tags) ? metadata.tags : []
+    success('AI 建议已生成，可自行调整后保存')
+  } catch (err) {
+    error(err.response?.data?.error || 'AI 自动补全失败')
+  } finally {
+    aiLoading.value = false
   }
 }
 
@@ -180,12 +263,17 @@ const handleSubmit = async () => {
 
   try {
     let photoId
+    const payload = { ...data }
+    if (aiTags.value.length > 0) {
+      payload.ai_tags = aiTags.value
+    }
+
     if (editingPhoto.value) {
-      await photos.update(editingPhoto.value.id, data)
+      await photos.update(editingPhoto.value.id, payload)
       photoId = editingPhoto.value.id
       success('更新成功')
     } else {
-      const res = await photos.create(data)
+      const res = await photos.create(payload)
       photoId = res.photo.id
       success('创建成功')
     }
@@ -238,6 +326,8 @@ const getVisibilityLabel = (visibility) => {
 // 编辑
 const handleEdit = async (photo) => {
   editingPhoto.value = photo
+  aiTags.value = []
+  aiLoading.value = false
   form.value = { ...photo }
   
   // 加载照片的标签
@@ -256,6 +346,8 @@ const resetForm = () => {
   editingPhoto.value = null
   selectedTags.value = []
   uploadedPhotos.value = []
+  aiTags.value = []
+  aiLoading.value = false
   form.value = {
     title: '',
     mood: '',
@@ -297,7 +389,10 @@ const handleBatchSave = async () => {
         visibility: form.value.visibility
       }
       
-      const res = await photos.create(data)
+      const res = await photos.create({
+        ...data,
+        ai_tags: aiTags.value
+      })
       
       // 保存标签
       if (selectedTags.value.length > 0) {
@@ -331,6 +426,45 @@ const handleLogout = () => {
         <div class="header-actions">
           <button @click="showForm = true; resetForm()">+ 上传照片</button>
           <button class="logout" @click="handleLogout">登出</button>
+        </div>
+      </div>
+
+      <!-- AI 全局设置 -->
+      <div class="ai-settings-panel">
+        <h3>AI 全局配置</h3>
+        <div class="ai-settings-grid">
+          <label>
+            <span>是否启用 AI</span>
+            <input type="checkbox" v-model="aiForm.enabled" />
+          </label>
+          <label>
+            <span>AI 提供商</span>
+            <select v-model="aiForm.provider">
+              <option value="">请选择</option>
+              <option value="ollama">Ollama</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </label>
+          <label>
+            <span>模型名称</span>
+            <input type="text" v-model="aiForm.model" placeholder="例如：llama2 或 gpt-4" />
+          </label>
+          <label>
+            <span>Base URL</span>
+            <input type="text" v-model="aiForm.base_url" placeholder="例如：http://127.0.0.1:11434" />
+          </label>
+          <label>
+            <span>API Key</span>
+            <input type="text" v-model="aiForm.api_key" placeholder="仅远程模型需要" />
+          </label>
+        </div>
+        <div class="ai-settings-actions">
+          <button type="button" @click="saveAiConfig" :disabled="aiSaveLoading">
+            {{ aiSaveLoading ? '保存中...' : '保存 AI 配置' }}
+          </button>
+          <span class="ai-settings-tip">
+            保存后，系统将使用该配置为 AI 生成功能提供支持。
+          </span>
         </div>
       </div>
 
@@ -410,6 +544,23 @@ const handleLogout = () => {
             <div class="form-group">
               <label>心情/日记</label>
               <textarea v-model="form.mood" placeholder="一句话日记..." rows="3"></textarea>
+            </div>
+            <div class="ai-action">
+              <button type="button" class="ai-button" @click="generateAiMetadata" :disabled="aiLoading || !form.url || !aiEnabled">
+                {{ aiLoading ? 'AI 正在生成...' : 'AI 自动补全' }}
+              </button>
+              <span class="ai-hint" v-if="aiEnabled">
+                AI 已启用：{{ aiConfig.provider || '未知' }} / {{ aiConfig.model || '默认模型' }}
+              </span>
+              <span class="ai-hint ai-disabled" v-else>
+                AI 未启用：请配置本地 Ollama 或远程模型，检查服务器设置。
+              </span>
+            </div>
+            <div class="form-group" v-if="aiTags.length > 0">
+              <label>AI 建议标签</label>
+              <div class="ai-tags">
+                <span v-for="tag in aiTags" :key="tag" class="ai-tag">{{ tag }}</span>
+              </div>
             </div>
             <div class="form-row">
               <div class="form-group">
@@ -728,6 +879,42 @@ const handleLogout = () => {
   padding: 10px;
   border: 1px solid var(--input-border);
   border-radius: 6px;
+}
+.ai-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+.ai-button {
+  padding: 10px 18px;
+  border: none;
+  border-radius: 8px;
+  background: var(--secondary-color);
+  color: #fff;
+  cursor: pointer;
+  transition: transform 0.2s, opacity 0.2s;
+}
+.ai-button:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.ai-hint {
+  color: var(--text-secondary);
+  font-size: 0.9rem;
+}
+.ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ai-tag {
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(52, 152, 219, 0.15);
+  color: var(--primary-color);
+  font-size: 12px;
 }
 
 .tags-selector {

@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../config/database.js';
+import { summarizeReview } from '../services/ai.js';
 
 const router = Router();
 
@@ -105,6 +106,16 @@ router.get('/:year', async (req, res, next) => {
       [yearInt]
     );
 
+    const reviewText = await summarizeReview({
+      totalPhotos: yearStats[0].total_photos || 0,
+      totalSize: yearStats[0].total_size || 0,
+      topTags,
+      topLocations,
+      firstPhoto: dateRange[0].first_photo,
+      lastPhoto: dateRange[0].last_photo,
+      photosWithGps: gpsStats[0].count || 0
+    });
+
     res.json({
       year: yearInt,
       totalPhotos: yearStats[0].total_photos || 0,
@@ -116,7 +127,8 @@ router.get('/:year', async (req, res, next) => {
       lastPhoto: dateRange[0].last_photo,
       avgWidth: sizeStats[0].avg_width ? Math.round(sizeStats[0].avg_width) : 0,
       avgHeight: sizeStats[0].avg_height ? Math.round(sizeStats[0].avg_height) : 0,
-      photosWithGps: gpsStats[0].count || 0
+      photosWithGps: gpsStats[0].count || 0,
+      aiSummary: reviewText
     });
   } catch (err) {
     next(err);

@@ -76,14 +76,11 @@ const loadPhotos = async (reset = false) => {
     if (tag) {
       params.tag = tag
     }
-    
-    // 如果是"我的照片"模式且已登录
-    if (viewMode.value === 'my' && authStore.isLoggedIn) {
-      params.user_id = authStore.user.id
-      params.visibility = 'all' // 显示包括私有的所有照片
-    }
-    
-    const res = await photos.list(params)
+
+    const res = viewMode.value === 'my' && authStore.isLoggedIn
+      ? await photos.getMyPhotos(params)
+      : await photos.list(params)
+
     if (reset) {
       photoList.value = res.data
       page.value = 1

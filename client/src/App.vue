@@ -1,16 +1,20 @@
 <script setup>
-import { ref, onMounted, watch, computed } from 'vue'
-import { RouterLink, RouterView, useRouter } from 'vue-router'
-import { tags } from './api'
+import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
+import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
+import { tags, ai } from './api'
 import { useAuthStore } from './stores'
 
 const router = useRouter()
+const route = useRoute()
 const authStore = useAuthStore()
 const searchQuery = ref('')
+const searchSuggestions = ref([])
+const suggestionsLoading = ref(false)
 const popularTags = ref([])
 const showTags = ref(false)
 const isDarkMode = ref(false)
 const showUserMenu = ref(false)
+const showPopularTags = computed(() => showTags.value && !searchQuery.value.trim())
 
 // 加载热门标签
 const loadPopularTags = async () => {
@@ -26,6 +30,37 @@ const handleSearch = () => {
   if (query) {
     router.push({ path: '/', query: { search: query } })
     showTags.value = false
+    searchSuggestions.value = []
+  }
+}
+
+const selectSuggestion = (value) => {
+  searchQuery.value = value
+  router.push({ path: '/', query: { search: value } })
+  searchSuggestions.value = []
+  showTags.value = false
+}
+
+const fetchSearchSuggestions = async (query) => {
+  if (!query) {
+    searchSuggestions.value = []
+    return
+  }
+  suggestionsLoading.value = true
+  try {
+    const res = await ai.rewriteSearch(query)
+    const suggestions = [
+      ...(Array.isArray(res.keywords) ? res.keywords : []),
+      ...(Array.isArray(res.tags) ? res.tags : [])
+    ]
+      .map(item => String(item).trim())
+      .filter(Boolean)
+
+    searchSuggestions.value = [...new Set(suggestions)].slice(0, 6)
+  } catch (e) {
+    searchSuggestions.value = []
+  } finally {
+    suggestionsLoading.value = false
   }
 }
 
@@ -75,6 +110,10 @@ onMounted(async () => {
     isDarkMode.value = true
     document.documentElement.classList.add('dark')
   }
+  searchQuery.value = route.query.search || ''
+  if (searchQuery.value.trim()) {
+    fetchSearchSuggestions(searchQuery.value.trim())
+  }
   loadPopularTags()
 
   // 获取用户信息
@@ -84,6 +123,28 @@ onMounted(async () => {
 
   // 添加点击事件监听
   document.addEventListener('click', handleClickOutside)
+})
+
+watch(() => route.query.search, (newSearch) => {
+  searchQuery.value = newSearch || ''
+  fetchSearchSuggestions(searchQuery.value)
+})
+
+let searchDebounceTimer = null
+watch(searchQuery, (newQuery) => {
+  clearTimeout(searchDebounceTimer)
+  const trimmed = newQuery.trim()
+  if (!trimmed) {
+    searchSuggestions.value = []
+    showTags.value = true
+    return
+  }
+  showTags.value = false
+  searchDebounceTimer = setTimeout(() => fetchSearchSuggestions(trimmed), 300)
+})
+
+onBeforeUnmount(() => {
+  clearTimeout(searchDebounceTimer)
 })
 
 // 监听用户菜单状态
@@ -109,7 +170,7 @@ watch(showUserMenu, (newVal) => {
               type="text"
               placeholder="搜索照片..."
               @keyup.enter="handleSearch"
-              @focus="showTags = true"
+              @focus="showTags = !searchQuery.trim()"
             />
             <button @click="handleSearch">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -118,8 +179,21 @@ watch(showUserMenu, (newVal) => {
               </svg>
             </button>
           </div>
+          <div v-if="searchSuggestions.length > 0" class="search-suggestions">
+            <span class="suggestion-label">AI 搜索建议：</span>
+            <button
+              v-for="suggestion in searchSuggestions"
+              :key="suggestion"
+              type="button"
+              class="suggestion-pill"
+              @click="selectSuggestion(suggestion)"
+            >
+              {{ suggestion }}
+            </button>
+            <span class="suggestion-loading" v-if="suggestionsLoading">AI 生成中...</span>
+          </div>
           <!-- 热门标签 -->
-          <div v-if="showTags && popularTags.length > 0" class="tags-dropdown">
+          <div v-if="showPopularTags && popularTags.length > 0" class="tags-dropdown">
             <div class="tags-label">热门标签</div>
             <div class="tags-list">
               <span 
@@ -294,6 +368,34 @@ body {
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
   padding: 12px;
   margin-top: 8px;
+}
+
+.search-suggestions {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.search-suggestions .suggestion-label {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.search-suggestions .suggestion-pill {
+  background: #eef6ff;
+  border: 1px solid #d6e8ff;
+  color: #1558b5;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.search-suggestions .suggestion-pill:hover {
+  background: #d6e8ff;
+}
+.search-suggestions .suggestion-loading {
+  color: var(--text-tertiary);
+  font-size: 12px;
 }
 
 .tags-label {

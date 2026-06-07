@@ -45,3 +45,13 @@ uploads/
 
 # Test
 coverage/
+
+# Graphify
+.graphify_*.json
+.graphify_*.txt
+graphify-out/
+
+# Docker
+docker-compose.yml
+Dockerfile
+.dockerignore

@@ -8,6 +8,7 @@ const years = ref([])
 const selectedYear = ref(null)
 const reviewData = ref(null)
 const loading = ref(true)
+const reviewError = ref(null)
 
 // 加载可选年份
 const loadYears = async () => {
@@ -26,11 +27,14 @@ const loadYears = async () => {
 const loadReview = async () => {
   if (!selectedYear.value) return
   loading.value = true
+  reviewError.value = null
   try {
     const res = await photos.getReview(selectedYear.value)
     reviewData.value = res
   } catch (e) {
     console.error(e)
+    reviewData.value = null
+    reviewError.value = e.response?.data?.error || e.message || '年度回顾加载失败，请稍后重试'
   } finally {
     loading.value = false
   }
@@ -84,12 +88,23 @@ onMounted(() => {
       </div>
 
       <div v-if="loading" class="loading">加载中...</div>
+      <div v-else-if="reviewError" class="error-message">
+        <p>获取年度回顾失败</p>
+        <p class="hint">{{ reviewError }}</p>
+      </div>
       <div v-else-if="!reviewData || reviewData.totalPhotos === 0" class="empty">
         <p>{{ selectedYear }} 年还没有照片</p>
         <p class="hint">去上传一些照片吧！</p>
       </div>
 
       <template v-else>
+        <!-- AI 自动生成年度总结 -->
+        <div class="review-summary">
+          <h2>年度 AI 回顾</h2>
+          <p v-if="reviewData.aiSummary">{{ reviewData.aiSummary }}</p>
+          <p v-else class="summary-placeholder">AI 回顾尚未生成或数据不足，请确保该年份已有照片并刷新页面。</p>
+        </div>
+
         <!-- 总览卡片 -->
         <div class="overview-cards">
           <div class="overview-card highlight">
@@ -217,10 +232,18 @@ onMounted(() => {
   transform: scale(1.05);
 }
 
-.loading, .empty {
+.loading, .empty, .error-message {
   text-align: center;
   padding: 60px 20px;
   color: var(--text-tertiary);
+}
+
+.error-message {
+  background: rgba(255, 235, 238, 0.9);
+  border: 1px solid #f5c2c7;
+  color: #b71c1c;
+  border-radius: 12px;
+  margin-bottom: 16px;
 }
 
 .hint {
@@ -237,11 +260,36 @@ onMounted(() => {
 
 .overview-card {
   background: var(--card-bg);
-  border-radius: 16px;
-  padding: 24px 16px;
+  border-radius: 12px;
+  padding: 24px;
   text-align: center;
+  min-height: 120px;
   box-shadow: 0 2px 8px var(--shadow-color);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
 }
+
+  .review-summary {
+    background: linear-gradient(135deg, #f6f9ff, #e8f1ff);
+    border: 1px solid #d0e4ff;
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+    color: #1f3d7a;
+    line-height: 1.8;
+  }
+
+  .review-summary h2 {
+    margin-bottom: 12px;
+    font-size: 1.1rem;
+  }
+
+  .summary-placeholder {
+    color: var(--text-secondary);
+    font-style: italic;
+  }
 
 .overview-card.highlight {
   background: linear-gradient(135deg, oklch(41.462% 0.04699 149.954), oklch(41.462% 0.04699 149.954));

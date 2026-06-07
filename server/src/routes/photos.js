@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { query, getConnection } from '../config/database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error.js';
+import { generatePhotoMetadata, rewriteSearchQuery } from '../services/ai.js';
 
 const router = Router();
 
@@ -44,9 +45,36 @@ router.get('/', async (req, res, next) => {
 
     // 搜索支持（标题、心情、地点的模糊搜索）
     if (search) {
-      whereClause += ' AND (p.title LIKE ? OR p.mood LIKE ? OR p.location LIKE ?)';
+      let searchClause = '(p.title LIKE ? OR p.mood LIKE ? OR p.location LIKE ?)';
       const searchPattern = `%${search}%`;
       params.push(searchPattern, searchPattern, searchPattern);
+
+      try {
+        const aiResult = await rewriteSearchQuery(search);
+        const aiKeywords = Array.isArray(aiResult.keywords) ? aiResult.keywords.filter(Boolean) : [];
+        const aiTagNames = Array.isArray(aiResult.tags) ? aiResult.tags.filter(Boolean) : [];
+
+        if (aiKeywords.length > 0) {
+          const keywordConditions = aiKeywords
+            .map(() => '(p.title LIKE ? OR p.mood LIKE ? OR p.location LIKE ?)')
+            .join(' OR ');
+          searchClause += ` OR ${keywordConditions}`;
+          aiKeywords.forEach(keyword => {
+            const pattern = `%${keyword}%`;
+            params.push(pattern, pattern, pattern);
+          });
+        }
+
+        if (aiTagNames.length > 0) {
+          const tagPlaceholders = aiTagNames.map(() => '?').join(',');
+          searchClause += ` OR p.id IN (SELECT DISTINCT pt.photo_id FROM photo_tags pt JOIN tags t ON pt.tag_id = t.id WHERE t.name IN (${tagPlaceholders}))`;
+          params.push(...aiTagNames);
+        }
+      } catch (err) {
+        console.error('[AI] rewriteSearchQuery error:', err.message || err);
+      }
+
+      whereClause += ` AND (${searchClause})`;
     }
 
     // 标签过滤
@@ -303,12 +331,14 @@ router.get('/map/markers', async (req, res, next) => {
 
 // 创建照片
 router.post('/', authenticateToken, async (req, res, next) => {
+  const connection = await getConnection();
   try {
     const {
-      title, url, thumbnail_url, original_url,
-      mood, shot_date, location, width, height,
+      title: rawTitle, url, thumbnail_url, original_url,
+      mood: rawMood, shot_date, location, width, height,
       file_size, sort_order, visibility = 'public',
-      latitude, longitude
+      latitude, longitude,
+      ai_tags: requestedAiTags = []
     } = req.body;
 
     if (!url) {
@@ -317,17 +347,67 @@ router.post('/', authenticateToken, async (req, res, next) => {
 
     // 将 undefined 和空字符串转换为 null
     const toNull = (v) => (v === undefined || v === '' ? null : v);
+    let title = rawTitle;
+    let mood = rawMood;
+    let aiTags = Array.isArray(requestedAiTags) ? requestedAiTags.map(tag => String(tag).trim()).filter(Boolean) : [];
 
-    const result = await query(
+    if (!title || !mood) {
+      try {
+        const aiResult = await generatePhotoMetadata(url, {
+          location,
+          shot_date,
+          title: rawTitle,
+          mood: rawMood
+        });
+        title = title || aiResult.title || null;
+        mood = mood || aiResult.mood || null;
+        aiTags = Array.isArray(aiResult.tags) ? aiResult.tags : [];
+      } catch (err) {
+        console.error('[AI] generatePhotoMetadata error:', err.message || err);
+      }
+    }
+
+    await connection.beginTransaction();
+    const [result] = await connection.execute(
       `INSERT INTO photos (user_id, title, url, thumbnail_url, original_url, mood, shot_date, location, width, height, file_size, sort_order, visibility, latitude, longitude)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.user.id, toNull(title), toNull(url), toNull(thumbnail_url), toNull(original_url), toNull(mood), formatDate(shot_date), toNull(location), toNull(width), toNull(height), toNull(file_size), sort_order || 0, visibility, toNull(latitude), toNull(longitude)]
     );
 
-    const photos = await query('SELECT * FROM photos WHERE id = ?', [result.insertId]);
+    const photoId = result.insertId;
+    if (aiTags.length > 0) {
+      const normalizedTags = Array.from(new Set(aiTags.map(tag => String(tag).trim()).filter(Boolean)));
+      for (const tagName of normalizedTags) {
+        const [existingTags] = await connection.execute('SELECT id FROM tags WHERE name = ?', [tagName]);
+        let tagId;
+        if (existingTags.length > 0) {
+          tagId = existingTags[0].id;
+        } else {
+          const [insertResult] = await connection.execute(
+            'INSERT INTO tags (name, color) VALUES (?, ?)',
+            [tagName, '#3b82f6']
+          );
+          tagId = insertResult.insertId;
+        }
+        await connection.execute(
+          'INSERT IGNORE INTO photo_tags (photo_id, tag_id) VALUES (?, ?)',
+          [photoId, tagId]
+        );
+      }
+    }
+
+    await connection.commit();
+    const [photos] = await connection.execute('SELECT * FROM photos WHERE id = ?', [photoId]);
     res.status(201).json({ message: '照片创建成功', photo: photos[0] });
   } catch (err) {
+    if (connection) {
+      await connection.rollback();
+    }
     next(err);
+  } finally {
+    if (connection) {
+      connection.release();
+    }
   }
 });
 

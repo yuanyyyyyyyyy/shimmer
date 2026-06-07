@@ -9,6 +9,7 @@ import favoriteRoutes from './routes/favorites.js';
 import uploadRoutes from './routes/upload.js';
 import tagRoutes from './routes/tags.js';
 import reviewRoutes from './routes/review.js';
+import aiRoutes from './routes/ai.js';
 import userRoutes from './routes/users.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
@@ -41,6 +42,7 @@ app.use('/api/photos', photoRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/review', reviewRoutes);
+app.use('/api/ai', aiRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api', uploadRoutes);
 

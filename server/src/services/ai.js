@@ -1,0 +1,282 @@
+import dotenv from 'dotenv';
+import { query } from '../config/database.js';
+
+dotenv.config();
+
+const AI_PROVIDER = process.env.AI_PROVIDER || '';
+const AI_MODEL = process.env.AI_MODEL || 'llama2';
+const AI_BASE_URL = process.env.AI_BASE_URL || (AI_PROVIDER === 'ollama' ? 'http://127.0.0.1:11434' : 'https://api.openai.com');
+const AI_API_KEY = process.env.AI_API_KEY || '';
+const AI_TIMEOUT = Number(process.env.AI_TIMEOUT || 10000);
+
+const DEFAULT_AI_CONFIG = {
+  enabled: Boolean(AI_PROVIDER),
+  provider: AI_PROVIDER || null,
+  model: AI_MODEL,
+  baseUrl: AI_BASE_URL,
+  apiKey: AI_API_KEY,
+  timeout: AI_TIMEOUT
+};
+
+async function loadAiSettings() {
+  try {
+    const rows = await query(
+      'SELECT provider, model, base_url, api_key, enabled FROM ai_settings ORDER BY id DESC LIMIT 1'
+    );
+
+    if (rows.length === 0) {
+      return { ...DEFAULT_AI_CONFIG };
+    }
+
+    const row = rows[0];
+    return {
+      enabled: row.enabled === 1,
+      provider: row.provider || DEFAULT_AI_CONFIG.provider,
+      model: row.model || DEFAULT_AI_CONFIG.model,
+      baseUrl: row.base_url || DEFAULT_AI_CONFIG.baseUrl,
+      apiKey: row.api_key || DEFAULT_AI_CONFIG.apiKey,
+      timeout: DEFAULT_AI_CONFIG.timeout
+    };
+  } catch (err) {
+    console.error('[AI] loadAiSettings error:', err.message || err);
+    return { ...DEFAULT_AI_CONFIG };
+  }
+}
+
+async function getAIConfig() {
+  return await loadAiSettings();
+}
+
+function safeParseJSON(text) {
+  if (!text || typeof text !== 'string') return null;
+  const first = text.indexOf('{');
+  const last = text.lastIndexOf('}');
+  if (first === -1 || last === -1) return null;
+  const maybeJson = text.slice(first, last + 1);
+  try {
+    return JSON.parse(maybeJson);
+  } catch (err) {
+    try {
+      return JSON.parse(text);
+    } catch (error) {
+      return null;
+    }
+  }
+}
+
+async function makeChatCompletion(messages, options = {}) {
+  const aiConfig = await loadAiSettings();
+  if (!aiConfig.enabled || !aiConfig.provider) {
+    return null;
+  }
+
+  const provider = aiConfig.provider.toLowerCase();
+  const model = options.model || aiConfig.model;
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  if (aiConfig.apiKey) {
+    headers.Authorization = `Bearer ${aiConfig.apiKey}`;
+  }
+
+  let url;
+  let body;
+
+  if (provider === 'ollama') {
+    url = `${aiConfig.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
+    body = {
+      model,
+      messages,
+      temperature: options.temperature ?? 0.8,
+      max_tokens: options.maxTokens ?? 400
+    };
+  } else {
+    url = `${aiConfig.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
+    body = {
+      model,
+      messages,
+      temperature: options.temperature ?? 0.8,
+      max_tokens: options.maxTokens ?? 400
+    };
+  }
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), aiConfig.timeout);
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal
+    });
+    const result = await response.json();
+    if (!response.ok) {
+      throw new Error(result.error?.message || `AI 请求失败: ${response.status}`);
+    }
+
+    const choice = result.choices?.[0];
+    if (!choice) {
+      throw new Error('AI 返回内容空');
+    }
+
+    return choice.message?.content || choice.text || '';
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function getOllamaModels() {
+  const aiConfig = await loadAiSettings();
+  if (aiConfig.provider?.toLowerCase() !== 'ollama') {
+    return [];
+  }
+
+  const url = `${aiConfig.baseUrl.replace(/\/$/, '')}/v1/models`;
+  try {
+    const response = await fetch(url, { method: 'GET' });
+    if (!response.ok) {
+      throw new Error(`Ollama 模型列表请求失败: ${response.status}`);
+    }
+    const models = await response.json();
+    if (!Array.isArray(models)) return [];
+    return models.map(model => ({ name: model.name, displayName: model.name }));
+  } catch (error) {
+    console.error('[AI] getOllamaModels error:', error.message || error);
+    return [];
+  }
+}
+
+async function generatePhotoMetadata(photoUrl, options = {}) {
+  if (!AI_PROVIDER) {
+    return { title: '', mood: '', tags: [] };
+  }
+
+  const prompt = `你是一个中文照片日记助手。根据下面的照片信息，生成一个精炼的中文标题、一句心情文字和 3 到 5 个标签。
+
+请仅返回一个合法 JSON 对象，格式如下：
+{
+  "title": "...",
+  "mood": "...",
+  "tags": ["...", "...", "..."]
+}
+
+不要添加额外的说明文字，也不要输出 markdown。`;
+
+  let content = `照片 URL: ${photoUrl}`;
+  if (options.location) {
+    content += `\n拍摄地点: ${options.location}`;
+  }
+  if (options.shot_date) {
+    content += `\n拍摄日期: ${options.shot_date}`;
+  }
+  if (options.title) {
+    content += `\n已有标题: ${options.title}`;
+  }
+  if (options.mood) {
+    content += `\n已有心情: ${options.mood}`;
+  }
+
+  const messages = [
+    { role: 'system', content: prompt },
+    { role: 'user', content }
+  ];
+
+  try {
+    const raw = await makeChatCompletion(messages, { maxTokens: 250 });
+    const parsed = safeParseJSON(raw);
+    if (!parsed) {
+      return { title: '', mood: '', tags: [] };
+    }
+
+    return {
+      title: parsed.title || '',
+      mood: parsed.mood || '',
+      tags: Array.isArray(parsed.tags) ? parsed.tags.map(tag => String(tag).trim()).filter(Boolean) : []
+    };
+  } catch (error) {
+    console.error('[AI] generatePhotoMetadata error:', error.message || error);
+    return { title: '', mood: '', tags: [] };
+  }
+}
+
+async function summarizeReview(reviewStats = {}, options = {}) {
+  if (!AI_PROVIDER) {
+    return '';
+  }
+
+  const summaryPrompt = `你是一个中文摄影回顾助手。根据下面的年度统计数据，写一段简短而有温度的年度回顾文字。
+
+请仅返回纯文本，不要输出 JSON 或其他结构化数据。`;
+
+  let content = `年度统计数据：\n`;
+  if (reviewStats.totalPhotos != null) content += `总照片数：${reviewStats.totalPhotos}\n`;
+  if (reviewStats.totalSize != null) content += `存储空间：${reviewStats.totalSize} KB\n`;
+  if (Array.isArray(reviewStats.topTags) && reviewStats.topTags.length > 0) {
+    content += `热门标签：${reviewStats.topTags.map(t => `${t.name}(${t.count})`).join('，')}\n`;
+  }
+  if (Array.isArray(reviewStats.topLocations) && reviewStats.topLocations.length > 0) {
+    content += `热门地点：${reviewStats.topLocations.map(l => `${l.location}(${l.count})`).join('，')}\n`;
+  }
+  if (reviewStats.firstPhoto) content += `首张照片日期：${reviewStats.firstPhoto}\n`;
+  if (reviewStats.lastPhoto) content += `最后一张照片日期：${reviewStats.lastPhoto}\n`;
+  if (reviewStats.photosWithGps != null) content += `带定位照片：${reviewStats.photosWithGps}\n`;
+
+  const messages = [
+    { role: 'system', content: summaryPrompt },
+    { role: 'user', content }
+  ];
+
+  try {
+    const raw = await makeChatCompletion(messages, { maxTokens: 250 });
+    return String(raw).trim();
+  } catch (error) {
+    console.error('[AI] summarizeReview error:', error.message || error);
+    return '';
+  }
+}
+
+async function rewriteSearchQuery(query, options = {}) {
+  if (!AI_PROVIDER) {
+    return { keywords: [], tags: [] };
+  }
+
+  const prompt = `你是一个中文照片搜索助手。将用户的搜索词转换为可用于照片搜索的关键词和标签建议。
+
+请仅返回一个合法 JSON 对象，格式如下：
+{
+  "keywords": ["...", "..."],
+  "tags": ["...", "..."]
+}
+
+不要输出解释性文字。`;
+
+  const messages = [
+    { role: 'system', content: prompt },
+    { role: 'user', content: `用户搜索词：${query}` }
+  ];
+
+  try {
+    const raw = await makeChatCompletion(messages, { maxTokens: 200 });
+    const parsed = safeParseJSON(raw);
+    if (!parsed) {
+      return { keywords: [], tags: [] };
+    }
+
+    return {
+      keywords: Array.isArray(parsed.keywords) ? parsed.keywords.map(k => String(k).trim()).filter(Boolean) : [],
+      tags: Array.isArray(parsed.tags) ? parsed.tags.map(t => String(t).trim()).filter(Boolean) : []
+    };
+  } catch (error) {
+    console.error('[AI] rewriteSearchQuery error:', error.message || error);
+    return { keywords: [], tags: [] };
+  }
+}
+
+export {
+  getAIConfig,
+  getOllamaModels,
+  generatePhotoMetadata,
+  summarizeReview,
+  rewriteSearchQuery
+};
