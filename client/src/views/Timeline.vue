@@ -41,6 +41,12 @@ const selectYear = async (year) => {
 
 const viewPhoto = (id) => router.push(`/photo/${id}`)
 
+// 格式化日期
+const formatDate = (dateStr) => {
+  if (!dateStr) return ''
+  return dateStr.split('T')[0]  // 将 "2026-03-21T16:00:00.000Z" 转换为 "2026-03-21"
+}
+
 // 打开 Lightbox
 const openLightbox = (index) => {
   lightboxIndex.value = index
@@ -82,7 +88,7 @@ onMounted(loadStats)
             class="timeline-item"
             @click="openLightbox(index)"
           >
-            <div class="timeline-date">{{ photo.shot_date }}</div>
+            <div class="timeline-date">{{ formatDate(photo.shot_date) }}</div>
             <img :src="photo.thumbnail_url || photo.url" :alt="photo.title" />
             <div class="timeline-content">
               <h3>{{ photo.title || '无题' }}</h3>
@@ -161,8 +167,10 @@ h2 { margin-bottom: 24px; }
 .timeline-item img {
   width: 80px;
   height: 80px;
-  object-fit: cover;
+  object-fit: cover;      /* 保持比例，裁剪溢出部分 */
+  object-position: center; /* 居中裁剪 */
   border-radius: 4px;
+  display: block;          /* 防止 inline 元素的底部空白 */
 }
 
 .timeline-content h3 {
