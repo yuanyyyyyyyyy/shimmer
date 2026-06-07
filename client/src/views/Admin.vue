@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores'
 import { photos, upload, tags, ai } from '../api'
@@ -9,11 +9,6 @@ import { extractExif } from '../composables/useExif'
 
 const router = useRouter()
 const authStore = useAuthStore()
-
-const aiConfig = ref({ enabled: false, provider: null, model: null, base_url: null, timeout: 0 })
-const aiForm = ref({ enabled: false, provider: '', model: '', base_url: '', api_key: '' })
-const aiSaveLoading = ref(false)
-const aiEnabled = computed(() => aiConfig.value.enabled)
 
 // 照片列表
 const photoList = ref([])
@@ -63,47 +58,9 @@ onMounted(async () => {
     router.push('/my')
     return
   }
-  await loadAiConfig()
   loadPhotos()
   loadTags()
 })
-
-// 加载 AI 配置
-const loadAiConfig = async () => {
-  try {
-    const res = await ai.getConfig()
-    aiConfig.value = res.config || aiConfig.value
-    const config = aiConfig.value
-    aiForm.value = {
-      enabled: Boolean(config.enabled),
-      provider: config.provider || '',
-      model: config.model || '',
-      base_url: config.base_url || config.baseUrl || '',
-      api_key: config.apiKey || ''
-    }
-  } catch (e) {
-    console.error('加载 AI 配置失败:', e)
-  }
-}
-
-const saveAiConfig = async () => {
-  aiSaveLoading.value = true
-  try {
-    await ai.saveConfig({
-      enabled: aiForm.value.enabled,
-      provider: aiForm.value.provider || null,
-      model: aiForm.value.model || null,
-      base_url: aiForm.value.base_url || null,
-      api_key: aiForm.value.api_key || null
-    })
-    await loadAiConfig()
-    success('AI 配置已保存')
-  } catch (e) {
-    error(e.response?.data?.error || '保存 AI 配置失败')
-  } finally {
-    aiSaveLoading.value = false
-  }
-}
 
 // 加载标签
 const loadTags = async () => {
@@ -129,15 +86,10 @@ const createTag = async () => {
   }
 }
 
-// AI 自动补全标题、心情和标签建议
+// AI 自动补全标题、心情和标签建议（需要先在设置页面启用 AI）
 const generateAiMetadata = async () => {
   if (!form.value.url) {
     error('请先上传图片后再生成 AI 建议')
-    return
-  }
-
-  if (!aiEnabled.value) {
-    error('AI 未启用，请检查服务器 AI 设置')
     return
   }
 
@@ -161,7 +113,7 @@ const generateAiMetadata = async () => {
     aiTags.value = Array.isArray(metadata.tags) ? metadata.tags : []
     success('AI 建议已生成，可自行调整后保存')
   } catch (err) {
-    error(err.response?.data?.error || 'AI 自动补全失败')
+    error(err.response?.data?.error || 'AI 自动补全失败，请确认已在 AI 设置中配置并启用')
   } finally {
     aiLoading.value = false
   }
@@ -231,7 +183,8 @@ const handleFileSelect = async (e) => {
     
     // 自动填充 EXIF 数据
     if (exifData.shot_date && !form.value.shot_date) {
-      form.value.shot_date = exifData.shot_date
+      // 确保 EXIF 日期格式为 yyyy-MM-dd
+      form.value.shot_date = exifData.shot_date.split('T')[0]
     }
 
     // 自动填充 GPS 数据
@@ -328,7 +281,14 @@ const handleEdit = async (photo) => {
   editingPhoto.value = photo
   aiTags.value = []
   aiLoading.value = false
-  form.value = { ...photo }
+
+  // 格式化日期字段，将 ISO 格式转换为 yyyy-MM-dd
+  const formattedPhoto = { ...photo }
+  if (formattedPhoto.shot_date) {
+    formattedPhoto.shot_date = formattedPhoto.shot_date.split('T')[0]
+  }
+
+  form.value = formattedPhoto
   
   // 加载照片的标签
   try {
@@ -425,46 +385,8 @@ const handleLogout = () => {
         <h2>照片管理</h2>
         <div class="header-actions">
           <button @click="showForm = true; resetForm()">+ 上传照片</button>
+          <router-link to="/settings" class="settings-link-btn">AI 设置</router-link>
           <button class="logout" @click="handleLogout">登出</button>
-        </div>
-      </div>
-
-      <!-- AI 全局设置 -->
-      <div class="ai-settings-panel">
-        <h3>AI 全局配置</h3>
-        <div class="ai-settings-grid">
-          <label>
-            <span>是否启用 AI</span>
-            <input type="checkbox" v-model="aiForm.enabled" />
-          </label>
-          <label>
-            <span>AI 提供商</span>
-            <select v-model="aiForm.provider">
-              <option value="">请选择</option>
-              <option value="ollama">Ollama</option>
-              <option value="openai">OpenAI</option>
-            </select>
-          </label>
-          <label>
-            <span>模型名称</span>
-            <input type="text" v-model="aiForm.model" placeholder="例如：llama2 或 gpt-4" />
-          </label>
-          <label>
-            <span>Base URL</span>
-            <input type="text" v-model="aiForm.base_url" placeholder="例如：http://127.0.0.1:11434" />
-          </label>
-          <label>
-            <span>API Key</span>
-            <input type="text" v-model="aiForm.api_key" placeholder="仅远程模型需要" />
-          </label>
-        </div>
-        <div class="ai-settings-actions">
-          <button type="button" @click="saveAiConfig" :disabled="aiSaveLoading">
-            {{ aiSaveLoading ? '保存中...' : '保存 AI 配置' }}
-          </button>
-          <span class="ai-settings-tip">
-            保存后，系统将使用该配置为 AI 生成功能提供支持。
-          </span>
         </div>
       </div>
 
@@ -546,14 +468,11 @@ const handleLogout = () => {
               <textarea v-model="form.mood" placeholder="一句话日记..." rows="3"></textarea>
             </div>
             <div class="ai-action">
-              <button type="button" class="ai-button" @click="generateAiMetadata" :disabled="aiLoading || !form.url || !aiEnabled">
+              <button type="button" class="ai-button" @click="generateAiMetadata" :disabled="aiLoading || !form.url">
                 {{ aiLoading ? 'AI 正在生成...' : 'AI 自动补全' }}
               </button>
-              <span class="ai-hint" v-if="aiEnabled">
-                AI 已启用：{{ aiConfig.provider || '未知' }} / {{ aiConfig.model || '默认模型' }}
-              </span>
-              <span class="ai-hint ai-disabled" v-else>
-                AI 未启用：请配置本地 Ollama 或远程模型，检查服务器设置。
+              <span class="ai-hint">
+                需要先在 AI 设置页面配置并启用
               </span>
             </div>
             <div class="form-group" v-if="aiTags.length > 0">
@@ -674,6 +593,23 @@ const handleLogout = () => {
 
 .header-actions button.logout {
   background: #95a5a6;
+}
+
+.settings-link-btn {
+  padding: 10px 20px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-size: 14px;
+  border: 1px solid var(--input-border);
+  background: var(--card-bg);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.settings-link-btn:hover {
+  border-color: var(--secondary-color);
+  color: var(--secondary-color);
 }
 
 .photo-list {

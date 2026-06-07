@@ -148,7 +148,8 @@ async function getOllamaModels() {
 }
 
 async function generatePhotoMetadata(photoUrl, options = {}) {
-  if (!AI_PROVIDER) {
+  const aiConfig = await loadAiSettings();
+  if (!aiConfig.enabled || !aiConfig.provider) {
     return { title: '', mood: '', tags: [] };
   }
 
@@ -163,23 +164,26 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
 
 不要添加额外的说明文字，也不要输出 markdown。`;
 
-  let content = `照片 URL: ${photoUrl}`;
-  if (options.location) {
-    content += `\n拍摄地点: ${options.location}`;
-  }
-  if (options.shot_date) {
-    content += `\n拍摄日期: ${options.shot_date}`;
-  }
-  if (options.title) {
-    content += `\n已有标题: ${options.title}`;
-  }
-  if (options.mood) {
-    content += `\n已有心情: ${options.mood}`;
+  // 构建多模态消息内容（支持图片理解）
+  const content = [
+    { type: 'text', text: '请分析这张照片，生成标题、心情和标签' },
+    { type: 'image_url', image_url: { url: photoUrl } }
+  ];
+
+  // 追加附加信息到文本部分
+  let textParts = [];
+  if (options.location) textParts.push(`拍摄地点: ${options.location}`);
+  if (options.shot_date) textParts.push(`拍摄日期: ${options.shot_date}`);
+  if (options.title) textParts.push(`已有标题: ${options.title}`);
+  if (options.mood) textParts.push(`已有心情: ${options.mood}`);
+
+  if (textParts.length > 0) {
+    content[0].text += '\n\n附加信息:\n' + textParts.join('\n');
   }
 
   const messages = [
     { role: 'system', content: prompt },
-    { role: 'user', content }
+    { role: 'user', content }  // content 现在是数组格式（多模态）
   ];
 
   try {
@@ -201,7 +205,8 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
 }
 
 async function summarizeReview(reviewStats = {}, options = {}) {
-  if (!AI_PROVIDER) {
+  const aiConfig = await loadAiSettings();
+  if (!aiConfig.enabled || !aiConfig.provider) {
     return '';
   }
 
@@ -237,7 +242,8 @@ async function summarizeReview(reviewStats = {}, options = {}) {
 }
 
 async function rewriteSearchQuery(query, options = {}) {
-  if (!AI_PROVIDER) {
+  const aiConfig = await loadAiSettings();
+  if (!aiConfig.enabled || !aiConfig.provider) {
     return { keywords: [], tags: [] };
   }
 

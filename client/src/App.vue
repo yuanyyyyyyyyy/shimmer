@@ -253,6 +253,9 @@ watch(showUserMenu, (newVal) => {
               <router-link v-if="authStore.isAdmin" to="/admin" class="dropdown-item admin" @click="closeUserMenu">
                 管理后台
               </router-link>
+              <router-link v-if="authStore.isAdmin" to="/settings" class="dropdown-item admin" @click="closeUserMenu">
+                AI 设置
+              </router-link>
               <div class="dropdown-divider"></div>
               <button class="dropdown-item logout" @click="handleLogout">
                 退出登录

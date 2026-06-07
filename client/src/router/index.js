@@ -7,6 +7,7 @@ import Login from '../views/Login.vue'
 import Register from '../views/Register.vue'
 import PhotoDetail from '../views/PhotoDetail.vue'
 import Admin from '../views/Admin.vue'
+import Settings from '../views/Settings.vue'
 import Review from '../views/Review.vue'
 import UserProfile from '../views/UserProfile.vue'
 import { useAuthStore } from '../stores'
@@ -20,6 +21,7 @@ const routes = [
   { path: '/register', name: 'Register', component: Register },
   { path: '/photo/:id', name: 'PhotoDetail', component: PhotoDetail },
   { path: '/admin', name: 'Admin', component: Admin, meta: { requiresAdmin: true } },
+  { path: '/settings', name: 'Settings', component: Settings, meta: { requiresAdmin: true } },
   { path: '/review', name: 'Review', component: Review },
   { path: '/user/:id', name: 'UserProfile', component: UserProfile }
 ]
