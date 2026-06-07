@@ -212,7 +212,6 @@ watch(showUserMenu, (newVal) => {
           <RouterLink to="/">首页</RouterLink>
           <RouterLink to="/timeline">时间轴</RouterLink>
           <RouterLink to="/darkroom">暗房</RouterLink>
-          <RouterLink to="/map">地图</RouterLink>
 
           <!-- 未登录状态 -->
           <template v-if="!authStore.isLoggedIn">

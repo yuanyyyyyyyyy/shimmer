@@ -311,22 +311,6 @@ router.get('/stats/timeline', async (req, res, next) => {
   }
 });
 
-// 获取地图标记点
-router.get('/map/markers', async (req, res, next) => {
-  try {
-    const markers = await query(
-      `SELECT id, title, thumbnail_url, shot_date, location, latitude, longitude
-       FROM photos 
-       WHERE visibility != 'hidden' AND latitude IS NOT NULL AND longitude IS NOT NULL
-       ORDER BY shot_date DESC`
-    );
-
-    res.json({ markers });
-  } catch (err) {
-    next(err);
-  }
-});
-
 // 以下为需要认证的管理员接口
 
 // 创建照片
