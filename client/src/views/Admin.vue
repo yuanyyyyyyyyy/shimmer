@@ -46,7 +46,7 @@ const form = ref({
   width: 0,
   height: 0,
   file_size: 0,
-  visibility: 'public', // public | private | hidden
+  visibility: 'public', // public | private
   latitude: null,
   longitude: null
 })
@@ -306,7 +306,7 @@ const handleDelete = async (photo) => {
 // 切换可见性
 const toggleVisibility = async (photo) => {
   try {
-    const options = ['public', 'private', 'hidden']
+    const options = ['public', 'private']
     const currentIndex = options.indexOf(photo.visibility)
     const nextIndex = (currentIndex + 1) % options.length
     const newVisibility = options[nextIndex]
@@ -319,7 +319,7 @@ const toggleVisibility = async (photo) => {
 }
 
 const getVisibilityLabel = (visibility) => {
-  const labels = { public: '公开', private: '私有', hidden: '隐藏' }
+  const labels = { public: '公开', private: '私密' }
   return labels[visibility] || visibility
 }
 
@@ -585,15 +585,8 @@ const handleLogout = () => {
                 <label class="radio-option">
                   <input v-model="form.visibility" type="radio" value="private" />
                   <span class="radio-label">
-                    <strong>仅自己</strong>
+                    <strong>私密</strong>
                     <small>仅自己可见</small>
-                  </span>
-                </label>
-                <label class="radio-option">
-                  <input v-model="form.visibility" type="radio" value="hidden" />
-                  <span class="radio-label">
-                    <strong>隐藏</strong>
-                    <small>临时下架，不显示</small>
                   </span>
                 </label>
               </div>
@@ -749,11 +742,6 @@ const handleLogout = () => {
 .visibility-btn.private { 
   background: #fff3cd; 
   color: #856404; 
-}
-
-.visibility-btn.hidden { 
-  background: #f8d7da; 
-  color: #721c24; 
 }
 
 .visibility-btn:hover {

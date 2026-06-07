@@ -846,19 +846,19 @@ h2 { margin-bottom: 8px; }
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 12px;
+  gap: 6px;
   z-index: 7;
 }
 
 .controls button {
-  background: rgba(255,255,255,0.12);
-  border: 1px solid rgba(255,255,255,0.25);
-  color: #fff;
-  padding: 10px 24px;
-  border-radius: 24px;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: rgba(255,255,255,0.85);
+  padding: 5px 12px;
+  border-radius: 14px;
   cursor: pointer;
   transition: all 0.2s;
-  font-size: 0.95rem;
+  font-size: 0.8rem;
 }
 
 .controls button:hover {
