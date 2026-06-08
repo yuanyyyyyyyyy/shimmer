@@ -119,6 +119,36 @@ const generateAiMetadata = async () => {
   }
 }
 
+// 点击 AI 建议标签：自动创建并选中
+const addAiTag = async (tagName) => {
+  try {
+    // 1. 查找是否已存在同名标签
+    let existingTag = allTags.value.find(t => t.name === tagName)
+
+    // 2. 如果不存在，先创建新标签
+    if (!existingTag) {
+      const res = await tags.create({ name: tagName })
+      existingTag = res.tag
+      allTags.value.push(existingTag)
+    }
+
+    // 3. 选中该标签
+    if (!selectedTags.value.includes(existingTag.id)) {
+      selectedTags.value.push(existingTag.id)
+    }
+
+    success(`已添加标签「${tagName}」`)
+  } catch (err) {
+    error(err.response?.data?.error || '添加标签失败')
+  }
+}
+
+// 检查 AI 标签是否已被选中
+const isAiTagSelected = (tagName) => {
+  const tag = allTags.value.find(t => t.name === tagName)
+  return tag && selectedTags.value.includes(tag?.id)
+}
+
 // 切换标签
 const toggleTag = (tagId) => {
   const index = selectedTags.value.indexOf(tagId)
@@ -476,9 +506,21 @@ const handleLogout = () => {
               </span>
             </div>
             <div class="form-group" v-if="aiTags.length > 0">
-              <label>AI 建议标签</label>
+              <label>AI 建议标签 <small class="hint">(点击添加)</small></label>
               <div class="ai-tags">
-                <span v-for="tag in aiTags" :key="tag" class="ai-tag">{{ tag }}</span>
+                <span
+                  v-for="tag in aiTags"
+                  :key="tag"
+                  class="ai-tag"
+                  :class="{
+                    'ai-tag--added': isAiTagSelected(tag),
+                    'ai-tag--clickable': !isAiTagSelected(tag)
+                  }"
+                  @click="!isAiTagSelected(tag) && addAiTag(tag)"
+                >
+                  <span class="ai-tag-icon">{{ isAiTagSelected(tag) ? '✓' : '+' }}</span>
+                  {{ tag }}
+                </span>
               </div>
             </div>
             <div class="form-row">
@@ -828,17 +870,67 @@ const handleLogout = () => {
   color: var(--text-secondary);
   font-size: 0.9rem;
 }
+/* AI 建议标签容器 */
 .ai-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
+
+/* AI 建议标签基础样式 */
 .ai-tag {
   padding: 6px 12px;
   border-radius: 999px;
-  background: rgba(52, 152, 219, 0.15);
-  color: var(--primary-color);
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  transition: all 0.25s ease;
+  user-select: none;
+}
+
+/* 可点击状态（未添加） */
+.ai-tag--clickable {
+  background: rgba(52, 152, 219, 0.1);
+  color: var(--primary-color);
+  border: 1.5px dashed var(--primary-color);
+  cursor: pointer;
+}
+
+.ai-tag--clickable:hover {
+  background: rgba(52, 152, 219, 0.2);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.25);
+}
+
+/* 已添加/选中状态 */
+.ai-tag--added {
+  background: rgba(46, 204, 113, 0.15);
+  color: #27ae60;
+  border: 1.5px solid rgba(46, 204, 113, 0.4);
+  cursor: default;
+  opacity: 0.75;
+}
+
+/* AI 标签内的图标 */
+.ai-tag-icon {
+  font-size: 10px;
+  font-weight: bold;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: currentColor;
+  color: white;
+}
+
+/* 提示文字 */
+.hint {
+  color: var(--text-tertiary);
+  font-weight: normal;
+  font-size: 0.85rem;
 }
 
 .tags-selector {
