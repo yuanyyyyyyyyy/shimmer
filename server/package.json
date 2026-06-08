@@ -8,7 +8,12 @@
     "start": "node src/app.js",
     "dev": "node --watch src/app.js"
   },
-  "keywords": ["photo", "gallery", "express", "api"],
+  "keywords": [
+    "photo",
+    "gallery",
+    "express",
+    "api"
+  ],
   "author": "",
   "license": "MIT",
   "dependencies": {
@@ -21,5 +26,6 @@
     "mysql2": "^3.11.3",
     "sharp": "^0.33.5",
     "uuid": "^10.0.0"
-  }
+  },
+  "devDependencies": {}
 }

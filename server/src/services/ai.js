@@ -90,7 +90,18 @@ async function makeChatCompletion(messages, options = {}) {
       temperature: options.temperature ?? 0.8,
       max_tokens: options.maxTokens ?? 400
     };
+  } else if (provider === 'zhipu') {
+    // 智谱AI：使用 /chat/completions（不带 /v1）
+    // 正确地址：https://open.bigmodel.cn/api/paas/v4/chat/completions
+    url = `${aiConfig.baseUrl.replace(/\/$/, '')}/chat/completions`;
+    body = {
+      model,
+      messages,
+      temperature: options.temperature ?? 0.8,
+      max_tokens: options.maxTokens ?? 400
+    };
   } else {
+    // 其他 OpenAI 兼容的 provider：使用标准 /v1/chat/completions
     url = `${aiConfig.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
     body = {
       model,
