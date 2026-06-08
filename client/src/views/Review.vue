@@ -10,6 +10,26 @@ const reviewData = ref(null)
 const loading = ref(true)
 const reviewError = ref(null)
 
+// AI 回顾相关状态
+const aiLoading = ref(false)
+const aiError = ref(null)
+const aiErrorMessage = computed(() => {
+  if (!reviewData.value?.aiError) return null
+  const err = reviewData.value.aiError
+  // 根据错误类型返回更友好的提示
+  const errorMessages = {
+    'AI_NOT_ENABLED': 'AI 功能未启用，请在设置中开启',
+    'NO_API_KEY': '未配置 API Key，请在 AI 设置中填写',
+    'INVALID_API_KEY': 'API Key 无效或已过期，请检查设置中的 API Key',
+    'INVALID_MODEL': err.message || '模型不存在，请检查模型名称是否正确（推荐：glm-4-flash）',
+    'TIMEOUT': '请求超时，AI 服务响应时间过长，请稍后重试',
+    'NETWORK_ERROR': '网络连接失败，请检查网络或 AI 服务是否正常运行',
+    'RATE_LIMIT': '请求过于频繁，请稍后重试',
+    'EMPTY_RESPONSE': 'AI 返回内容为空，请稍后重试'
+  }
+  return errorMessages[err.error] || err.message || '未知错误'
+})
+
 // 加载可选年份
 const loadYears = async () => {
   try {
@@ -28,15 +48,51 @@ const loadReview = async () => {
   if (!selectedYear.value) return
   loading.value = true
   reviewError.value = null
+  aiError.value = null
   try {
     const res = await photos.getReview(selectedYear.value)
     reviewData.value = res
+    // 如果有 AI 错误信息，显示出来
+    if (res.aiError) {
+      aiError.value = res.aiError
+      console.warn('[Review] AI Error:', res.aiError)
+    }
   } catch (e) {
     console.error(e)
     reviewData.value = null
     reviewError.value = e.response?.data?.error || e.message || '年度回顾加载失败，请稍后重试'
   } finally {
     loading.value = false
+  }
+}
+
+// 重新生成 AI 回顾
+const regenerateAiSummary = async () => {
+  if (!selectedYear.value || aiLoading.value) return
+
+  aiLoading.value = true
+  aiError.value = null
+
+  try {
+    // 重新加载整个年度回顾数据（包含重新生成 AI 总结）
+    const res = await photos.getReview(selectedYear.value, { regenerate: true })
+    reviewData.value = res
+
+    if (res.aiSummary && !res.aiError) {
+      // 成功生成
+      console.log('[Review] AI 回顾重新生成成功')
+    } else if (res.aiError) {
+      aiError.value = res.aiError
+      console.error('[Review] AI 重新生成失败:', res.aiError)
+    }
+  } catch (e) {
+    console.error('[Review] 重新生成失败:', e)
+    aiError.value = {
+      error: 'REGENERATE_FAILED',
+      message: '重新生成失败：' + (e.response?.data?.error || e.message || '未知错误')
+    }
+  } finally {
+    aiLoading.value = false
   }
 }
 
@@ -100,8 +156,54 @@ onMounted(() => {
       <template v-else>
         <!-- AI 自动生成年度总结 -->
         <div class="review-summary">
-          <h2>年度 AI 回顾</h2>
-          <p v-if="reviewData.aiSummary">{{ reviewData.aiSummary }}</p>
+          <div class="summary-header">
+            <h2>🤖 年度 AI 回顾</h2>
+            <button
+              class="regenerate-btn"
+              @click="regenerateAiSummary"
+              :disabled="aiLoading"
+              :title="'重新生成 AI 回顾'"
+            >
+              {{ aiLoading ? '⏳ 生成中...' : '🔄 重新生成' }}
+            </button>
+          </div>
+
+          <!-- 加载状态 -->
+          <div v-if="aiLoading" class="ai-loading">
+            <div class="loading-spinner"></div>
+            <p>AI 正在分析你的年度照片数据...</p>
+          </div>
+
+          <!-- 成功状态 -->
+          <div v-else-if="reviewData.aiSummary" class="ai-content">
+            <p>{{ reviewData.aiSummary }}</p>
+          </div>
+
+          <!-- 错误状态 -->
+          <div v-else-if="aiErrorMessage" class="ai-error">
+            <p class="error-title">❌ AI 回顾生成失败</p>
+            <p class="error-message">{{ aiErrorMessage }}</p>
+            <!-- 针对特定错误给出建议 -->
+            <div class="error-suggestions">
+              <p v-if="reviewData.aiError?.error === 'INVALID_API_KEY'" class="suggestion">
+                💡 建议：请前往<a href="/settings">设置页面</a>检查 API Key 是否正确填写
+              </p>
+              <p v-else-if="reviewData.aiError?.error === 'INVALID_MODEL'" class="suggestion">
+                💡 建议：请前往<a href="/settings">设置页面</a>将模型改为 glm-4-flash（免费且稳定）
+              </p>
+              <p v-else-if="reviewData.aiError?.error === 'NO_API_KEY'" class="suggestion">
+                💡 建议：请前往<a href="/settings">设置页面</a>配置 API Key
+              </p>
+              <p v-else-if="reviewData.aiError?.error === 'TIMEOUT'" class="suggestion">
+                💡 建议：可能是网络较慢，点击上方"重新生成"按钮重试
+              </p>
+              <p v-else class="suggestion">
+                💡 请检查网络连接或<a href="/settings">AI 设置</a>，然后重试
+              </p>
+            </div>
+          </div>
+
+          <!-- 默认占位 -->
           <p v-else class="summary-placeholder">AI 回顾尚未生成或数据不足，请确保该年份已有照片并刷新页面。</p>
         </div>
 
@@ -279,11 +381,112 @@ onMounted(() => {
     margin-bottom: 24px;
     color: #1f3d7a;
     line-height: 1.8;
+    position: relative;
   }
 
   .review-summary h2 {
     margin-bottom: 12px;
     font-size: 1.1rem;
+  }
+
+  .summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+  }
+
+  .summary-header h2 {
+    margin-bottom: 0 !important;
+  }
+
+  .regenerate-btn {
+    background: oklch(41.462% 0.04699 149.954);
+    color: white;
+    border: none;
+    padding: 6px 14px;
+    border-radius: 18px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    white-space: nowrap;
+  }
+
+  .regenerate-btn:hover:not(:disabled) {
+    transform: scale(1.05);
+    box-shadow: 0 2px 8px rgba(65, 153, 63, 0.3);
+  }
+
+  .regenerate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .ai-loading {
+    text-align: center;
+    padding: 20px;
+    color: var(--text-secondary);
+  }
+
+  .loading-spinner {
+    width: 30px;
+    height: 30px;
+    border: 3px solid #e0e7ff;
+    border-top-color: oklch(41.462% 0.04699 149.954);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto 12px;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  .ai-content p {
+    font-size: 1rem;
+    line-height: 1.9;
+  }
+
+  .ai-error {
+    background: rgba(255, 235, 238, 0.5);
+    border-left: 4px solid #ef5350;
+    padding: 16px;
+    border-radius: 8px;
+    margin-top: 8px;
+  }
+
+  .error-title {
+    font-weight: 600;
+    color: #c62828;
+    margin-bottom: 8px;
+  }
+
+  .error-message {
+    color: #d32f2f;
+    margin-bottom: 10px;
+    font-size: 0.95rem;
+  }
+
+  .error-suggestions {
+    background: rgba(255, 243, 224, 0.6);
+    padding: 10px 12px;
+    border-radius: 6px;
+    font-size: 0.88rem;
+  }
+
+  .suggestion {
+    color: #e65100;
+    margin: 4px 0;
+    line-height: 1.6;
+  }
+
+  .suggestion a {
+    color: #1565c0;
+    text-decoration: underline;
+    font-weight: 500;
   }
 
   .summary-placeholder {

@@ -49,7 +49,7 @@ export const photos = {
   get: (id) => api.get(`/photos/${id}`),
   getRandomDiary: () => api.get('/photos/random/diary'),
   getTimelineStats: () => api.get('/photos/stats/timeline'),
-  getReview: (year) => api.get(`/review/${year}`),
+  getReview: (year, options = {}) => api.get(`/review/${year}`, { params: options }),
   getReviewYears: () => api.get('/review/years'),
   getMyPhotos: (params) => api.get('/photos/my/list', { params }),
   getAdminPhotos: (params) => api.get('/photos/admin/all', { params }),

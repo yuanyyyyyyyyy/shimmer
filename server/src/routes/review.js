@@ -106,7 +106,7 @@ router.get('/:year', async (req, res, next) => {
       [yearInt]
     );
 
-    const reviewText = await summarizeReview({
+    const reviewResult = await summarizeReview({
       totalPhotos: yearStats[0].total_photos || 0,
       totalSize: yearStats[0].total_size || 0,
       topTags,
@@ -115,6 +115,26 @@ router.get('/:year', async (req, res, next) => {
       lastPhoto: dateRange[0].last_photo,
       photosWithGps: gpsStats[0].count || 0
     });
+
+    // 处理 AI 回顾结果（支持新旧两种格式）
+    let aiSummary = '';
+    let aiError = null;
+
+    if (typeof reviewResult === 'string') {
+      // 旧格式：直接返回字符串
+      aiSummary = reviewResult;
+    } else if (reviewResult && typeof reviewResult === 'object') {
+      // 新格式：返回对象 { success, data, error, message }
+      if (reviewResult.success) {
+        aiSummary = reviewResult.data || '';
+      } else {
+        aiError = {
+          error: reviewResult.error || 'UNKNOWN_ERROR',
+          message: reviewResult.message || 'AI 生成失败',
+          detail: reviewResult.detail || null
+        };
+      }
+    }
 
     res.json({
       year: yearInt,
@@ -128,7 +148,8 @@ router.get('/:year', async (req, res, next) => {
       avgWidth: sizeStats[0].avg_width ? Math.round(sizeStats[0].avg_width) : 0,
       avgHeight: sizeStats[0].avg_height ? Math.round(sizeStats[0].avg_height) : 0,
       photosWithGps: gpsStats[0].count || 0,
-      aiSummary: reviewText
+      aiSummary,
+      aiError
     });
   } catch (err) {
     next(err);

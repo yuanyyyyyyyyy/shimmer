@@ -217,8 +217,17 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
 
 async function summarizeReview(reviewStats = {}, options = {}) {
   const aiConfig = await loadAiSettings();
+
+  // 检查 AI 是否启用
   if (!aiConfig.enabled || !aiConfig.provider) {
-    return '';
+    console.warn('[AI] summarizeReview: AI 未启用或未配置 provider');
+    return { success: false, error: 'AI_NOT_ENABLED', message: 'AI 功能未启用' };
+  }
+
+  // 检查 API Key（智谱等云服务需要）
+  if (aiConfig.provider !== 'ollama' && !aiConfig.apiKey) {
+    console.warn('[AI] summarizeReview: 未配置 API Key');
+    return { success: false, error: 'NO_API_KEY', message: '未配置 API Key，请在设置中填写' };
   }
 
   const summaryPrompt = `你是一个中文摄影回顾助手。根据下面的年度统计数据，写一段简短而有温度的年度回顾文字。
@@ -244,11 +253,42 @@ async function summarizeReview(reviewStats = {}, options = {}) {
   ];
 
   try {
+    console.log(`[AI] summarizeReview: 开始生成回顾 (provider=${aiConfig.provider}, model=${aiConfig.model})`);
     const raw = await makeChatCompletion(messages, { maxTokens: 250 });
-    return String(raw).trim();
+    const result = String(raw).trim();
+
+    if (!result || result.length === 0) {
+      return { success: false, error: 'EMPTY_RESPONSE', message: 'AI 返回内容为空' };
+    }
+
+    console.log(`[AI] summarizeReview: 生成成功 (${result.length} 字符)`);
+    return { success: true, data: result };
   } catch (error) {
-    console.error('[AI] summarizeReview error:', error.message || error);
-    return '';
+    const errorMsg = error.message || error;
+    console.error('[AI] summarizeReview error:', errorMsg);
+
+    // 解析具体错误类型
+    let errorType = 'UNKNOWN_ERROR';
+    let userMessage = 'AI 生成失败';
+
+    if (errorMsg.includes('401') || errorMsg.includes('invalid_api_key')) {
+      errorType = 'INVALID_API_KEY';
+      userMessage = 'API Key 无效或已过期，请检查设置中的 API Key';
+    } else if (errorMsg.includes('model') && (errorMsg.includes('not exist') || errorMsg.includes('does not exist') || errorMsg.includes('invalid_model'))) {
+      errorType = 'INVALID_MODEL';
+      userMessage = `模型 "${aiConfig.model}" 不存在，请检查设置中的模型名称（推荐：glm-4-flash）`;
+    } else if (errorMsg.includes('timeout') || errorMsg.includes('abort') || errorMsg.includes('Timeout')) {
+      errorType = 'TIMEOUT';
+      userMessage = '请求超时，AI 服务响应时间过长，请稍后重试';
+    } else if (errorMsg.includes('network') || errorMsg.includes('fetch') || errorMsg.includes('ECONNREFUSED')) {
+      errorType = 'NETWORK_ERROR';
+      userMessage = '网络连接失败，请检查网络或 AI 服务是否正常运行';
+    } else if (errorMsg.includes('rate_limit') || errorMsg.includes('429')) {
+      errorType = 'RATE_LIMIT';
+      userMessage = '请求过于频繁，请稍后重试';
+    }
+
+    return { success: false, error: errorType, message: userMessage, detail: errorMsg };
   }
 }
 
