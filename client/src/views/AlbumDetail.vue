@@ -472,6 +472,12 @@ onMounted(() => {
 /* Dark mode - modal overrides */
 :global(.dark) .modal-panel {
   background: oklch(16% 0.008 250);
+  --color-surface: oklch(14% 0.008 250);
+  --color-bg: oklch(18% 0.008 250);
+  --color-border: oklch(25% 0.01 250);
+  --color-border-hover: oklch(32% 0.015 250);
+  --color-faint: #71717a;
+  --color-muted: #a1a1aa;
 }
 
 :global(.dark) .modal-header h2 {
@@ -505,6 +511,65 @@ onMounted(() => {
 :global(.dark) .picker-empty,
 :global(.dark) .picker-hint {
   color: #71717a;
+}
+
+/* Dark mode - button/interaction overrides */
+::global(.dark) .btn-icon:hover {
+  background: oklch(24% 0.008 250);
+}
+
+::global(.dark) .btn-outline:hover {
+  background: oklch(24% 0.04 230);
+}
+
+::global(.dark) .btn-text:hover {
+  background: oklch(24% 0.008 250);
+}
+
+/* Dark mode - placeholders & focus */
+::global(.dark) .search-bar input::placeholder,
+::global(.dark) .field input[type="text"]::placeholder,
+::global(.dark) .field textarea::placeholder {
+  color: #71717a;
+}
+
+::global(.dark) .field input[type="text"]:focus,
+::global(.dark) .field textarea:focus,
+::global(.dark) .search-bar input:focus {
+  box-shadow: 0 0 0 3px oklch(25% 0.06 var(--color-accent));
+}
+
+/* Dark mode - modal detail overrides (Teleport escape fix) */
+::global(.dark) .search-bar input,
+::global(.dark) .field input[type="text"],
+::global(.dark) .field textarea {
+  border-color: oklch(25% 0.01 250);
+}
+
+::global(.dark) .search-icon {
+  color: #71717a;
+}
+
+::global(.dark) .pick-name {
+  background: oklch(20% 0.008 250);
+  color: #d4d4d8;
+}
+
+::global(.dark) .pick-card:hover {
+  border-color: oklch(32% 0.015 250);
+}
+
+::global(.dark) .modal-footer.modal-sticky {
+  border-top-color: oklch(25% 0.01 250);
+}
+
+::global(.dark) .modal-header .btn-icon {
+  color: #a1a1aa;
+}
+
+::global(.dark) .modal-header .btn-icon:hover {
+  color: #e4e4e7;
+  background: oklch(24% 0.008 250);
 }
 
 /* ========== Loading ========== */

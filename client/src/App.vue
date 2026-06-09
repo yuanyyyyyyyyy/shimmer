@@ -81,6 +81,7 @@ const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value
   localStorage.setItem('darkMode', isDarkMode.value)
   document.documentElement.classList.toggle('dark', isDarkMode.value)
+  document.documentElement.style.colorScheme = isDarkMode.value ? 'dark' : 'light'
 }
 
 // 退出登录
@@ -109,6 +110,9 @@ onMounted(async () => {
   if (saved === 'true') {
     isDarkMode.value = true
     document.documentElement.classList.add('dark')
+    document.documentElement.style.colorScheme = 'dark'
+  } else {
+    document.documentElement.style.colorScheme = 'light'
   }
   searchQuery.value = route.query.search || ''
   if (searchQuery.value.trim()) {
@@ -295,6 +299,12 @@ watch(showUserMenu, (newVal) => {
   --bg-color: #1a1a1a;
   --card-bg: #2d2d2d;
   --hover-bg: rgba(255,255,255,0.1);
+  color-scheme: dark;
+}
+
+/* 确保 dark 模式下图片保持原始色彩 */
+:root.dark img {
+  opacity: 1 !important;
 }
 
 :root {
