@@ -10,6 +10,8 @@ import Admin from '../views/Admin.vue'
 import Settings from '../views/Settings.vue'
 import Review from '../views/Review.vue'
 import UserProfile from '../views/UserProfile.vue'
+import Albums from '../views/Albums.vue'
+import AlbumDetail from '../views/AlbumDetail.vue'
 import { useAuthStore } from '../stores'
 
 const routes = [
@@ -17,6 +19,8 @@ const routes = [
   { path: '/timeline', name: 'Timeline', component: Timeline },
   { path: '/darkroom', name: 'Darkroom', component: Darkroom },
   { path: '/favorites', name: 'Favorites', component: Favorites },
+  { path: '/albums', name: 'Albums', component: Albums },
+  { path: '/albums/:id', name: 'AlbumDetail', component: AlbumDetail },
   { path: '/login', name: 'Login', component: Login },
   { path: '/register', name: 'Register', component: Register },
   { path: '/photo/:id', name: 'PhotoDetail', component: PhotoDetail },

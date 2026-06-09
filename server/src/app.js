@@ -5,6 +5,7 @@ import path from 'path';
 
 import authRoutes from './routes/auth.js';
 import photoRoutes from './routes/photos.js';
+import albumRoutes from './routes/albums.js';
 import favoriteRoutes from './routes/favorites.js';
 import uploadRoutes from './routes/upload.js';
 import tagRoutes from './routes/tags.js';
@@ -39,6 +40,7 @@ app.use((req, res, next) => {
 // API 路由
 app.use('/api/auth', authRoutes);
 app.use('/api/photos', photoRoutes);
+app.use('/api/albums', albumRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/review', reviewRoutes);

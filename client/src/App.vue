@@ -224,6 +224,7 @@ watch(showUserMenu, (newVal) => {
           </template>
 
           <RouterLink to="/review">回顾</RouterLink>
+          <RouterLink to="/albums">相册</RouterLink>
 
           <button class="dark-toggle" @click="toggleDarkMode" :title="isDarkMode ? '切换亮色模式' : '切换深色模式'">
             {{ isDarkMode ? '☀️' : '🌙' }}

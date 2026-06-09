@@ -106,4 +106,7 @@ export const ai = {
   rewriteSearch: (q) => api.get('/ai/search', { params: { q } })
 }
 
+// 相册
+export { albums } from './albums'
+
 export default api
