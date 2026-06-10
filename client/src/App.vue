@@ -215,6 +215,7 @@ watch(showUserMenu, (newVal) => {
         <nav class="nav">
           <RouterLink to="/">首页</RouterLink>
           <RouterLink to="/timeline">时间轴</RouterLink>
+          <RouterLink to="/story">故事</RouterLink>
           <RouterLink to="/darkroom">暗房</RouterLink>
 
           <!-- 未登录状态 -->

@@ -102,8 +102,22 @@ export const ai = {
   getConfig: () => api.get('/ai/config'),
   saveConfig: (data) => api.post('/ai/config', data),
   getOllamaModels: () => api.get('/ai/ollama/models'),
-  generateMetadata: (data) => api.post('/ai/metadata', data),
+  generateMetadata: (data) => ai.post('/metadata', data),
   rewriteSearch: (q) => api.get('/ai/search', { params: { q } })
+}
+
+// 故事线
+export const storylines = {
+  list: (params) => api.get('/storylines', { params }),
+  getDetail: (date, location) => api.get(`/storylines/${encodeURIComponent(date)}/${encodeURIComponent(location)}`),
+  generateSummary: (date, location, body) => api.post(`/storylines/${encodeURIComponent(date)}/${encodeURIComponent(location)}/summary`, body || { regenerate: true })
+}
+
+// 分享卡片
+export const share = {
+  create: (data) => api.post('/share', data),
+  get: (shareId) => api.get(`/share/${shareId}`),
+  delete: (shareId) => api.delete(`/share/${shareId}`)
 }
 
 // 相册

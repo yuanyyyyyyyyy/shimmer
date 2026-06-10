@@ -12,6 +12,10 @@ import Review from '../views/Review.vue'
 import UserProfile from '../views/UserProfile.vue'
 import Albums from '../views/Albums.vue'
 import AlbumDetail from '../views/AlbumDetail.vue'
+import Storyline from '../views/Storyline.vue'
+import StoryDetail from '../views/StoryDetail.vue'
+import ShareCard from '../views/ShareCard.vue'
+import SharePreview from '../views/SharePreview.vue'
 import { useAuthStore } from '../stores'
 
 const routes = [
@@ -27,6 +31,10 @@ const routes = [
   { path: '/admin', name: 'Admin', component: Admin, meta: { requiresAdmin: true } },
   { path: '/settings', name: 'Settings', component: Settings, meta: { requiresAdmin: true } },
   { path: '/review', name: 'Review', component: Review },
+  { path: '/story', name: 'Storyline', component: Storyline },
+  { path: '/story/:date/:location', name: 'StoryDetail', component: StoryDetail },
+  { path: '/share/create', name: 'ShareCard', component: ShareCard },
+  { path: '/share/:shareId', name: 'SharePreview', component: SharePreview },
   { path: '/user/:id', name: 'UserProfile', component: UserProfile }
 ]
 

@@ -12,6 +12,8 @@ import tagRoutes from './routes/tags.js';
 import reviewRoutes from './routes/review.js';
 import aiRoutes from './routes/ai.js';
 import userRoutes from './routes/users.js';
+import storylineRoutes from './routes/storyline.js';
+import shareRoutes from './routes/share.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 dotenv.config();
@@ -46,6 +48,8 @@ app.use('/api/tags', tagRoutes);
 app.use('/api/review', reviewRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/storylines', storylineRoutes);
+app.use('/api/share', shareRoutes);
 app.use('/api', uploadRoutes);
 
 // 根路径

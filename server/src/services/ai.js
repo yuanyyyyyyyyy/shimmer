@@ -330,10 +330,113 @@ async function rewriteSearchQuery(query, options = {}) {
   }
 }
 
+async function generateStorySummary(storyData = {}, options = {}) {
+  const aiConfig = await loadAiSettings();
+
+  if (!aiConfig.enabled || !aiConfig.provider) {
+    return { success: false, error: 'AI_NOT_ENABLED', message: 'AI 功能未启用' };
+  }
+
+  if (aiConfig.provider !== 'ollama' && !aiConfig.apiKey) {
+    return { success: false, error: 'NO_API_KEY', message: '未配置 API Key' };
+  }
+
+  const { date, location, photos } = storyData;
+  const photoList = (photos || []).map((p, i) => `${i + 1}. ${p.title || '无标题'}${p.mood ? `（${p.mood}）` : ''}`).join('\n');
+
+  const prompt = `你是一个中文光影叙事助手。根据下面同一天同一地点拍摄的一组照片信息，写一段温暖、有画面感的叙事摘要（80-150字）。
+
+要求：
+- 用第一人称或第三人称叙述，营造故事感
+- 提及照片中的心情变化（如果有）
+- 语言优美但不矫情，像在讲述一段美好回忆
+- 仅返回纯文本，不要输出 JSON 或 markdown`;
+
+  const content = `日期：${date || '未知'}\n地点：${location || '未知地点'}\n\n照片列表：\n${photoList}\n\n共 ${photos?.length || 0} 张照片`;
+
+  const messages = [
+    { role: 'system', content: prompt },
+    { role: 'user', content }
+  ];
+
+  try {
+    console.log(`[AI] generateStorySummary: 开始生成 (${date} @ ${location})`);
+    const raw = await makeChatCompletion(messages, { maxTokens: 300 });
+    const result = String(raw).trim();
+
+    if (!result || result.length === 0) {
+      return { success: false, error: 'EMPTY_RESPONSE', message: 'AI 返回内容为空' };
+    }
+
+    console.log(`[AI] generateStorySummary: 生成成功 (${result.length} 字符)`);
+    return { success: true, data: result };
+  } catch (error) {
+    const errorMsg = error.message || error;
+    console.error('[AI] generateStorySummary error:', errorMsg);
+
+    let errorType = 'UNKNOWN_ERROR';
+    let userMessage = 'AI 叙事生成失败';
+
+    if (errorMsg.includes('401') || errorMsg.includes('invalid_api_key')) {
+      errorType = 'INVALID_API_KEY';
+      userMessage = 'API Key 无效或已过期';
+    } else if (errorMsg.includes('timeout') || errorMsg.includes('abort')) {
+      errorType = 'TIMEOUT';
+      userMessage = '请求超时，请稍后重试';
+    } else if (errorMsg.includes('network') || errorMsg.includes('ECONNREFUSED')) {
+      errorType = 'NETWORK_ERROR';
+      userMessage = '网络连接失败';
+    } else if (errorMsg.includes('rate_limit') || errorMsg.includes('429')) {
+      errorType = 'RATE_LIMIT';
+      userMessage = '请求过于频繁';
+    }
+
+    return { success: false, error: errorType, message: userMessage, detail: errorMsg };
+  }
+}
+
+// AI 生成分享卡片文案
+async function generateShareCaption(photos = [], options = {}) {
+  const aiConfig = await loadAiSettings();
+
+  if (!aiConfig.enabled || !aiConfig.provider) {
+    return { success: false, error: 'AI_NOT_ENABLED', message: 'AI 未启用' };
+  }
+
+  const template = options.template || 'cinematic';
+  const photoList = (photos || []).map(p => p.title || '一张美好的瞬间').join('、');
+
+  const styleMap = {
+    cinematic: '电影海报风格：一句有电影感的文案，简短有力，像电影台词',
+    calendar: '日历风格：一句关于时光流逝的感慨',
+    magazine: '杂志风格：文艺清新，适合小红书/朋友圈分享',
+    collage: '拼图风：活泼有趣，适合日常记录'
+  };
+
+  const prompt = `你是一个中文文案创作助手。为用户的一组照片创作一段精美的分享文案。\n\n风格要求：${styleMap[template] || styleMap.cinematic}\n\n要求：仅返回纯文本文案，20-50字，不要输出 JSON 或其他格式。`;
+
+  const messages = [
+    { role: 'system', content: prompt },
+    { role: 'user', content: `这组照片包含：${photoList}` }
+  ];
+
+  try {
+    const raw = await makeChatCompletion(messages, { maxTokens: 100 });
+    const result = String(raw).trim();
+    if (!result) return { success: false, error: 'EMPTY_RESPONSE', message: '返回内容为空' };
+    return { success: true, data: result };
+  } catch (error) {
+    console.error('[AI] generateShareCaption error:', error.message);
+    return { success: false, error: 'GENERATE_FAILED', message: '文案生成失败' };
+  }
+}
+
 export {
   getAIConfig,
   getOllamaModels,
   generatePhotoMetadata,
   summarizeReview,
-  rewriteSearchQuery
+  rewriteSearchQuery,
+  generateStorySummary,
+  generateShareCaption
 };

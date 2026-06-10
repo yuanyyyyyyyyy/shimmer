@@ -77,9 +77,8 @@ router.get('/:id/photos', async (req, res, next) => {
 
     // 获取照片列表
     const photos = await query(
-      `SELECT id, url, thumbnail_url, title, shot_date, camera, lens,
-              aperture, shutter_speed, iso, location_name, tags, visibility,
-              user_id, created_at
+      `SELECT id, url, thumbnail_url, title, shot_date, location, mood,
+              width, height, visibility, user_id, created_at
        FROM photos
        WHERE user_id = ? AND visibility = 'public'
        ORDER BY created_at DESC
