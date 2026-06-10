@@ -73,7 +73,7 @@ router.get('/:shareId', async (req, res, next) => {
     }
 
     const card = rows[0];
-    const photoIds = JSON.parse(card.photo_ids);
+    const photoIds = card.photo_ids;
 
     // 获取照片详情
     const photos = await query(

@@ -71,17 +71,17 @@ onMounted(loadShare)
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(145deg, oklch(96% 0.008 75), oklch(92% 0.012 75));
+  background: #fafafa;
   padding: 32px 16px;
 }
 
 .center-state { text-align: center; color: var(--text-tertiary); }
-.spinner-ring { width: 36px; height: 36px; border: 3px solid oklch(94% 0.008 75); border-top-color: var(--color-primary); border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 14px; }
+.spinner-ring { width: 36px; height: 36px; border: 3px solid var(--n-300); border-top-color: #000; border-radius: 50%; animation: spin 0.7s linear infinite; margin: 0 auto 14px; }
 @keyframes spin { to { transform: rotate(360deg); } }
-.center-state p { font-size: 0.94rem; margin-bottom: 16px; }
+.center-state p { font-size: 0.92rem; margin-bottom: 16px; }
 
-.error-state p { font-size: 1.06rem; color: oklch(45% 0.14 25); }
-.go-home-btn { display: inline-block; padding: 9px 24px; background: var(--color-primary); color: white; border-radius: 22px; text-decoration: none; font-weight: 500; font-size: 0.88rem; }
+.error-state p { font-size: 1rem; }
+.go-home-btn { display: inline-block; padding: 8px 22px; background: #000; color: #fff; border-radius: 20px; text-decoration: none; font-weight: 500; font-size: 0.86rem; }
 
 .card-stage { 
   max-width: 520px; 
@@ -94,17 +94,17 @@ onMounted(loadShare)
 @keyframes floatUp { from { opacity: 0; transform: translateY(30px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 
 .stage-footer { text-align: center; margin-top: 32px; }
-.from-line { font-size: 0.88rem; color: var(--text-secondary); }
-.from-line strong { color: oklch(45% 0.12 75); }
+.from-line { font-size: 0.86rem; color: var(--text-secondary); }
+.from-line strong { color: #000; }
 
 .cta-btn {
   display: inline-block; margin-top: 12px; padding: 8px 22px;
-  background: transparent; border: 1.5px solid oklch(55% 0.12 75);
-  border-radius: 22px; color: var(--color-primary);
-  text-decoration: none; font-size: 0.86rem; font-weight: 600;
+  background: transparent; border: 1.5px solid #000;
+  border-radius: 20px; color: #000;
+  text-decoration: none; font-size: 0.84rem; font-weight: 600;
   transition: all 0.22s;
 }
-.cta-btn:hover { background: oklch(55% 0.16 75); color: white; border-color: transparent; }
+.cta-btn:hover { background: #000; color: #fff; }
 
-.view-count { font-size: 0.76rem; color: var(--text-tertiary); margin-top: 8px; }
+.view-count { font-size: 0.74rem; color: var(--text-tertiary); margin-top: 8px; }
 </style>

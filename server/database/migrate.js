@@ -4,10 +4,10 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 async function runMigration() {
   let connection;
@@ -25,21 +25,29 @@ async function runMigration() {
 
     console.log('✅ 数据库连接成功');
 
-    // 读取迁移脚本
-    const migrationPath = path.join(__dirname, 'migrations', '001_create_albums.sql');
-    const sql = await fs.readFile(migrationPath, 'utf8');
+    // 读取所有迁移脚本
+    const migrationsDir = path.join(__dirname, 'migrations');
+    const files = await fs.readdir(migrationsDir);
+    const sqlFiles = files.filter(f => f.endsWith('.sql')).sort();
 
-    console.log('📄 正在执行迁移脚本:', migrationPath);
+    if (sqlFiles.length === 0) {
+      console.log('⚠️ 未找到迁移脚本');
+      await connection.end();
+      return;
+    }
 
-    // 执行 SQL 脚本
-    await connection.query(sql);
+    for (const file of sqlFiles) {
+      const migrationPath = path.join(migrationsDir, file);
+      const sql = await fs.readFile(migrationPath, 'utf8');
+      console.log('📄 正在执行迁移脚本:', file);
+      await connection.query(sql);
+    }
 
     console.log('✅ 数据库迁移成功！');
-    console.log('   已创建表: albums, album_photos');
 
-    // 验证表是否创建成功
-    const [tables] = await connection.query('SHOW TABLES LIKE "album%"');
-    console.log('📊 验证结果:');
+    // 验证所有表
+    const [tables] = await connection.query('SHOW TABLES');
+    console.log('📊 验证结果 (' + tables.length + ' 张表):');
     tables.forEach(table => {
       console.log('   -', Object.values(table)[0]);
     });

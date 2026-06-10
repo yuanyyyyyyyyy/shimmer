@@ -98,7 +98,26 @@ router.get('/:year', async (req, res, next) => {
       [yearInt]
     );
 
-    // 7. 有 GPS 坐标的照片数
+    // 7a. Hero 照片（年度第一张）
+    const heroPhoto = await query(
+      `SELECT id, url, thumbnail_url
+       FROM photos
+       WHERE visibility != 'hidden' AND YEAR(shot_date) = ?
+       ORDER BY shot_date ASC LIMIT 1`,
+      [yearInt]
+    );
+
+    // 7b. 4 张代表性照片（均匀分布）
+    const statPhotos = await query(
+      `SELECT id, url, thumbnail_url
+       FROM photos
+       WHERE visibility != 'hidden' AND YEAR(shot_date) = ?
+       ORDER BY shot_date ASC
+       LIMIT 4`,
+      [yearInt]
+    );
+
+    // 8. 有 GPS 坐标的照片数
     const gpsStats = await query(
       `SELECT COUNT(*) as count
        FROM photos 
@@ -148,6 +167,8 @@ router.get('/:year', async (req, res, next) => {
       avgWidth: sizeStats[0].avg_width ? Math.round(sizeStats[0].avg_width) : 0,
       avgHeight: sizeStats[0].avg_height ? Math.round(sizeStats[0].avg_height) : 0,
       photosWithGps: gpsStats[0].count || 0,
+      heroPhoto: heroPhoto[0] || null,
+      statPhotos: statPhotos || [],
       aiSummary,
       aiError
     });

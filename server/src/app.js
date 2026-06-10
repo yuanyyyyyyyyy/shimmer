@@ -23,7 +23,7 @@ const PORT = process.env.PORT || 3000;
 const uploadDir = process.env.UPLOAD_DIR || 'uploads';
 
 // 静态文件服务 - 提供上传的图片访问
-app.use('/uploads', express.static(path.join(process.cwd(), uploadDir)));
+app.use('/uploads', cors(), express.static(path.join(process.cwd(), uploadDir)));
 
 // 中间件
 app.use(cors({

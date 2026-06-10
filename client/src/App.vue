@@ -284,6 +284,10 @@ watch(showUserMenu, (newVal) => {
 :root {
   --primary-color: #2c3e50;
   --secondary-color: #3498db;
+  --color-primary: #2c3e50;
+  --color-secondary: #3498db;
+  --n-200: oklch(94% 0.003 260);
+  --n-300: oklch(86% 0.004 260);
   --text-color: #333;
   --text-secondary: #666;
   --text-tertiary: #999;
@@ -294,6 +298,10 @@ watch(showUserMenu, (newVal) => {
 :root.dark {
   --primary-color: #e0e0e0;
   --secondary-color: #64b5f6;
+  --color-primary: #e0e0e0;
+  --color-secondary: #64b5f6;
+  --n-200: oklch(30% 0.005 260);
+  --n-300: oklch(40% 0.005 260);
   --text-color: #e0e0e0;
   --text-secondary: #b0b0b0;
   --text-tertiary: #888;

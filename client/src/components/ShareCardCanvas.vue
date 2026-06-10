@@ -1,5 +1,5 @@
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
   template: { type: String, default: 'cinematic' },
@@ -23,6 +23,11 @@ const displayDate = computed(() => {
   const d = new Date(props.date)
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`
 })
+
+const getGridArea = (i) => {
+  if (i === 0) return '1 / 1 / 3 / 3'
+  return `auto / auto / span 1 / span ${props.photos.length <= 2 ? 1 : props.photos.length <= 4 ? 1 : 2}`
+}
 </script>
 
 <template>
@@ -30,9 +35,9 @@ const displayDate = computed(() => {
     <!-- 电影海报模板 -->
     <div v-if="template === 'cinematic'" class="tmpl cinematic">
       <div class="cinema-visual">
-        <img v-if="photos[0]" :src="photos[0].url || photos[0].thumbnail_url" class="hero-img" />
+        <img v-if="photos[0]" :src="photos[0].url || photos[0].thumbnail_url" class="hero-img" crossorigin="anonymous" />
         <div v-if="photos.length > 1" class="film-strip">
-          <img v-for="p in photos.slice(1, 4)" :key="p.id" :src="p.url || p.thumbnail_url" />
+          <img v-for="p in photos.slice(1, 4)" :key="p.id" :src="p.url || p.thumbnail_url" crossorigin="anonymous" />
         </div>
         <div class="cinema-overlay"></div>
       </div>
@@ -55,7 +60,7 @@ const displayDate = computed(() => {
       </div>
       <div class="cal-grid">
         <div v-for="(p, i) in photos.slice(0, 6)" :key="p.id" class="cal-cell" :class="{ 'big': i === 0 }">
-          <img :src="p.url || p.thumbnail_url" />
+          <img :src="p.url || p.thumbnail_url" crossorigin="anonymous" />
         </div>
       </div>
       <div class="cal-footer">
@@ -72,10 +77,10 @@ const displayDate = computed(() => {
       </div>
       <div class="mag-layout">
         <div class="mag-main" v-if="photos[0]">
-          <img :src="photos[0].url || photos[0].thumbnail_url" />
+          <img :src="photos[0].url || photos[0].thumbnail_url" crossorigin="anonymous" />
         </div>
         <div class="mag-side" v-if="photos.length > 1">
-          <img v-for="p in photos.slice(1, 3)" :key="p.id" :src="p.url || p.thumbnail_url" />
+          <img v-for="p in photos.slice(1, 3)" :key="p.id" :src="p.url || p.thumbnail_url" crossorigin="anonymous" />
         </div>
       </div>
       <div class="mag-info">
@@ -94,7 +99,7 @@ const displayDate = computed(() => {
     <div v-else class="tmpl collage">
       <div class="collage-grid" :class="{ 'single': photos.length === 1, 'two': photos.length === 2 }">
         <div v-for="(p, i) in photos.slice(0, 9)" :key="p.id" class="collage-cell" :style="{ gridArea: getGridArea(i) }">
-          <img :src="p.url || p.thumbnail_url" />
+          <img :src="p.url || p.thumbnail_url" crossorigin="anonymous" />
         </div>
       </div>
       <div class="collage-caption" v-if="caption">
@@ -107,17 +112,6 @@ const displayDate = computed(() => {
     </div>
   </div>
 </template>
-
-<script>
-export default {
-  methods: {
-    getGridArea(i) {
-      if (i === 0) return '1 / 1 / 3 / 3'
-      return `auto / auto / span 1 / span ${this.photos.length <= 2 ? 1 : this.photos.length <= 4 ? 1 : 2}`
-    }
-  }
-}
-</script>
 
 <style scoped>
 .share-card-canvas {

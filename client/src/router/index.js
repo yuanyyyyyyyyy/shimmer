@@ -33,7 +33,7 @@ const routes = [
   { path: '/review', name: 'Review', component: Review },
   { path: '/story', name: 'Storyline', component: Storyline },
   { path: '/story/:date/:location', name: 'StoryDetail', component: StoryDetail },
-  { path: '/share/create', name: 'ShareCard', component: ShareCard },
+  { path: '/share/create', name: 'ShareCard', component: ShareCard, meta: { requiresAuth: true } },
   { path: '/share/:shareId', name: 'SharePreview', component: SharePreview },
   { path: '/user/:id', name: 'UserProfile', component: UserProfile }
 ]
