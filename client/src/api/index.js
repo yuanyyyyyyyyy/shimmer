@@ -115,7 +115,7 @@ export const ai = {
 export const storylines = {
   list: (params) => api.get('/storylines', { params }),
   getDetail: (date, location) => api.get(`/storylines/${encodeURIComponent(date)}/${encodeURIComponent(location)}`),
-  generateSummary: (date, location, body) => api.post(`/storylines/${encodeURIComponent(date)}/${encodeURIComponent(location)}/summary`, body || { regenerate: true })
+  generateSummary: (date, location, body) => api.post(`/storylines/${encodeURIComponent(date)}/${encodeURIComponent(location)}/summary`, body || {})
 }
 
 // 统计

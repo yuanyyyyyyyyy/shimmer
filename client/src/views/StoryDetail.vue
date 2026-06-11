@@ -25,7 +25,8 @@ const loadDetail = async () => {
     detail.value = res
     photos.value = res.photos || []
     tags.value = res.tags || []
-    aiSummary.value = ''
+    // 如果后端已缓存了 AI 叙事，直接填充
+    aiSummary.value = res.aiSummary || ''
   } catch (e) {
     console.error('加载失败:', e)
     if (e.response?.status === 404) {
@@ -44,7 +45,7 @@ const generateAiSummary = async () => {
     const res = await storylines.generateSummary(
       date.value,
       location.value,
-      photoIds.length > 0 ? { photoIds } : undefined
+      { photoIds, regenerate: true }
     )
     if (res.summary && res.summary.trim().length > 0) {
       aiSummary.value = res.summary
@@ -65,7 +66,7 @@ const generateAiSummary = async () => {
 const formatFullDate = (d) => {
   if (!d) return ''
   const date = new Date(d)
-  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}.${String(date.getDate()).padStart(2, '0')}`
+  return `${date.getFullYear()}.${String(date.getMonth() + 1).padStart(2, '0')}`
 }
 
 const goBack = () => {
@@ -88,93 +89,79 @@ onMounted(loadDetail)
     </div>
 
     <template v-else>
-      <section class="hero-section">
-        <div
-          class="hero-bg"
-          :style="coverPhoto ? { backgroundImage: `url(${coverPhoto.original_url || coverPhoto.url || coverPhoto.thumbnail_url})` } : {}"
-        ></div>
+      <div class="detail-header">
         <button class="back-btn" @click="goBack">← 返回</button>
-        <div class="hero-label">
-          <h1>{{ formatFullDate(detail.date) }}</h1>
-          <p class="hero-location">{{ detail.location }}</p>
-          <div class="hero-meta">
-            <span>{{ photos.length }} 张照片</span>
-            <span v-if="tags.length">{{ tags.length }} 个标签</span>
-          </div>
-          <div v-if="tags.length" class="hero-tags">
-            <span v-for="tag in tags" :key="tag.id" class="hero-tag">{{ tag.name }}</span>
+      </div>
+      <section class="hero-section">
+        <div class="hero-frame">
+          <div
+            class="hero-bg"
+            :style="coverPhoto ? { backgroundImage: `url(${coverPhoto.original_url || coverPhoto.url || coverPhoto.thumbnail_url})` } : {}"
+          ></div>
+          <div class="hero-label">
+            <span class="hero-date">{{ formatFullDate(detail.date) }}</span>
+            <span class="hero-dot"></span>
+            <span class="hero-location">{{ detail.location }}</span>
           </div>
         </div>
       </section>
 
       <div class="content-area">
-        <div class="content-main">
-          <section class="ai-block">
-            <h2>AI 叙事</h2>
-            <div v-if="aiLoading" class="ai-loading">
-              <div class="mini-spinner"></div>
-              <p>AI 正在回忆这段故事...</p>
-            </div>
-            <p v-else-if="aiSummary" class="ai-text">{{ aiSummary }}</p>
-            <div v-else class="ai-prompt">
-              <button @click="generateAiSummary" :disabled="aiLoading">
-                让 AI 讲述这个故事
-              </button>
-            </div>
-            <p v-if="aiError" class="ai-error">{{ aiError.message || '生成失败' }}</p>
-          </section>
-
-          <section class="photos-block">
-            <h2>全部照片</h2>
-            <div class="photo-grid">
-              <figure v-for="photo in photos" :key="photo.id" class="photo-item">
-                <img :src="photo.thumbnail_url || photo.url" :alt="photo.title || ''" loading="lazy" />
-                <figcaption v-if="photo.title">
-                  <span class="photo-title">{{ photo.title }}</span>
-                  <span v-if="photo.mood" class="photo-mood">{{ photo.mood }}</span>
-                </figcaption>
-              </figure>
-            </div>
-          </section>
+        <div v-if="tags.length" class="story-tags">
+          <span v-for="tag in tags" :key="tag.id" class="story-tag">{{ tag.name }}</span>
         </div>
 
-        <aside class="content-sidebar">
-          <div class="exif-card" v-if="coverPhoto">
-            <h3>照片信息</h3>
-            <dl>
-              <div class="exif-row">
-                <dt>相机</dt>
-                <dd>{{ coverPhoto.camera || '--' }}</dd>
-              </div>
-              <div class="exif-row">
-                <dt>镜头</dt>
-                <dd>{{ coverPhoto.lens || '--' }}</dd>
-              </div>
-              <div class="exif-row">
-                <dt>光圈</dt>
-                <dd>{{ coverPhoto.aperture || '--' }}</dd>
-              </div>
-              <div class="exif-row">
-                <dt>快门</dt>
-                <dd>{{ coverPhoto.shutter_speed || '--' }}</dd>
-              </div>
-              <div class="exif-row">
-                <dt>ISO</dt>
-                <dd>{{ coverPhoto.iso || '--' }}</dd>
-              </div>
-            </dl>
+        <section class="story-narrative">
+          <h2 class="narrative-label">AI 叙事</h2>
+          <div v-if="aiLoading" class="ai-loading">
+            <div class="mini-spinner"></div>
+            <p>AI 正在回忆这段故事...</p>
           </div>
+          <p v-else-if="aiSummary" class="narrative-text">{{ aiSummary }}</p>
+          <div v-else class="ai-prompt">
+            <button @click="generateAiSummary" :disabled="aiLoading" class="narrative-btn">
+              {{ aiSummary ? '重新生成叙事' : '让 AI 讲述这个故事' }}
+            </button>
+          </div>
+          <p v-if="aiError" class="ai-error">{{ aiError.message || '生成失败' }}</p>
+        </section>
 
-          <div class="action-card">
-            <router-link
-              :to="{ path: '/share/create', query: { date: detail.date, location: detail.location } }"
-              class="action-btn primary"
-            >
-              生成分享卡片
-            </router-link>
-            <button class="action-btn ghost" @click="goBack">返回故事线</button>
+        <div class="story-exif" v-if="coverPhoto">
+          <span v-if="coverPhoto.camera">{{ coverPhoto.camera }}</span>
+          <span class="exif-sep"></span>
+          <span v-if="coverPhoto.lens">{{ coverPhoto.lens }}</span>
+          <span class="exif-sep"></span>
+          <span v-if="coverPhoto.aperture">{{ coverPhoto.aperture }}</span>
+          <span class="exif-sep"></span>
+          <span v-if="coverPhoto.shutter_speed">{{ coverPhoto.shutter_speed }}</span>
+          <span class="exif-sep"></span>
+          <span v-if="coverPhoto.iso">ISO {{ coverPhoto.iso }}</span>
+        </div>
+
+        <div class="story-actions">
+          <router-link
+            :to="{ path: '/share/create', query: { date: detail.date, location: detail.location } }"
+            class="action-btn primary"
+          >
+            生成分享卡片
+          </router-link>
+          <button class="action-btn ghost" @click="goBack">返回故事线</button>
+        </div>
+
+        <section class="photos-block">
+          <h2 class="photos-heading">全部照片</h2>
+          <div class="photo-strip">
+              <figure v-for="photo in photos" :key="photo.id" class="photo-item">
+                <div class="photo-img">
+                  <img :src="photo.original_url || photo.url || photo.thumbnail_url" :alt="photo.title || ''" loading="lazy" />
+                </div>
+                <figcaption v-if="photo.title || photo.mood" class="photo-caption">
+                <span v-if="photo.title" class="photo-title">{{ photo.title }}</span>
+                <span v-if="photo.mood" class="photo-mood">{{ photo.mood }}</span>
+              </figcaption>
+            </figure>
           </div>
-        </aside>
+        </section>
       </div>
     </template>
   </div>
@@ -212,18 +199,44 @@ onMounted(loadDetail)
   cursor: pointer;
 }
 
-/* Hero */
-.hero-section {
-  position: relative;
-  height: 420px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  max-width: 960px;
+/* ===== Detail Header (back button) ===== */
+.detail-header {
+  max-width: 640px;
   margin: 0 auto;
-  border-radius: 4px;
+  padding: 20px 24px 0;
+}
+
+.back-btn {
+  background: none;
+  border: none;
+  color: var(--text-s);
+  padding: 6px 0;
+  cursor: pointer;
+  font-size: 0.84rem;
+  font-weight: 500;
+  transition: color 0.2s;
+}
+
+.back-btn:hover {
+  color: #000;
+}
+
+/* ===== Hero ===== */
+.hero-section {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px 24px 0;
+  display: flex;
+  justify-content: center;
+}
+
+.hero-frame {
+  position: relative;
+  width: 592px;
+  aspect-ratio: 8/3;
+  border-radius: 8px;
+  overflow: hidden;
+  background-color: var(--n-200);
 }
 
 .hero-bg {
@@ -231,121 +244,89 @@ onMounted(loadDetail)
   inset: 0;
   background-size: cover;
   background-position: center;
-  background-color: var(--n-200);
-}
-
-.back-btn {
-  position: absolute;
-  top: 20px;
-  left: 24px;
-  background: rgba(255,255,255,0.85);
-  backdrop-filter: blur(8px);
-  border: none;
-  color: #000;
-  padding: 6px 16px;
-  border-radius: 16px;
-  cursor: pointer;
-  font-size: 0.84rem;
-  font-weight: 500;
-  z-index: 2;
-  transition: background 0.2s;
-}
-
-.back-btn:hover {
-  background: #fff;
 }
 
 .hero-label {
-  position: relative;
+  position: absolute;
+  bottom: 12px;
+  left: 12px;
   z-index: 1;
-  background: rgba(255,255,255,0.05);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  margin: 0;
-  padding: 20px 32px;
-  border-radius: 12px;
-  text-align: center;
+  background: rgba(0,0,0,0.35);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 6px 14px;
+  border-radius: 6px;
   color: #fff;
+  font-size: 0.78rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
-.hero-label h1 {
-  font-size: 1.3rem;
-  font-weight: 700;
-  margin-bottom: 4px;
-  color: #fff;
-  font-family: 'Georgia', 'Noto Serif SC', serif;
+.hero-date {
+  font-weight: 600;
+}
+
+.hero-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.4);
 }
 
 .hero-location {
-  font-size: 0.9rem;
-  color: rgba(255,255,255,0.7);
-  margin-bottom: 8px;
-  font-family: 'Georgia', 'Noto Serif SC', serif;
+  font-weight: 400;
+  opacity: 0.7;
 }
 
-.hero-meta {
-  display: flex;
-  gap: 12px;
-  font-size: 0.78rem;
-  color: rgba(255,255,255,0.5);
-  margin-bottom: 8px;
-  justify-content: center;
+/* ===== Content area (single column) ===== */
+.content-area {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 40px 24px 60px;
 }
 
-.hero-tags {
+/* ===== Tags ===== */
+.story-tags {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
+  margin-bottom: 24px;
 }
 
-.hero-tag {
-  font-size: 0.7rem;
-  color: rgba(255,255,255,0.7);
-  border: 1px solid rgba(255,255,255,0.2);
-  padding: 2px 10px;
-  border-radius: 10px;
+.story-tag {
+  font-size: 0.72rem;
+  color: var(--text-s);
+  border: 1px solid var(--border-light);
+  padding: 3px 12px;
+  border-radius: 12px;
 }
 
-/* Content area */
-.content-area {
-  max-width: 1100px;
-  margin: 0 auto;
-  padding: 36px 24px 48px;
-  display: grid;
-  grid-template-columns: 1fr 240px;
-  gap: 40px;
+/* ===== Narrative ===== */
+.story-narrative {
+  margin-bottom: 32px;
 }
 
-/* Main column */
-.content-main section {
-  margin-bottom: 36px;
-}
-
-.content-main h2 {
-  font-size: 1.1rem;
-  font-weight: 700;
+.narrative-label {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-t);
   margin-bottom: 16px;
-  color: #000;
-  padding-bottom: 8px;
-  border-bottom: 2px solid #000;
-  display: inline-block;
 }
 
-:root.dark .content-main h2 {
-  color: #e0e0e0;
-  border-bottom-color: #555;
-}
-
-/* AI block */
-.ai-block {
-  background: var(--n-200);
-  border-radius: 4px;
-  padding: 24px;
+.narrative-text {
+  font-size: 1rem;
+  line-height: 1.9;
+  color: var(--text-p);
+  white-space: pre-wrap;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 .ai-loading {
   text-align: center;
-  color: var(--text-secondary);
+  color: var(--text-s);
   padding: 12px;
 }
 
@@ -354,146 +335,68 @@ onMounted(loadDetail)
   font-size: 0.9rem;
 }
 
-.ai-text {
-  font-size: 0.95rem;
-  line-height: 1.85;
-  color: var(--text-color);
-  white-space: pre-wrap;
-}
-
 .ai-prompt {
-  text-align: center;
-  padding: 8px 0;
+  text-align: left;
+  padding: 4px 0;
 }
 
-.ai-prompt button {
-  background: #000;
-  border: none;
-  color: white;
-  padding: 10px 24px;
-  border-radius: 24px;
-  font-size: 0.9rem;
-  font-weight: 500;
+.narrative-btn {
+  background: none;
+  border: 1px solid var(--border-light);
+  color: var(--text-s);
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 0.84rem;
   cursor: pointer;
-  transition: opacity 0.2s;
+  transition: all 0.2s;
 }
 
-.ai-prompt button:hover {
-  opacity: 0.85;
+.narrative-btn:hover {
+  border-color: #000;
+  color: #000;
 }
 
 .ai-error {
-  color: var(--text-secondary);
+  color: var(--text-t);
   font-size: 0.84rem;
   margin-top: 8px;
 }
 
-/* Photo grid */
-.photo-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.photo-item {
-  break-inside: avoid;
-  margin: 0;
-  background: var(--card-bg);
-  border: 1px solid var(--n-300);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.photo-item img {
-  width: 100%;
-  display: block;
-  transition: transform 0.3s;
-}
-
-.photo-item:hover img {
-  transform: scale(1.02);
-}
-
-.photo-item figcaption {
-  padding: 8px 10px;
-  font-size: 0.82rem;
-  color: var(--text-secondary);
-}
-
-.photo-title {
-  display: block;
-  color: var(--text-color);
-  font-weight: 500;
-  margin-bottom: 2px;
-}
-
-.photo-mood {
-  font-style: italic;
-  opacity: 0.7;
-  font-size: 0.78rem;
-}
-
-/* Sidebar */
-.content-sidebar {
+/* ===== EXIF bar ===== */
+.story-exif {
   display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.exif-card {
-  background: var(--card-bg);
-  border: 1px solid var(--n-300);
-  border-radius: 4px;
-  padding: 20px;
-}
-
-.exif-card h3 {
-  font-size: 0.85rem;
-  font-weight: 700;
-  margin-bottom: 16px;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.exif-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--n-200);
-}
-
-.exif-row:last-child {
-  border-bottom: none;
-}
-
-.exif-row dt {
+  align-items: center;
+  gap: 6px;
   font-size: 0.78rem;
-  color: var(--text-tertiary);
+  color: var(--text-t);
+  padding: 14px 0;
+  border-top: 1px solid var(--border-divider);
+  border-bottom: 1px solid var(--border-divider);
+  margin-bottom: 20px;
+  flex-wrap: wrap;
 }
 
-.exif-row dd {
-  font-size: 0.78rem;
-  color: var(--text-color);
-  font-weight: 500;
-  margin: 0;
-  text-align: right;
+.exif-sep {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border-light);
 }
 
-/* Action buttons */
-.action-card {
+/* ===== Actions ===== */
+.story-actions {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
+  gap: 10px;
+  margin-bottom: 48px;
 }
 
 .action-btn {
-  display: block;
+  display: inline-block;
   text-align: center;
-  padding: 10px 20px;
-  border-radius: 4px;
-  font-size: 0.85rem;
-  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 500;
   cursor: pointer;
   text-decoration: none;
   border: none;
@@ -511,8 +414,8 @@ onMounted(loadDetail)
 
 .action-btn.ghost {
   background: transparent;
-  border: 1px solid var(--n-300);
-  color: var(--text-secondary);
+  border: 1px solid var(--border-light);
+  color: var(--text-s);
 }
 
 .action-btn.ghost:hover {
@@ -520,22 +423,100 @@ onMounted(loadDetail)
   color: #000;
 }
 
+/* ===== Photos ===== */
+.photos-block {
+  margin-bottom: 36px;
+}
+
+.photos-heading {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-t);
+  margin-bottom: 20px;
+}
+
+.photo-strip {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.photo-item {
+  margin: 0;
+  overflow: hidden;
+}
+
+.photo-item .photo-img {
+  width: 100%;
+  aspect-ratio: 1/1;
+  overflow: hidden;
+}
+
+.photo-item img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  transition: transform 0.3s;
+}
+
+.photo-item:hover img {
+  transform: scale(1.01);
+}
+
+.photo-caption {
+  padding: 10px 4px 0;
+  font-size: 0.82rem;
+  color: var(--text-s);
+}
+
+.photo-title {
+  display: block;
+  color: var(--text-p);
+  font-weight: 500;
+  margin-bottom: 2px;
+}
+
+.photo-mood {
+  font-style: italic;
+  opacity: 0.6;
+  font-size: 0.78rem;
+}
+
+/* ===== Responsive ===== */
 @media (max-width: 768px) {
-  .content-area {
-    grid-template-columns: 1fr;
+  .detail-header {
+    padding: 16px 16px 0;
   }
 
   .hero-section {
-    height: 320px;
+    padding: 12px 16px 0;
+  }
+
+  .hero-frame {
+    width: min(280px, 100%);
   }
 
   .hero-label {
-    margin: 0 16px 20px;
-    padding: 16px 20px;
+    font-size: 0.72rem;
+    padding: 5px 10px;
+    bottom: 8px;
+    left: 8px;
   }
 
-  .photo-grid {
+  .content-area {
+    padding: 28px 16px 48px;
+  }
+
+  .story-actions {
+    flex-direction: column;
+  }
+
+  .photo-strip {
     grid-template-columns: 1fr;
+    gap: 20px;
   }
 }
 </style>

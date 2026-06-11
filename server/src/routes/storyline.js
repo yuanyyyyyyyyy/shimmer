@@ -18,101 +18,34 @@ const normalizeLocation = (loc) => {
 // 返回 { photos, matchedLevel } 或 null
 // ============================================================
 async function findStoryPhotos(date, decodedLocation, options = {}) {
-  const targetLoc = normalizeLocation(decodedLocation);
   const logTag = options.logTag || '[Story]';
 
-  // ---- Level 1: 精确匹配（SQL 层归一化）----
-  const exactMatch = await query(
+  // 从 date (如 '2026-06-01') 提取年月
+  const dateObj = new Date(date + 'T00:00:00Z');
+  const year = dateObj.getUTCFullYear();
+  const month = dateObj.getUTCMonth() + 1;
+  const monthStart = `${year}-${String(month).padStart(2, '0')}-01`;
+  const nextMonth = month === 12 ? 1 : month + 1;
+  const nextYear = month === 12 ? year + 1 : year;
+  const monthEnd = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
+
+  // 返回当月所有可见照片
+  const photos = await query(
     `SELECT id, title, mood, shot_date, location
      FROM photos 
-     WHERE DATE(shot_date) = ?
-       AND REPLACE(TRIM(COALESCE(location, '')), ' ', '') = ?
+     WHERE shot_date >= ? AND shot_date < ?
        AND visibility != 'hidden'
      ORDER BY shot_date`,
-    [date, targetLoc]
+    [monthStart, monthEnd]
   );
-  console.log(`${logTag} Level1(精确匹配): date="${date}", loc="${targetLoc}" → ${exactMatch.length} 条`);
-  if (exactMatch.length > 0) return { photos: exactMatch, matchedLevel: 1 };
+  console.log(`${logTag} 当月(${monthStart} ~ ${monthEnd}): ${photos.length} 条`);
+  if (photos.length > 0) return { photos, matchedLevel: 1 };
 
-  // ---- Level 1.5: 日期范围容错查询（解决时区导致的 ±1天偏差）----
-  const rangeMatch = await query(
-    `SELECT id, title, mood, shot_date, location
-     FROM photos 
-     WHERE DATE(shot_date) BETWEEN DATE_SUB(?, INTERVAL 1 DAY) AND DATE_ADD(?, INTERVAL 1 DAY)
-       AND REPLACE(TRIM(COALESCE(location, '')), ' ', '') = ?
-       AND visibility != 'hidden'
-     ORDER BY shot_date
-     LIMIT 20`,
-    [date, date, targetLoc]
-  );
-
-  if (rangeMatch.length > 0) {
-    const diagInfo = rangeMatch.map(p => ({
-      id: p.id,
-      actualDate: String(p.shot_date),
-      location: p.location
-    }));
-    console.log(`${logTag} Level1.5(日期容差±1天): 找到 ${rangeMatch.length} 条! 实际日期:`,
-      JSON.stringify(diagInfo));
-    console.warn(`${logTag} ⚠️ 日期不匹配: 请求="${date}", 实际存储日期见上方`);
-    return { photos: rangeMatch, matchedLevel: 1.5 };
-  }
-
-  console.log(`${logTag} Level1.5(日期容差): 范围内也无匹配`);
-
-  // ---- Level 2: 按日期范围 + JS 层归一化过滤（原逻辑增强版）----
-  const dayRangeAll = await query(
-    `SELECT id, title, mood, shot_date, location, visibility
-     FROM photos 
-     WHERE DATE(shot_date) BETWEEN DATE_SUB(?, INTERVAL 1 DAY) AND DATE_ADD(?, INTERVAL 1 DAY)
-       AND visibility != 'hidden'
-     ORDER BY shot_date
-     LIMIT 50`,
-    [date, date]
-  );
-  console.log(`${logTag} Level2(范围+JS归一化): 日期±1天内共 ${dayRangeAll.length} 条可见照片`);
-  if (dayRangeAll.length > 0) {
-    // 输出原始 shot_date 诊断（关键：排查时区问题）
-    console.log(`${logTag} 📅 实际存储的 shot_date 值:`,
-      dayRangeAll.map(p => `id=${p.id} date=${p.shot_date} loc="${p.location}"`));
-
-    const jsFiltered = dayRangeAll.filter(p => normalizeLocation(p.location) === targetLoc);
-    if (jsFiltered.length > 0) return { photos: jsFiltered, matchedLevel: 2 };
-
-    // ---- Level 3: LIKE 模糊匹配 ----
-    const likeResults = dayRangeAll.filter(p => {
-      const raw = (p.location || '').trim();
-      const norm = normalizeLocation(p.location);
-      return norm.includes(targetLoc) || targetLoc.includes(norm)
-        || raw.includes(decodedLocation.trim()) || decodedLocation.trim().includes(raw);
-    });
-    console.log(`${logTag} Level3(LIKE模糊): 匹配到 ${likeResults.length} 条`);
-    if (likeResults.length > 0) return { photos: likeResults, matchedLevel: 3 };
-
-    // ---- Level 4: 使用范围内所有照片（带警告）----
-    console.warn(`${logTag} Level4(兜底): 使用±1天内全部 ${dayRangeAll.length} 张照片，location不精确匹配`);
-    return { photos: dayRangeAll, matchedLevel: 4 };
-  }
-
-  // 完全没有数据 — 扩大范围诊断
-  const withHidden = await query(
-    `SELECT id, title, location, visibility, shot_date
-     FROM photos 
-     WHERE DATE(shot_date) BETWEEN DATE_SUB(?, INTERVAL 2 DAY) AND DATE_ADD(?, INTERVAL 2 DAY)
-     ORDER BY shot_date
-     LIMIT 10`,
-    [date, date]
-  );
-  if (withHidden.length > 0) {
-    console.error(`${logTag} ±2天内存在记录但未匹配! 详情:`,
-      withHidden.map(p => `id=${p.id} date=${p.shot_date} loc="${p.location}" vis=${p.visibility}`));
-  } else {
-    console.error(`${logTag} 当天(date=${date})完全无任何照片记录`);
-  }
+  console.error(`${logTag} 当月(${monthStart} ~ ${monthEnd})完全无任何照片记录`);
   return null;
 }
 
-// 获取故事线列表 — 按同一天+同一地点聚合
+// 获取故事线列表 — 按同一月+同一地点聚合
 router.get('/', async (req, res, next) => {
   try {
     const { year, page = 1, limit = 20 } = req.query;
@@ -130,29 +63,26 @@ router.get('/', async (req, res, next) => {
     const safeLimit = parseInt(limit) || 20;
     const safeOffset = (parseInt(page) - 1) * safeLimit;
 
-    // 查询故事节点：按 日期+地点 聚合
+    // 查询故事节点：按 月份 聚合（同月所有照片归为一条故事），LEFT JOIN 已缓存的 AI 摘要
     // 注意: LIMIT/OFFSET 使用插值而非占位符, 避免 mysql2 子查询参数绑定兼容性问题
     const stories = await query(
       `SELECT 
-        story_date,
-        COALESCE(location, '未知地点') as location,
-        photo_ids,
-        photo_count,
-        first_shot,
-        last_shot
+        grouped.*,
+        ss.summary_text AS cached_summary
        FROM (
          SELECT 
-           DATE(p.shot_date) as story_date,
-           p.location as location,
+           DATE_FORMAT(p.shot_date, '%Y-%m-01') as story_date,
+           GROUP_CONCAT(DISTINCT COALESCE(p.location, '未知地点') SEPARATOR ' / ') as location,
            GROUP_CONCAT(DISTINCT p.id ORDER BY p.shot_date) as photo_ids,
            COUNT(*) as photo_count,
            MIN(p.shot_date) as first_shot,
            MAX(p.shot_date) as last_shot
           FROM photos p
           ${whereClause}
-          GROUP BY DATE(p.shot_date), p.location
+          GROUP BY DATE_FORMAT(p.shot_date, '%Y-%m-01')
        ) AS grouped
-       ORDER BY story_date DESC, location
+       LEFT JOIN story_summaries ss ON ss.story_date = grouped.story_date
+       ORDER BY story_date DESC
        LIMIT ${safeLimit} OFFSET ${safeOffset}`,
       params
     );
@@ -186,16 +116,16 @@ router.get('/', async (req, res, next) => {
         photos,
         tags,
         photoCount: story.photo_count,
-        aiSummary: null  // 由前端按需触发生成
+        aiSummary: story.cached_summary || null  // 关联已缓存的 AI 摘要
       });
     }
 
     // 总数（用于分页）
     const countResult = await query(
       `SELECT COUNT(*) as total FROM (
-        SELECT DATE(shot_date) as d, COALESCE(location, '') as l
+        SELECT DATE_FORMAT(shot_date, '%Y-%m-01') as d
         FROM photos p ${whereClause}
-        GROUP BY d, l
+        GROUP BY DATE_FORMAT(shot_date, '%Y-%m-01')
       ) AS grouped`,
       params
     );
@@ -247,12 +177,19 @@ router.get('/:date/:location', async (req, res, next) => {
       photoIds
     );
 
+    // 查询已缓存的 AI 摘要
+    const summaryRows = await query(
+      `SELECT summary_text FROM story_summaries WHERE story_date = ?`,
+      [date]
+    );
+
     res.json({
       date,
       location: decodedLocation,
       photos: fullPhotos,
       tags,
-      photoCount: fullPhotos.length
+      photoCount: fullPhotos.length,
+      aiSummary: summaryRows.length > 0 ? summaryRows[0].summary_text : null
     });
   } catch (err) {
     next(err);
@@ -260,12 +197,26 @@ router.get('/:date/:location', async (req, res, next) => {
 });
 
 // 生成/重新生成故事的 AI 叙态摘要（使用统一的多级查找逻辑）
+// 支持 regenerate 参数：true=强制重新调 AI；缺省/false=优先返回缓存
 router.post('/:date/:location/summary', async (req, res, next) => {
   try {
     const { date, location } = req.params;
     const decodedLocation = decodeURIComponent(location);
+    const { regenerate } = req.body || {};
 
-    console.log(`[StorySummary] 查询参数: date="${date}", location="${decodedLocation}"`);
+    console.log(`[StorySummary] 查询参数: date="${date}", location="${decodedLocation}", regenerate=${!!regenerate}`);
+
+    // ---- 缓存命中检查（非强制重新生成时）----
+    if (!regenerate) {
+      const cached = await query(
+        `SELECT summary_text, updated_at FROM story_summaries WHERE story_date = ?`,
+        [date]
+      );
+      if (cached.length > 0 && cached[0].summary_text) {
+        console.log(`[StorySummary] 命中缓存 (updated_at: ${cached[0].updated_at})`);
+        return res.json({ summary: cached[0].summary_text, cached: true });
+      }
+    }
 
     // 支持可选的 photoIds 兜底参数（前端可从列表数据中传入已知 ID）
     let photoIdsParam = null;
@@ -319,7 +270,21 @@ router.post('/:date/:location/summary', async (req, res, next) => {
     if (aiResult && typeof aiResult === 'object' && aiResult.success) {
       const summaryText = String(aiResult.data || '').trim();
       if (summaryText.length > 0) {
-        res.json({ summary: summaryText });
+        // ---- 持久化到 story_summaries 表 ----
+        try {
+          await query(
+            `INSERT INTO story_summaries (story_date, summary_text, photo_hash)
+             VALUES (?, ?, ?)
+             ON DUPLICATE KEY UPDATE summary_text = VALUES(summary_text), updated_at = CURRENT_TIMESTAMP`,
+            [date, summaryText, null]
+          );
+          console.log('[StorySummary] AI 结果已持久化');
+        } catch (dbErr) {
+          // 存库失败不影响返回结果
+          console.error('[StorySummary] 持久化失败（不影响返回）:', dbErr.message);
+        }
+
+        res.json({ summary: summaryText, cached: false });
       } else {
         res.json({ summary: null, error: { message: 'AI 返回内容为空，请稍后重试', code: 'EMPTY_CONTENT' } });
       }

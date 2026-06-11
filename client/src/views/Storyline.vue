@@ -85,7 +85,7 @@ const normalizeDate = (dateVal) => {
 const formatMagazineDate = (dateStr) => {
   if (!dateStr) return ''
   const parts = String(dateStr).split(/[-T\s]/)
-  return `${parts[0]}.${(parts[1] || '01').padStart(2, '0')}.${(parts[2] || '01').padStart(2, '0')}`
+  return `${parts[0]}.${(parts[1] || '01').padStart(2, '0')}`
 }
 
 const truncate = (text, maxLen) => {
@@ -94,11 +94,12 @@ const truncate = (text, maxLen) => {
 }
 
 const goDetail = (story) => {
+  const firstLoc = story.location.split(' / ')[0]
   router.push({
     name: 'StoryDetail',
     params: {
       date: normalizeDate(story.date),
-      location: encodeURIComponent(story.location)
+      location: encodeURIComponent(firstLoc)
     }
   })
 }

@@ -95,7 +95,7 @@ async function makeChatCompletion(messages, options = {}) {
       model,
       messages,
       temperature: options.temperature ?? 0.8,
-      max_tokens: options.maxTokens ?? 400
+      max_tokens: options.maxTokens ?? 2048
     };
   } else if (provider === 'zhipu') {
     // 智谱AI：使用 /chat/completions（不带 /v1）
@@ -105,7 +105,7 @@ async function makeChatCompletion(messages, options = {}) {
       model,
       messages,
       temperature: options.temperature ?? 0.8,
-      max_tokens: options.maxTokens ?? 400
+      max_tokens: options.maxTokens ?? 2048
     };
   } else {
     // 其他 OpenAI 兼容的 provider：使用标准 /v1/chat/completions
@@ -114,7 +114,7 @@ async function makeChatCompletion(messages, options = {}) {
       model,
       messages,
       temperature: options.temperature ?? 0.8,
-      max_tokens: options.maxTokens ?? 400
+      max_tokens: options.maxTokens ?? 2048
     };
   }
 
@@ -145,7 +145,11 @@ async function makeChatCompletion(messages, options = {}) {
       throw new Error('AI 返回内容空');
     }
 
-    const content = choice.message?.content || choice.text || '';
+    // 优先使用 content；如果为空且有 reasoning 则回退使用 reasoning
+    const content = choice.message?.content || choice.message?.reasoning || '';
+    if (!content) {
+      console.warn('[AI] AI 返回内容为空');
+    }
     console.log(`[AI] 返回内容长度: ${content.length}, 前100字符:`, content.slice(0, 100));
     return content;
   } finally {
@@ -363,6 +367,7 @@ async function generateStorySummary(storyData = {}, options = {}) {
   const prompt = `你是一个中文光影叙事助手。根据下面同一天同一地点拍摄的一组照片信息，写一段温暖、有画面感的叙事摘要（80-150字）。
 
 要求：
+- 请直接输出答案，不要输出思考过程或推理步骤
 - 用第一人称或第三人称叙述，营造故事感
 - 提及照片中的心情变化（如果有）
 - 语言优美但不矫情，像在讲述一段美好回忆
@@ -377,7 +382,7 @@ async function generateStorySummary(storyData = {}, options = {}) {
 
   try {
     console.log(`[AI] generateStorySummary: 开始生成 (${date} @ ${location})`);
-    const raw = await makeChatCompletion(messages, { maxTokens: 300 });
+    const raw = await makeChatCompletion(messages, { maxTokens: 2048 });
     const result = String(raw).trim();
 
     if (!result || result.length === 0) {
