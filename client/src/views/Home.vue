@@ -153,6 +153,17 @@ onMounted(() => {
   loadStats()
   loadPopularTags()
 })
+
+const getCardStyle = (photo) => {
+  const seed = (photo.id * 7 + 3) % 360
+  const rotate = ((seed % 13) - 6) * 1.1
+  const translateY = ((seed * 3 + 11) % 17) - 8
+  const zIndex = (seed % 20) + 1
+  return {
+    transform: `rotate(${rotate.toFixed(1)}deg) translateY(${translateY}px)`,
+    zIndex
+  }
+}
 </script>
 
 <template>
@@ -235,23 +246,25 @@ onMounted(() => {
       </div>
 
       <template v-else>
-        <div class="gallery">
+        <div class="gallery-floating">
           <div
             v-for="(photo, index) in photoList"
             :key="photo.id"
-            class="g-item"
+            class="f-card"
+            :style="getCardStyle(photo)"
             @click="viewDetail(index)"
           >
-            <img
-              :src="photo.url || photo.thumbnail_url"
-              :alt="photo.title"
-              :style="{ aspectRatio: (photo.width && photo.height) ? `${photo.width}/${photo.height}` : '1/1' }"
-              loading="lazy"
-            />
-            <div class="g-label">
-              <span v-if="photo.location" class="g-location">{{ photo.location }}</span>
-              <span v-if="photo.title" class="g-title">{{ photo.title }}</span>
-              <span v-if="photo.mood && !photo.title" class="g-mood">{{ photo.mood }}</span>
+            <div class="f-card-img">
+              <img
+                :src="photo.url || photo.thumbnail_url"
+                :alt="photo.title"
+                loading="lazy"
+              />
+            </div>
+            <div class="f-card-label">
+              <span v-if="photo.location" class="f-location">{{ photo.location }}</span>
+              <span v-if="photo.title" class="f-title">{{ photo.title }}</span>
+              <span v-if="photo.mood && !photo.title" class="f-mood">{{ photo.mood }}</span>
             </div>
           </div>
         </div>
@@ -393,6 +406,7 @@ onMounted(() => {
   text-transform: uppercase;
   color: var(--text-tertiary);
   margin-bottom: 16px;
+  text-align: center;
 }
 
 /* Film Strip */
@@ -412,6 +426,7 @@ onMounted(() => {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  justify-content: center;
 }
 .filter-pills button {
   padding: 6px 18px;
@@ -455,71 +470,80 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-/* Gallery Wall */
+/* Floating Card Gallery */
 .gallery-section {
   max-width: 960px;
   margin: 0 auto;
   padding: 0 20px 60px;
 }
-.gallery {
-  column-count: 5;
-  column-gap: 8px;
-}
-@media (max-width: 1100px) {
-  .gallery { column-count: 3; }
-}
-@media (max-width: 600px) {
-  .gallery { column-count: 2; }
+.gallery-floating {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 20px;
+  padding: 32px 0 12px;
 }
 
-.g-item {
-  display: inline-block;
-  width: 100%;
-  margin-bottom: 8px;
-  break-inside: avoid;
-  border: 1px solid var(--n-300);
-  background: var(--card-bg);
-  border-radius: 2px;
+.f-card {
+  width: 210px;
+  background: #fff;
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  transition: transform 0.3s, box-shadow 0.3s;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.35s;
   position: relative;
 }
-.g-item:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+.f-card:hover {
+  transform: scale(1.04) !important;
+  box-shadow: 0 16px 40px rgba(0,0,0,0.14);
+  z-index: 100 !important;
 }
-.g-item img {
+
+.f-card-img {
   width: 100%;
+  height: 150px;
+  overflow: hidden;
+}
+.f-card-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
   display: block;
 }
 
-.g-label {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 10px 12px;
-  background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
-  color: #fff;
+.f-card-label {
+  padding: 10px 14px 14px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
 }
-.g-location {
+.f-location {
   font-size: 0.68rem;
-  opacity: 0.8;
+  color: #999;
   letter-spacing: 0.04em;
 }
-.g-title {
+.f-title {
   font-size: 0.82rem;
   font-weight: 600;
+  color: #333;
 }
-.g-mood {
+.f-mood {
   font-size: 0.75rem;
   font-style: italic;
-  opacity: 0.75;
+  color: #999;
 }
+
+:root.dark .f-card {
+  background: #2a2a2a;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+:root.dark .f-card:hover {
+  box-shadow: 0 16px 40px rgba(0,0,0,0.5);
+}
+:root.dark .f-title { color: #e0e0e0; }
+:root.dark .f-location,
+:root.dark .f-mood { color: #888; }
 
 /* Loading & More */
 .loading, .empty, .load-more, .all-loaded {
