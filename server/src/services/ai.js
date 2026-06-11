@@ -20,9 +20,16 @@ const DEFAULT_AI_CONFIG = {
 
 async function loadAiSettings() {
   try {
-    const rows = await query(
-      'SELECT provider, model, base_url, api_key, enabled FROM ai_settings ORDER BY id DESC LIMIT 1'
+    let rows = await query(
+      'SELECT provider, model, base_url, api_key, enabled FROM ai_settings WHERE is_active = 1 LIMIT 1'
     );
+
+    // 无活跃预设时回退到最新一条
+    if (rows.length === 0) {
+      rows = await query(
+        'SELECT provider, model, base_url, api_key, enabled FROM ai_settings ORDER BY id DESC LIMIT 1'
+      );
+    }
 
     if (rows.length === 0) {
       return { ...DEFAULT_AI_CONFIG };

@@ -227,6 +227,12 @@ onMounted(async () => {
   padding: 40px 0;
 }
 
+.user-profile .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
 .profile-header {
   display: flex;
   gap: 32px;

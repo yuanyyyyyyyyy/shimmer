@@ -102,8 +102,13 @@ export const ai = {
   getConfig: () => api.get('/ai/config'),
   saveConfig: (data) => api.post('/ai/config', data),
   getOllamaModels: () => api.get('/ai/ollama/models'),
-  generateMetadata: (data) => ai.post('/metadata', data),
-  rewriteSearch: (q) => api.get('/ai/search', { params: { q } })
+  generateMetadata: (data) => api.post('/ai/metadata', data),
+  rewriteSearch: (q) => api.get('/ai/search', { params: { q } }),
+  getPresets: () => api.get('/ai/presets'),
+  createPreset: (data) => api.post('/ai/presets', data),
+  updatePreset: (id, data) => api.put(`/ai/presets/${id}`, data),
+  activatePreset: (id) => api.put(`/ai/presets/${id}/activate`),
+  deletePreset: (id) => api.delete(`/ai/presets/${id}`)
 }
 
 // 故事线

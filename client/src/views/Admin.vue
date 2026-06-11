@@ -617,6 +617,12 @@ const handleLogout = () => {
 <style scoped>
 .admin { min-height: calc(100vh - 140px); }
 
+.admin .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
 .admin-header {
   display: flex;
   justify-content: space-between;
