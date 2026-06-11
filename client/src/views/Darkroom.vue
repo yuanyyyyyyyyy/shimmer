@@ -429,9 +429,8 @@ const maskStyle = computed(() => {
 <template>
   <div class="darkroom">
     <div class="container">
-      <h2>暗房</h2>
       <p class="tip">
-        移动鼠标探索光影 ·
+        暗房 · 移动鼠标探索光影 ·
         <span v-if="exploreProgress > 0" class="progress">
           探索: {{ exploreProgress }}%
         </span>
@@ -597,13 +596,18 @@ const maskStyle = computed(() => {
 <style scoped>
 .darkroom { min-height: calc(100vh - 140px); }
 
-h2 { margin-bottom: 8px; }
+.darkroom .container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
 
 .tip {
   color: #999;
   margin-bottom: 24px;
   font-size: 0.9rem;
   display: flex;
+  justify-content: center;
   align-items: center;
   gap: 4px;
 }

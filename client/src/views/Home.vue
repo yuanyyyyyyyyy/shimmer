@@ -145,16 +145,12 @@ const clearFilters = () => {
   router.push({ path: '/' })
 }
 
-const addToFade = (el) => {
-  const observer = new IntersectionObserver((entries) => {
-    entries.forEach(entry => {
-      if (entry.isIntersecting) {
-        entry.target.classList.add('fade-in')
-        observer.unobserve(entry.target)
-      }
-    })
-  }, { threshold: 0.1 })
-  observer.observe(el)
+const getSizeClass = (index) => {
+  const p = index % 8
+  if (p === 0) return 'size-big'
+  if (p === 1) return 'size-tall'
+  if (p === 4) return 'size-wide'
+  return 'size-normal'
 }
 
 watch(() => route.query, () => {
@@ -247,37 +243,25 @@ onMounted(() => {
       </div>
 
       <template v-else>
-        <div class="waterfall">
+        <div class="gallery">
           <div
             v-for="(photo, index) in photoList"
             :key="photo.id"
-            class="waterfall-item"
+            class="g-item"
+            :class="getSizeClass(index)"
             @click="viewDetail(index)"
           >
-            <div class="waterfall-img-wrap">
+            <div class="g-thumb">
               <img
-                :src="photo.thumbnail_url || photo.url"
+                :src="photo.url || photo.thumbnail_url"
                 :alt="photo.title"
                 :style="{ aspectRatio: (photo.width && photo.height) ? `${photo.width}/${photo.height}` : '1/1' }"
                 loading="lazy"
               />
-              <div class="waterfall-overlay">
-                <div class="overlay-top">
-                  <button
-                    class="fav-btn"
-                    :class="{ active: favoriteIds.has(photo.id) }"
-                    @click="toggleFavorite(photo, $event)"
-                  >{{ favoriteIds.has(photo.id) ? '♥' : '♡' }}</button>
-                </div>
-                <div class="overlay-bottom">
-                  <div v-if="photo.tags && photo.tags.length" class="overlay-tags">
-                    <span v-for="tag in photo.tags.slice(0, 2)" :key="tag.id" class="overlay-tag">{{ tag.name }}</span>
-                  </div>
-                  <p v-if="photo.title" class="overlay-title">{{ photo.title }}</p>
-                  <p v-if="photo.location || photo.mood" class="overlay-meta">
-                    {{ photo.location }}{{ photo.mood ? ' · ' + photo.mood : '' }}
-                  </p>
-                </div>
+              <div class="g-label">
+                <span v-if="photo.location" class="g-location">{{ photo.location }}</span>
+                <span v-if="photo.title" class="g-title">{{ photo.title }}</span>
+                <span v-if="photo.mood && !photo.title" class="g-mood">{{ photo.mood }}</span>
               </div>
             </div>
           </div>
@@ -311,8 +295,10 @@ onMounted(() => {
 /* Hero */
 .hero-section {
   position: relative;
-  height: 100vh;
-  min-height: 500px;
+  height: 460px;
+  max-width: 1200px;
+  margin: 24px auto 0;
+  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -375,8 +361,9 @@ onMounted(() => {
 
 /* Stats */
 .stats-section {
-  padding: 48px 20px;
-  background: #000;
+  max-width: 1200px;
+  margin: 32px auto;
+  padding: 32px 20px;
 }
 .stats-grid {
   max-width: 800px;
@@ -397,12 +384,15 @@ onMounted(() => {
 .stat-number {
   font-size: 2.2rem;
   font-weight: 700;
-  color: #fff;
+  color: #000;
   letter-spacing: -0.02em;
+}
+:root.dark .stat-number {
+  color: #e0e0e0;
 }
 .stat-label {
   font-size: 0.82rem;
-  color: rgba(255,255,255,0.4);
+  color: var(--text-tertiary);
   font-weight: 400;
 }
 
@@ -414,16 +404,19 @@ onMounted(() => {
   text-transform: uppercase;
   color: var(--text-tertiary);
   margin-bottom: 16px;
-  padding: 0 20px;
 }
 
 /* Film Strip */
 .film-section {
-  padding: 40px 0;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 40px 20px;
 }
 
 /* Filter */
 .filter-section {
+  max-width: 1200px;
+  margin: 0 auto;
   padding: 0 20px 32px;
 }
 .filter-pills {
@@ -473,104 +466,84 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-/* Waterfall Gallery */
+/* Gallery Wall */
 .gallery-section {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 20px 60px;
 }
-.waterfall {
-  columns: 3;
-  column-gap: 16px;
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
 }
 @media (max-width: 900px) {
-  .waterfall { columns: 2; }
+  .gallery { grid-template-columns: repeat(3, 1fr); }
 }
-@media (max-width: 540px) {
-  .waterfall { columns: 1; }
+@media (max-width: 600px) {
+  .gallery { grid-template-columns: repeat(2, 1fr); }
 }
-.waterfall-item {
-  break-inside: avoid;
-  margin-bottom: 16px;
-  border-radius: 10px;
+
+.g-item {
+  border: 1px solid var(--n-300);
+  background: var(--card-bg);
+  border-radius: 2px;
   overflow: hidden;
   cursor: pointer;
+  transition: transform 0.3s, box-shadow 0.3s;
 }
-.waterfall-img-wrap {
+.g-item:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+}
+
+.g-item.size-big  { grid-column: span 2; grid-row: span 2; }
+.g-item.size-tall { grid-row: span 2; }
+.g-item.size-wide { grid-column: span 2; }
+
+.g-thumb {
   position: relative;
   overflow: hidden;
-  border-radius: 10px;
+  height: 100%;
 }
-.waterfall-item img {
+.g-thumb img {
   width: 100%;
+  height: 100%;
   display: block;
-  transition: transform 0.4s;
   object-fit: cover;
 }
-.waterfall-item:hover img {
-  transform: scale(1.04);
-}
 
-/* Hover overlay */
-.waterfall-overlay {
+.g-label {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 50%);
-  opacity: 0;
-  transition: opacity 0.3s;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 12px;
+  background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
+  color: #fff;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  padding: 12px;
+  gap: 2px;
 }
-.waterfall-item:hover .waterfall-overlay {
-  opacity: 1;
+.g-location {
+  font-size: 0.68rem;
+  opacity: 0.8;
+  letter-spacing: 0.04em;
 }
-.overlay-top {
-  display: flex;
-  justify-content: flex-end;
-}
-.fav-btn {
-  background: rgba(255,255,255,0.9);
-  border: none;
-  border-radius: 50%;
-  width: 34px;
-  height: 34px;
-  font-size: 16px;
-  cursor: pointer;
-  transition: transform 0.2s;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.fav-btn:hover { transform: scale(1.1); }
-.fav-btn.active { color: #e74c3c; }
-
-.overlay-bottom {
-  color: #fff;
-}
-.overlay-tags {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 4px;
-}
-.overlay-tag {
-  background: rgba(255,255,255,0.2);
-  backdrop-filter: blur(4px);
-  padding: 1px 8px;
-  border-radius: 8px;
-  font-size: 0.7rem;
-}
-.overlay-title {
-  font-size: 0.9rem;
+.g-title {
+  font-size: 0.82rem;
   font-weight: 600;
-  margin: 0 0 2px;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
-.overlay-meta {
+.g-mood {
   font-size: 0.75rem;
+  font-style: italic;
   opacity: 0.75;
-  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .g-item.size-big  { grid-column: span 1; grid-row: span 1; }
+  .g-item.size-tall { grid-row: span 1; }
+  .g-item.size-wide { grid-column: span 2; }
 }
 
 /* Loading & More */

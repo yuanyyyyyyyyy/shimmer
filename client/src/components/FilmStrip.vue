@@ -10,9 +10,7 @@ const paused = ref(false)
 
 const stripPhotos = computed(() => {
   if (props.photos.length === 0) return []
-  const duped = [...props.photos]
-  while (duped.length < 20) duped.push(...props.photos)
-  return duped
+  return [...props.photos, ...props.photos]
 })
 </script>
 

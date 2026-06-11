@@ -201,7 +201,7 @@ router.get('/', async (req, res, next) => {
     );
 
     res.json({
-      stories,
+      stories: result,
       total: countResult[0].total,
       page: parseInt(page),
       limit: parseInt(limit)
