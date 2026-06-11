@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch, computed, onBeforeUnmount, onBeforeMount } from 'vue'
+import { ref, onMounted, watch, computed, onBeforeUnmount, nextTick } from 'vue'
 import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { tags, ai } from './api'
 import { useAuthStore } from './stores'
@@ -14,11 +14,21 @@ const popularTags = ref([])
 const showTags = ref(false)
 const isDarkMode = ref(false)
 const showUserMenu = ref(false)
-const showMoreMenu = ref(false)
+const showSearchBar = ref(false)
 const scrolled = ref(false)
+const searchInputRef = ref(null)
+const searchBarRef = ref(null)
 const showPopularTags = computed(() => showTags.value && !searchQuery.value.trim())
 
-// 加载热门标签
+const navLinks = [
+  { to: '/', label: '首页' },
+  { to: '/timeline', label: '时间轴' },
+  { to: '/story', label: '故事' },
+  { to: '/darkroom', label: '暗房' },
+  { to: '/review', label: '回顾' },
+  { to: '/albums', label: '相册' }
+]
+
 const loadPopularTags = async () => {
   try {
     const res = await tags.getPopular(8)
@@ -26,13 +36,13 @@ const loadPopularTags = async () => {
   } catch (e) {}
 }
 
-// 搜索
 const handleSearch = () => {
   const query = searchQuery.value.trim()
   if (query) {
     router.push({ path: '/', query: { search: query } })
     showTags.value = false
     searchSuggestions.value = []
+    closeSearch()
   }
 }
 
@@ -41,6 +51,7 @@ const selectSuggestion = (value) => {
   router.push({ path: '/', query: { search: value } })
   searchSuggestions.value = []
   showTags.value = false
+  closeSearch()
 }
 
 const fetchSearchSuggestions = async (query) => {
@@ -57,7 +68,6 @@ const fetchSearchSuggestions = async (query) => {
     ]
       .map(item => String(item).trim())
       .filter(Boolean)
-
     searchSuggestions.value = [...new Set(suggestions)].slice(0, 6)
   } catch (e) {
     searchSuggestions.value = []
@@ -66,19 +76,16 @@ const fetchSearchSuggestions = async (query) => {
   }
 }
 
-// 按标签筛选
 const filterByTag = (tagId) => {
   router.push({ path: '/', query: { tag: tagId } })
   showTags.value = false
 }
 
-// 清除筛选
 const clearFilters = () => {
   searchQuery.value = ''
   router.push({ path: '/' })
 }
 
-// 切换深色模式
 const toggleDarkMode = () => {
   isDarkMode.value = !isDarkMode.value
   localStorage.setItem('darkMode', isDarkMode.value)
@@ -86,31 +93,43 @@ const toggleDarkMode = () => {
   document.documentElement.style.colorScheme = isDarkMode.value ? 'dark' : 'light'
 }
 
-// 退出登录
 const handleLogout = () => {
   authStore.logout()
   showUserMenu.value = false
   router.push('/')
 }
 
-// 关闭用户菜单
 const closeUserMenu = () => {
   showUserMenu.value = false
 }
 
-// 点击外部关闭菜单
+const openSearch = async () => {
+  showSearchBar.value = true
+  await nextTick()
+  searchInputRef.value?.focus()
+}
+
+const closeSearch = () => {
+  showSearchBar.value = false
+  searchQuery.value = ''
+  searchSuggestions.value = []
+  showTags.value = false
+}
+
+const handleSearchKeydown = (e) => {
+  if (e.key === 'Escape') closeSearch()
+}
+
 const handleClickOutside = (e) => {
   if (showUserMenu.value && !e.target.closest('.user-menu-wrapper')) {
     showUserMenu.value = false
   }
-  if (showMoreMenu.value && !e.target.closest('.more-menu-wrapper')) {
-    showMoreMenu.value = false
+  if (showSearchBar.value && searchBarRef.value && !searchBarRef.value.contains(e.target) && !e.target.closest('.search-trigger')) {
+    closeSearch()
   }
 }
 
-// 初始化
 onMounted(async () => {
-  // 读取深色模式设置
   const saved = localStorage.getItem('darkMode')
   if (saved === 'true') {
     isDarkMode.value = true
@@ -125,15 +144,12 @@ onMounted(async () => {
   }
   loadPopularTags()
 
-  // 获取用户信息
   if (authStore.token && !authStore.user) {
     await authStore.fetchUser()
   }
 
-  // 添加点击事件监听
   document.addEventListener('click', handleClickOutside)
 
-  // 滚动监听 — 毛玻璃导航
   const onScroll = () => { scrolled.value = window.scrollY > 50 }
   window.addEventListener('scroll', onScroll, { passive: true })
   onScroll()
@@ -165,10 +181,8 @@ onBeforeUnmount(() => {
   if (cleanupScroll) cleanupScroll()
 })
 
-// 监听用户菜单状态
-watch([showUserMenu, showMoreMenu], () => {
-  const anyOpen = showUserMenu.value || showMoreMenu.value
-  if (anyOpen) {
+watch(showUserMenu, (newVal) => {
+  if (newVal) {
     document.addEventListener('click', handleClickOutside)
   } else {
     document.removeEventListener('click', handleClickOutside)
@@ -178,119 +192,111 @@ watch([showUserMenu, showMoreMenu], () => {
 
 <template>
   <div class="app">
-    <header class="header" :class="{ scrolled }">
-      <div class="container">
-        <RouterLink to="/" class="logo">光影手记</RouterLink>
-        <div class="header-center">
-          <!-- 搜索框 -->
-          <div class="search-box">
+    <header class="header" :class="{ scrolled, 'search-open': showSearchBar }">
+      <div class="header-inner">
+        <div class="brand-row">
+          <RouterLink to="/" class="brand-link">
+            <span class="brand-cn">光影手记</span>
+            <span class="brand-en" :class="{ hide: scrolled }">LIGHT &amp; SHADOW JOURNAL</span>
+          </RouterLink>
+
+          <div class="brand-actions">
+            <button class="icon-btn search-trigger" @click="openSearch" title="搜索">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+              </svg>
+            </button>
+            <button class="icon-btn" @click="toggleDarkMode" :title="isDarkMode ? '切换亮色模式' : '切换深色模式'">
+              <svg v-if="isDarkMode" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/>
+              </svg>
+            </button>
+            <template v-if="authStore.isLoggedIn">
+              <div class="user-menu-wrapper">
+                <button class="icon-btn user-avatar-btn" @click.stop="showUserMenu = !showUserMenu" :title="authStore.user?.nickname || authStore.user?.username">
+                  {{ (authStore.user?.nickname || authStore.user?.username || 'U').charAt(0).toUpperCase() }}
+                </button>
+                <div v-if="showUserMenu" class="user-dropdown">
+                  <div class="dropdown-header">
+                    <span class="user-dropdown-name">{{ authStore.user?.nickname || authStore.user?.username }}</span>
+                    <span class="role-badge" :class="authStore.user?.role">
+                      {{ authStore.user?.role === 'admin' ? '管理员' : '用户' }}
+                    </span>
+                  </div>
+                  <router-link :to="`/user/${authStore.user?.id}`" class="dropdown-item" @click="closeUserMenu">我的主页</router-link>
+                  <router-link to="/favorites" class="dropdown-item" @click="closeUserMenu">我的收藏</router-link>
+                  <router-link v-if="authStore.isAdmin" to="/admin" class="dropdown-item admin" @click="closeUserMenu">管理后台</router-link>
+                  <router-link v-if="authStore.isAdmin" to="/settings" class="dropdown-item admin" @click="closeUserMenu">AI 设置</router-link>
+                  <div class="dropdown-divider"></div>
+                  <button class="dropdown-item logout" @click="handleLogout">退出登录</button>
+                </div>
+              </div>
+            </template>
+            <RouterLink v-else to="/login" class="icon-btn login-link" title="登录">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+              </svg>
+            </RouterLink>
+          </div>
+        </div>
+
+        <nav class="nav-row" :class="{ compact: scrolled }">
+          <RouterLink
+            v-for="link in navLinks"
+            :key="link.to"
+            :to="link.to"
+            class="nav-link"
+          >{{ link.label }}</RouterLink>
+        </nav>
+      </div>
+
+      <!-- Search Bar (toggle) -->
+      <div v-if="showSearchBar" ref="searchBarRef" class="search-bar" @keydown="handleSearchKeydown">
+        <div class="search-bar-inner">
+          <div class="search-field">
+            <svg class="search-field-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+            </svg>
             <input
+              ref="searchInputRef"
               v-model="searchQuery"
               type="text"
               placeholder="搜索照片..."
               @keyup.enter="handleSearch"
               @focus="showTags = !searchQuery.trim()"
             />
-            <button @click="handleSearch">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/>
-                <path d="M21 21l-4.35-4.35"/>
+            <button class="search-close" @click="closeSearch" title="关闭">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M18 6 6 18M6 6l12 12"/>
               </svg>
             </button>
           </div>
-          <div v-if="searchSuggestions.length > 0" class="search-suggestions">
-            <span class="suggestion-label">AI 搜索建议：</span>
-            <button
-              v-for="suggestion in searchSuggestions"
-              :key="suggestion"
-              type="button"
-              class="suggestion-pill"
-              @click="selectSuggestion(suggestion)"
-            >
-              {{ suggestion }}
-            </button>
-            <span class="suggestion-loading" v-if="suggestionsLoading">AI 生成中...</span>
+
+          <div v-if="searchSuggestions.length > 0" class="search-extra">
+            <span class="suggestion-label">AI 搜索建议</span>
+            <div class="suggestion-pills">
+              <button v-for="s in searchSuggestions" :key="s" class="pill" @click="selectSuggestion(s)">{{ s }}</button>
+              <span v-if="suggestionsLoading" class="pill loading">···</span>
+            </div>
           </div>
-          <!-- 热门标签 -->
-          <div v-if="showPopularTags && popularTags.length > 0" class="tags-dropdown">
-            <div class="tags-label">热门标签</div>
-            <div class="tags-list">
-              <span 
-                v-for="tag in popularTags" 
-                :key="tag.id" 
-                class="tag-item"
-                :style="{ backgroundColor: tag.color }"
-                @click="filterByTag(tag.id)"
-              >
-                {{ tag.name }}
-              </span>
+
+          <div v-if="showPopularTags && popularTags.length > 0" class="search-extra">
+            <span class="suggestion-label">热门分类</span>
+            <div class="suggestion-pills">
+              <button v-for="tag in popularTags" :key="tag.id" class="pill" @click="filterByTag(tag.id)">{{ tag.name }}</button>
             </div>
           </div>
         </div>
-        <nav class="nav">
-          <RouterLink to="/">首页</RouterLink>
-          <RouterLink to="/timeline">时间轴</RouterLink>
-
-          <!-- 更多 下拉 -->
-          <div class="more-menu-wrapper">
-            <button class="more-btn" @click.stop="showMoreMenu = !showMoreMenu">
-              更多
-              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: showMoreMenu }"><path d="M6 9l6 6 6-6"/></svg>
-            </button>
-            <div v-if="showMoreMenu" class="more-dropdown">
-              <RouterLink to="/story" class="dropdown-item" @click="showMoreMenu = false">故事线</RouterLink>
-              <RouterLink to="/darkroom" class="dropdown-item" @click="showMoreMenu = false">暗房</RouterLink>
-              <RouterLink to="/review" class="dropdown-item" @click="showMoreMenu = false">回顾</RouterLink>
-              <RouterLink to="/albums" class="dropdown-item" @click="showMoreMenu = false">相册</RouterLink>
-            </div>
-          </div>
-
-          <!-- 登录（未登录） -->
-          <RouterLink v-if="!authStore.isLoggedIn" to="/login">登录</RouterLink>
-
-          <button class="dark-toggle" @click="toggleDarkMode" :title="isDarkMode ? '切换亮色模式' : '切换深色模式'">
-            {{ isDarkMode ? '☀️' : '🌙' }}
-          </button>
-
-          <!-- 用户菜单（已登录） -->
-          <div v-if="authStore.isLoggedIn" class="user-menu-wrapper">
-            <button class="user-btn" @click.stop="showUserMenu = !showUserMenu">
-              <span class="user-avatar">
-                {{ (authStore.user?.nickname || authStore.user?.username || 'U').charAt(0).toUpperCase() }}
-              </span>
-              <span class="user-name">{{ authStore.user?.nickname || authStore.user?.username }}</span>
-              <span class="dropdown-arrow">▼</span>
-            </button>
-            <div v-if="showUserMenu" class="user-dropdown">
-              <div class="dropdown-header">
-                <span class="role-badge" :class="authStore.user?.role">
-                  {{ authStore.user?.role === 'admin' ? '管理员' : '用户' }}
-                </span>
-              </div>
-              <router-link :to="`/user/${authStore.user?.id}`" class="dropdown-item" @click="closeUserMenu">
-                我的主页
-              </router-link>
-              <router-link to="/favorites" class="dropdown-item" @click="closeUserMenu">
-                我的收藏
-              </router-link>
-              <router-link v-if="authStore.isAdmin" to="/admin" class="dropdown-item admin" @click="closeUserMenu">
-                管理后台
-              </router-link>
-              <router-link v-if="authStore.isAdmin" to="/settings" class="dropdown-item admin" @click="closeUserMenu">
-                AI 设置
-              </router-link>
-              <div class="dropdown-divider"></div>
-              <button class="dropdown-item logout" @click="handleLogout">
-                退出登录
-              </button>
-            </div>
-          </div>
-        </nav>
       </div>
     </header>
-    <main class="main">
+
+    <main class="main" :class="{ 'search-expanded': showSearchBar }">
       <RouterView />
     </main>
+
     <footer class="footer">
       <p>© 光影手记 · 用光影记录生活</p>
     </footer>
@@ -328,7 +334,6 @@ watch([showUserMenu, showMoreMenu], () => {
   color-scheme: dark;
 }
 
-/* 确保 dark 模式下图片保持原始色彩 */
 :root.dark img {
   opacity: 1 !important;
 }
@@ -337,18 +342,16 @@ watch([showUserMenu, showMoreMenu], () => {
   --hover-bg: rgba(0,0,0,0.05);
 }
 
+* { box-sizing: border-box; }
+
 body {
+  margin: 0;
   background-color: var(--bg-color);
   color: var(--text-color);
   line-height: 1.6;
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
+/* ===== HEADER ===== */
 .header {
   position: sticky;
   top: 0;
@@ -356,276 +359,286 @@ body {
   background: transparent;
   transition: background 0.3s, box-shadow 0.3s, backdrop-filter 0.3s;
 }
+
 .header.scrolled {
   background: rgba(255,255,255,0.88);
   backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   box-shadow: 0 1px 0 rgba(0,0,0,0.06);
 }
+
+.header.search-open.scrolled {
+  box-shadow: none;
+}
+
 :root.dark .header.scrolled {
   background: rgba(26,26,26,0.88);
 }
 
-.header .container {
+.header-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 16px 24px 8px;
+  transition: padding 0.3s;
+}
+
+.header.scrolled .header-inner {
+  padding: 8px 24px;
+}
+
+/* Brand Row */
+.brand-row {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  height: 60px;
-}
-
-.header-center {
-  position: relative;
-  flex: 1;
-  max-width: 400px;
-  margin: 0 24px;
-}
-
-.search-box {
-  display: flex;
-  align-items: center;
-  background: #f5f5f5;
-  border-radius: 20px;
-  padding: 4px 12px;
-}
-
-.search-box input {
-  flex: 1;
-  border: none;
-  background: transparent;
-  padding: 8px;
-  font-size: 14px;
-  outline: none;
-}
-
-.search-box button {
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 16px;
-  padding: 4px 8px;
-  opacity: 0.5;
-}
-
-.tags-dropdown {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-  padding: 12px;
-  margin-top: 8px;
-}
-
-.search-suggestions {
-  margin-top: 8px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-}
-.search-suggestions .suggestion-label {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-.search-suggestions .suggestion-pill {
-  background: var(--n-200);
-  border: 1px solid var(--n-300);
-  color: var(--text-color);
-  border-radius: 999px;
-  padding: 6px 12px;
-  font-size: 12px;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.search-suggestions .suggestion-pill:hover {
-  border-color: #000;
-  color: #000;
-}
-.search-suggestions .suggestion-loading {
-  color: var(--text-tertiary);
-  font-size: 12px;
-}
-
-.tags-label {
-  font-size: 12px;
-  color: #999;
   margin-bottom: 8px;
+  transition: margin 0.3s;
 }
 
-.tags-list {
+.header.scrolled .brand-row {
+  margin-bottom: 0;
+}
+
+.brand-link {
+  text-decoration: none;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1;
 }
 
-.tag-item {
-  padding: 4px 12px;
-  border-radius: 12px;
-  font-size: 12px;
-  color: #fff;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.tag-item:hover {
-  transform: scale(1.05);
-}
-
-.logo {
-  font-size: 1.5rem;
-  color: var(--primary-color);
-  text-decoration: none;
-}
-
-.nav {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-}
-
-.nav > a {
-  text-decoration: none;
-  color: var(--text-color);
-  font-weight: 500;
-  font-size: 0.92rem;
-  transition: color 0.2s;
-}
-
-.nav > a:hover,
-.nav > a.router-link-active {
+.brand-cn {
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
   color: #000;
+  transition: font-size 0.3s;
 }
 
-/* More menu */
-.more-menu-wrapper {
-  position: relative;
-}
-
-.more-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  font-size: 0.92rem;
-  font-weight: 500;
-  color: var(--text-color);
-  cursor: pointer;
-  padding: 4px 0;
-  transition: color 0.2s;
-}
-
-.more-btn:hover {
-  color: #000;
-}
-
-.more-btn svg {
-  transition: transform 0.2s;
-}
-
-.more-btn svg.rotated {
-  transform: rotate(180deg);
-}
-
-.more-dropdown {
-  position: absolute;
-  top: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  background: var(--card-bg);
-  border-radius: 10px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
-  min-width: 130px;
-  padding: 6px 0;
-  z-index: 200;
-}
-
-.more-dropdown .dropdown-item {
-  display: block;
-  width: 100%;
-  padding: 9px 18px;
-  text-align: left;
-  text-decoration: none;
-  color: var(--text-color);
-  font-size: 0.88rem;
-  font-weight: 400;
-  background: none;
-  border: none;
-  cursor: pointer;
-  transition: background 0.15s;
-  white-space: nowrap;
-}
-
-.more-dropdown .dropdown-item:hover {
-  background: var(--hover-bg);
-}
-
-.admin-link {
-  opacity: 0.6;
-}
-
-.dark-toggle {
-  background: none;
-  border: none;
-  cursor: pointer;
+.header.scrolled .brand-cn {
   font-size: 1.2rem;
-  padding: 4px 8px;
-  border-radius: 8px;
-  transition: background 0.2s;
 }
 
-.dark-toggle:hover {
-  background: var(--hover-bg);
+:root.dark .brand-cn {
+  color: #e0e0e0;
 }
 
-/* 用户菜单 */
-.user-menu-wrapper {
-  position: relative;
+.brand-en {
+  font-size: 0.68rem;
+  font-weight: 400;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  transition: opacity 0.3s, max-height 0.3s;
+  max-height: 20px;
+  opacity: 1;
 }
 
-.user-btn {
+.brand-en.hide {
+  max-height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Brand Actions */
+.brand-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  background: none;
-  border: 1px solid #ddd;
-  border-radius: 20px;
-  padding: 4px 12px 4px 4px;
-  cursor: pointer;
-  transition: background 0.2s;
+  gap: 6px;
+  padding-bottom: 2px;
 }
 
-.user-btn:hover {
-  background: var(--hover-bg);
-}
-
-.user-avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background: #000;
-  color: #fff;
+.icon-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.85rem;
-  font-weight: bold;
-}
-
-.user-name {
-  font-size: 0.9rem;
-  color: var(--text-color);
-  max-width: 80px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dropdown-arrow {
-  font-size: 0.6rem;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
   color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.icon-btn:hover {
+  background: var(--hover-bg);
+  color: #000;
+}
+
+:root.dark .icon-btn:hover {
+  color: #e0e0e0;
+}
+
+.login-link {
+  text-decoration: none;
+}
+
+/* User Avatar */
+.user-avatar-btn {
+  font-size: 0.8rem;
+  font-weight: 700;
+  background: #000 !important;
+  color: #fff !important;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+}
+
+.user-avatar-btn:hover {
+  opacity: 0.85;
+}
+
+/* Nav Row */
+.nav-row {
+  display: flex;
+  gap: 0;
+  margin-left: -2px;
+}
+
+.nav-link {
+  position: relative;
+  text-decoration: none;
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  padding: 2px 10px;
+  transition: color 0.2s;
+}
+
+.nav-link:not(:last-child)::after {
+  content: '·';
+  position: absolute;
+  right: -2px;
+  color: var(--n-300);
+  font-weight: 300;
+}
+
+.nav-link:hover {
+  color: var(--text-color);
+}
+
+.nav-link.router-link-active {
+  color: #000;
+  font-weight: 600;
+}
+
+:root.dark .nav-link.router-link-active {
+  color: #e0e0e0;
+}
+
+/* ===== SEARCH BAR ===== */
+.search-bar {
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--n-300);
+  animation: searchSlide 0.2s ease;
+}
+
+@keyframes searchSlide {
+  from { transform: translateY(-8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.search-bar-inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 12px 24px 16px;
+}
+
+.search-field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--n-200);
+  border-radius: 8px;
+}
+
+.search-field-icon {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+}
+
+.search-field input {
+  flex: 1;
+  border: none;
+  background: transparent;
+  font-size: 0.95rem;
+  outline: none;
+  color: var(--text-color);
+  min-width: 0;
+}
+
+.search-field input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.search-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s;
+}
+
+.search-close:hover {
+  color: #000;
+}
+
+.search-extra {
+  margin-top: 12px;
+}
+
+.suggestion-label {
+  display: block;
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+.suggestion-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  padding: 4px 12px;
+  border-radius: 14px;
+  border: 1px solid var(--n-300);
+  background: transparent;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pill:hover {
+  border-color: #000;
+  color: #000;
+}
+
+.pill.loading {
+  border-style: dashed;
+  cursor: default;
+}
+
+.pill.loading:hover {
+  border-color: var(--n-300);
+  color: var(--text-secondary);
+}
+
+/* ===== USER DROPDOWN ===== */
+.user-menu-wrapper {
+  position: relative;
 }
 
 .user-dropdown {
@@ -633,26 +646,34 @@ body {
   top: calc(100% + 8px);
   right: 0;
   background: var(--card-bg);
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.15);
-  min-width: 180px;
-  padding: 8px 0;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px rgba(0,0,0,0.12);
+  min-width: 170px;
+  padding: 6px 0;
   z-index: 200;
 }
 
 .dropdown-header {
-  padding: 8px 16px;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 8px;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid var(--n-200);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.user-dropdown-name {
+  font-size: 0.85rem;
+  font-weight: 600;
 }
 
 .role-badge {
   display: inline-block;
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 4px;
-  font-size: 0.75rem;
-  background: #eee;
-  color: #666;
+  font-size: 0.65rem;
+  background: var(--n-200);
+  color: var(--text-tertiary);
 }
 
 .role-badge.admin {
@@ -663,15 +684,15 @@ body {
 .dropdown-item {
   display: block;
   width: 100%;
-  padding: 10px 16px;
+  padding: 9px 16px;
   text-align: left;
   text-decoration: none;
   color: var(--text-color);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   background: none;
   border: none;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.15s;
 }
 
 .dropdown-item:hover {
@@ -679,7 +700,6 @@ body {
 }
 
 .dropdown-item.admin {
-  color: #000;
   font-weight: 600;
 }
 
@@ -689,19 +709,53 @@ body {
 
 .dropdown-divider {
   height: 1px;
-  background: #eee;
-  margin: 8px 0;
+  background: var(--n-200);
+  margin: 4px 0;
 }
 
+/* ===== MAIN & FOOTER ===== */
 .main {
   min-height: calc(100vh - 140px);
-  padding: 24px 0;
+  padding: 32px 0;
+  transition: padding 0.3s;
+}
+
+.main.search-expanded {
+  padding-top: 0;
 }
 
 .footer {
   text-align: center;
-  padding: 20px;
+  padding: 24px 20px;
   color: var(--text-tertiary);
-  font-size: 0.9rem;
+  font-size: 0.82rem;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 700px) {
+  .header-inner {
+    padding: 12px 16px 6px;
+  }
+
+  .header.scrolled .header-inner {
+    padding: 6px 16px;
+  }
+
+  .brand-cn {
+    font-size: 1.3rem;
+  }
+
+  .header.scrolled .brand-cn {
+    font-size: 1.1rem;
+  }
+
+  .brand-en {
+    font-size: 0.6rem;
+  }
+
+  .nav-link {
+    font-size: 0.72rem;
+    padding: 2px 8px;
+  }
 }
 </style>
