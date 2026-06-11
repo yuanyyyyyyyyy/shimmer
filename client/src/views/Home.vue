@@ -8,6 +8,7 @@ import { error as showError } from '../composables/useToast'
 import ParticlesBg from '../components/ParticlesBg.vue'
 import FilmStrip from '../components/FilmStrip.vue'
 import Lightbox from '../components/Lightbox.vue'
+import DarkroomPrint from '../components/DarkroomPrint.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -26,6 +27,9 @@ const activeTagId = ref(null)
 
 const lightboxVisible = ref(false)
 const lightboxIndex = ref(0)
+
+const darkroomPhoto = ref(null)
+const showDarkroom = ref(false)
 
 const featuredPhoto = computed(() => {
   if (photoList.value.length === 0) return null
@@ -115,12 +119,18 @@ const viewDetail = (index) => {
   lightboxVisible.value = true
 }
 
+const handleDarkroomDetail = (photo) => {
+  darkroomPhoto.value = photo
+  showDarkroom.value = true
+}
+
+const handleDarkroomClose = () => {
+  showDarkroom.value = false
+  darkroomPhoto.value = null
+}
+
 const handleLightboxClose = () => {
-  const photo = photoList.value[lightboxIndex.value]
   lightboxVisible.value = false
-  if (photo) {
-    router.push(`/photo/${photo.id}`)
-  }
 }
 
 const filterByTag = (tagId) => {
@@ -286,6 +296,13 @@ onMounted(() => {
       :start-index="lightboxIndex"
       :visible="lightboxVisible"
       @close="handleLightboxClose"
+      @detail="handleDarkroomDetail"
+    />
+
+    <DarkroomPrint
+      :photo="darkroomPhoto"
+      :visible="showDarkroom"
+      @close="handleDarkroomClose"
     />
   </div>
 </template>

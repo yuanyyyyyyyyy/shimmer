@@ -117,12 +117,14 @@ router.get('/', optionalAuth, async (req, res, next) => {
 
     // 获取列表（添加 tags 字段）
     const photos = await query(
-      `SELECT p.id, p.title, p.url, p.thumbnail_url, p.mood, p.shot_date, p.location, p.width, p.height,
-              p.created_at as create_time, p.latitude, p.longitude
-       FROM photos p ${whereClause}
-       GROUP BY p.id
-       ORDER BY ${orderBy}
-       LIMIT ${safeLimit} OFFSET ${safeOffset}`,
+      `SELECT p.id, p.title, p.url, p.thumbnail_url, p.mood, p.shot_date, p.location,
+               p.camera, p.lens, p.aperture, p.shutter_speed, p.iso,
+               p.width, p.height,
+               p.created_at as create_time, p.latitude, p.longitude
+        FROM photos p ${whereClause}
+        GROUP BY p.id
+        ORDER BY ${orderBy}
+        LIMIT ${safeLimit} OFFSET ${safeOffset}`,
       params
     );
 
@@ -189,11 +191,12 @@ router.get('/admin/all', authenticateToken, async (req, res, next) => {
     // 获取所有照片（包括隐藏的）
     const photos = await query(
       `SELECT id, title, url, thumbnail_url, original_url, mood, shot_date, location,
-              width, height, file_size, sort_order, visibility,
-              created_at, user_id, latitude, longitude
-       FROM photos
-       ORDER BY ${orderBy}
-       LIMIT ${safeLimit} OFFSET ${safeOffset}`
+               camera, lens, aperture, shutter_speed, iso,
+               width, height, file_size, sort_order, visibility,
+               created_at, user_id, latitude, longitude
+        FROM photos
+        ORDER BY ${orderBy}
+        LIMIT ${safeLimit} OFFSET ${safeOffset}`
     );
 
     const [countResult] = await query('SELECT COUNT(*) as total FROM photos');
@@ -270,11 +273,12 @@ router.get('/my/list', authenticateToken, async (req, res, next) => {
     // 获取用户自己的照片（所有状态）
     const photos = await query(
       `SELECT id, title, url, thumbnail_url, original_url, mood, shot_date, location,
-              width, height, file_size, sort_order, visibility, created_at
-       FROM photos
-       WHERE user_id = ?
-       ORDER BY ${orderBy}
-       LIMIT ${safeLimit} OFFSET ${safeOffset}`,
+               camera, lens, aperture, shutter_speed, iso,
+               width, height, file_size, sort_order, visibility, created_at
+        FROM photos
+        WHERE user_id = ?
+        ORDER BY ${orderBy}
+        LIMIT ${safeLimit} OFFSET ${safeOffset}`,
       [userId]
     );
 
@@ -311,9 +315,10 @@ router.get('/random/diary', optionalAuth, async (req, res, next) => {
 
     // 只要上传成功就显示，不要求必须填写mood等信息
     const photos = await query(
-      `SELECT id, title, url, thumbnail_url, mood, shot_date, location
-       FROM photos WHERE ${whereClause}
-       ORDER BY RAND() LIMIT 1`,
+      `SELECT id, title, url, thumbnail_url, mood, shot_date, location,
+               camera, lens, aperture, shutter_speed, iso
+        FROM photos WHERE ${whereClause}
+        ORDER BY RAND() LIMIT 1`,
       params
     );
 
@@ -362,7 +367,9 @@ router.post('/', authenticateToken, async (req, res, next) => {
   try {
     const {
       title: rawTitle, url, thumbnail_url, original_url,
-      mood: rawMood, shot_date, location, width, height,
+      mood: rawMood, shot_date, location,
+      camera, lens, aperture, shutter_speed, iso,
+      width, height,
       file_size, sort_order, visibility = 'public',
       latitude, longitude,
       ai_tags: requestedAiTags = []
@@ -396,9 +403,9 @@ router.post('/', authenticateToken, async (req, res, next) => {
 
     await connection.beginTransaction();
     const [result] = await connection.execute(
-      `INSERT INTO photos (user_id, title, url, thumbnail_url, original_url, mood, shot_date, location, width, height, file_size, sort_order, visibility, latitude, longitude)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [req.user.id, toNull(title), toNull(url), toNull(thumbnail_url), toNull(original_url), toNull(mood), formatDate(shot_date), toNull(location), toNull(width), toNull(height), toNull(file_size), sort_order || 0, visibility, toNull(latitude), toNull(longitude)]
+      `INSERT INTO photos (user_id, title, url, thumbnail_url, original_url, mood, shot_date, location, camera, lens, aperture, shutter_speed, iso, width, height, file_size, sort_order, visibility, latitude, longitude)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [req.user.id, toNull(title), toNull(url), toNull(thumbnail_url), toNull(original_url), toNull(mood), formatDate(shot_date), toNull(location), toNull(camera), toNull(lens), toNull(aperture), toNull(shutter_speed), toNull(iso), toNull(width), toNull(height), toNull(file_size), sort_order || 0, visibility, toNull(latitude), toNull(longitude)]
     );
 
     const photoId = result.insertId;
@@ -444,7 +451,9 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
     const { id } = req.params;
     const {
       title, url, thumbnail_url, original_url,
-      mood, shot_date, location, width, height,
+      mood, shot_date, location,
+      camera, lens, aperture, shutter_speed, iso,
+      width, height,
       file_size, sort_order, visibility,
       latitude, longitude
     } = req.body;
@@ -479,6 +488,11 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
         mood = COALESCE(?, mood),
         shot_date = COALESCE(?, shot_date),
         location = COALESCE(?, location),
+        camera = COALESCE(?, camera),
+        lens = COALESCE(?, lens),
+        aperture = COALESCE(?, aperture),
+        shutter_speed = COALESCE(?, shutter_speed),
+        iso = COALESCE(?, iso),
         width = COALESCE(?, width),
         height = COALESCE(?, height),
         file_size = COALESCE(?, file_size),
@@ -487,7 +501,7 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
         latitude = COALESCE(?, latitude),
         longitude = COALESCE(?, longitude)
        WHERE id = ?`,
-      [toNull(title), toNull(url), toNull(thumbnail_url), toNull(original_url), toNull(mood), formatDate(shot_date), toNull(location), toNull(width), toNull(height), toNull(file_size), toNull(sort_order), visibilityValue, toNull(latitude), toNull(longitude), id]
+      [toNull(title), toNull(url), toNull(thumbnail_url), toNull(original_url), toNull(mood), formatDate(shot_date), toNull(location), toNull(camera), toNull(lens), toNull(aperture), toNull(shutter_speed), toNull(iso), toNull(width), toNull(height), toNull(file_size), toNull(sort_order), visibilityValue, toNull(latitude), toNull(longitude), id]
     );
 
     const photos = await query('SELECT * FROM photos WHERE id = ?', [id]);

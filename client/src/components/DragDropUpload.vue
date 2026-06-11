@@ -105,6 +105,11 @@ const uploadFile = async (fileObj) => {
     fileObj.width = res.width
     fileObj.height = res.height
     fileObj.file_size = res.file_size
+    fileObj.camera = res.camera
+    fileObj.lens = res.lens
+    fileObj.aperture = res.aperture
+    fileObj.shutter_speed = res.shutter_speed
+    fileObj.iso = res.iso
     
     emit('uploaded', res)
     

@@ -10,7 +10,7 @@ const props = defineProps({
   visible: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['close', 'detail'])
 
 const currentIndex = ref(props.startIndex)
 const isLoading = ref(true)
@@ -137,6 +137,13 @@ onUnmounted(() => {
         <svg v-else width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
       </button>
 
+      <!-- detail -->
+      <button class="btn-info" @click="emit('detail', currentPhoto)" title="详细信息">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+      </button>
+
       <!-- arrows -->
       <button v-if="photos.length > 1" class="btn-arrow left" @click="prev">
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 18l-6-6 6-6"/></svg>
@@ -240,6 +247,23 @@ onUnmounted(() => {
 .btn-fav:hover { color: #fff; transform: scale(1.1); }
 .btn-fav.active { color: #e74c3c; opacity: 1; }
 .btn-fav.active:hover { color: #e74c3c; }
+
+/* info */
+.btn-info {
+  position: absolute;
+  top: 20px;
+  right: 100px;
+  z-index: 10;
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  padding: 8px;
+  transition: color 0.2s, opacity 0.2s;
+  opacity: 0;
+}
+.lightbox:hover .btn-info { opacity: 1; }
+.btn-info:hover { color: #fff; }
 
 /* arrows */
 .btn-arrow {

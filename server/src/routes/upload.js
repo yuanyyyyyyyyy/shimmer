@@ -55,8 +55,59 @@ async function processImage(buffer, filename) {
     .jpeg({ quality: 80 })
     .toFile(thumbnailPath);
   
-  // 获取图片尺寸
+  // 获取图片尺寸和 EXIF
   const metadata = await sharp(buffer).metadata();
+  
+  // 提取 EXIF 数据
+  const exifData = {};
+  try {
+    const ifd0 = metadata.ifd0 || {};
+    const exif = metadata.exif || {};
+    
+    // 相机型号
+    const make = ifd0.Make ? String(ifd0.Make).trim() : '';
+    const model = ifd0.Model ? String(ifd0.Model).trim() : '';
+    if (make && model) {
+      exifData.camera = `${make} ${model}`;
+    } else if (model) {
+      exifData.camera = model;
+    }
+    
+    // 镜头
+    exifData.lens = exif.LensModel ? String(exif.LensModel).trim() : null;
+    
+    // 光圈
+    if (exif.FNumber) {
+      const f = exif.FNumber;
+      const val = Array.isArray(f) ? f[0] / f[1] : Number(f);
+      exifData.aperture = `ƒ/${Math.round(val * 10) / 10}`;
+    }
+    
+    // 快门速度
+    if (exif.ExposureTime) {
+      const et = exif.ExposureTime;
+      if (Array.isArray(et)) {
+        exifData.shutter_speed = et[0] >= et[1]
+          ? `${Math.round(et[0] / et[1])}s`
+          : `${et[0]}/${et[1]}s`;
+      } else {
+        exifData.shutter_speed = `${et}s`;
+      }
+    }
+    
+    // ISO
+    exifData.iso = exif.ISO ? Number(exif.ISO) : null;
+    
+    // 焦距 (用于显示但不存库)
+    if (exif.FocalLength) {
+      const fl = exif.FocalLength;
+      const mm = Array.isArray(fl) ? Math.round(fl[0] / fl[1]) : Math.round(Number(fl));
+      exifData.focal_length = `${mm}mm`;
+    }
+  } catch (e) {
+    // EXIF 提取失败不影响上传
+    console.warn('[EXIF] 提取失败:', e.message);
+  }
   
   // 使用完整URL
   const backendUrl = process.env.BACKEND_URL || `http://localhost:${process.env.PORT || 3000}`;
@@ -66,7 +117,8 @@ async function processImage(buffer, filename) {
     thumbnailUrl: `${backendUrl}/uploads/thumbnails/${name}${ext}`,
     width: metadata.width,
     height: metadata.height,
-    file_size: Math.round(fs.statSync(compressedPath).size / 1024) // KB - 改为蛇形命名
+    file_size: Math.round(fs.statSync(compressedPath).size / 1024),
+    ...exifData
   };
 }
 

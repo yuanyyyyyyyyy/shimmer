@@ -36,12 +36,17 @@ const form = ref({
   mood: '',
   shot_date: '',
   location: '',
+  camera: '',
+  lens: '',
+  aperture: '',
+  shutter_speed: '',
+  iso: null,
   url: '',
   thumbnail_url: '',
   width: 0,
   height: 0,
   file_size: 0,
-  visibility: 'public', // public | private
+  visibility: 'public',
   latitude: null,
   longitude: null
 })
@@ -210,18 +215,21 @@ const handleFileSelect = async (e) => {
     form.value.width = res.width
     form.value.height = res.height
     form.value.file_size = res.file_size
+
+    // 自动填充相机 EXIF 数据
+    if (res.camera) form.value.camera = res.camera
+    if (res.lens) form.value.lens = res.lens
+    if (res.aperture) form.value.aperture = res.aperture
+    if (res.shutter_speed) form.value.shutter_speed = res.shutter_speed
+    if (res.iso) form.value.iso = res.iso
     
-    // 自动填充 EXIF 数据
+    // 自动填充客户端 EXIF 数据
     if (exifData.shot_date && !form.value.shot_date) {
-      // 确保 EXIF 日期格式为 yyyy-MM-dd
       form.value.shot_date = exifData.shot_date.split('T')[0]
     }
-
-    // 自动填充 GPS 数据
     if (exifData.latitude && exifData.longitude) {
       form.value.latitude = exifData.latitude
       form.value.longitude = exifData.longitude
-      console.log('GPS 坐标:', exifData.latitude, exifData.longitude)
     }
   } catch (err) {
     error(err.response?.data?.error || '上传失败')
@@ -343,6 +351,11 @@ const resetForm = () => {
     mood: '',
     shot_date: '',
     location: '',
+    camera: '',
+    lens: '',
+    aperture: '',
+    shutter_speed: '',
+    iso: null,
     url: '',
     thumbnail_url: '',
     width: 0,
@@ -371,6 +384,11 @@ const handleBatchSave = async () => {
         mood: form.value.mood || null,
         shot_date: form.value.shot_date || null,
         location: form.value.location || null,
+        camera: photo.camera || null,
+        lens: photo.lens || null,
+        aperture: photo.aperture || null,
+        shutter_speed: photo.shutter_speed || null,
+        iso: photo.iso || null,
         url: photo.url,
         thumbnail_url: photo.thumbnail_url,
         width: photo.width,
@@ -531,6 +549,16 @@ const handleLogout = () => {
               <div class="form-group">
                 <label>地点</label>
                 <input v-model="form.location" type="text" placeholder="拍摄地点" />
+              </div>
+            </div>
+            <div v-if="form.camera || form.lens || form.aperture || form.shutter_speed || form.iso" class="form-group exif-group">
+              <label>相机信息（自动读取）</label>
+              <div class="exif-display">
+                <span v-if="form.camera" class="exif-item">{{ form.camera }}</span>
+                <span v-if="form.lens" class="exif-item">{{ form.lens }}</span>
+                <span v-if="form.aperture" class="exif-item">{{ form.aperture }}</span>
+                <span v-if="form.shutter_speed" class="exif-item">{{ form.shutter_speed }}</span>
+                <span v-if="form.iso" class="exif-item">ISO {{ form.iso }}</span>
               </div>
             </div>
             <div class="form-group visibility-group">
@@ -968,6 +996,24 @@ const handleLogout = () => {
 
 .add-tag-btn:hover {
   border-color: var(--text-tertiary);
+}
+
+.exif-group { margin-bottom: 12px; }
+.exif-display {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  background: #f5f5f5;
+  border-radius: 6px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.8rem;
+  color: #666;
+}
+.exif-item + .exif-item::before {
+  content: '·';
+  margin-right: 6px;
+  color: #ccc;
 }
 
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
