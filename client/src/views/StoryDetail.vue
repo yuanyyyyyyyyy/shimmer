@@ -46,13 +46,17 @@ const generateAiSummary = async () => {
       location.value,
       photoIds.length > 0 ? { photoIds } : undefined
     )
-    if (res.summary) {
+    if (res.summary && res.summary.trim().length > 0) {
       aiSummary.value = res.summary
     } else if (res.error) {
-      aiError.value = res.error
+      aiError.value = { message: res.error.message || '生成失败' }
+    } else {
+      // 后端返回了空内容但没有错误信息
+      aiError.value = { message: 'AI 返回内容为空，请稍后重试' }
     }
   } catch (e) {
-    aiError.value = { message: e.message }
+    console.error('AI 叙事生成失败:', e)
+    aiError.value = { message: e.response?.data?.error?.message || e.message || '网络请求失败，请检查连接' }
   } finally {
     aiLoading.value = false
   }
@@ -87,7 +91,7 @@ onMounted(loadDetail)
       <section class="hero-section">
         <div
           class="hero-bg"
-          :style="coverPhoto ? { backgroundImage: `url(${coverPhoto.url || coverPhoto.thumbnail_url})` } : {}"
+          :style="coverPhoto ? { backgroundImage: `url(${coverPhoto.original_url || coverPhoto.url || coverPhoto.thumbnail_url})` } : {}"
         ></div>
         <button class="back-btn" @click="goBack">← 返回</button>
         <div class="hero-label">
@@ -214,7 +218,9 @@ onMounted(loadDetail)
   height: 420px;
   overflow: hidden;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   max-width: 960px;
   margin: 0 auto;
   border-radius: 4px;
@@ -252,40 +258,38 @@ onMounted(loadDetail)
 .hero-label {
   position: relative;
   z-index: 1;
-  background: #fff;
-  margin: 0 24px 28px;
-  padding: 20px 28px;
-  max-width: 520px;
-  box-shadow: 0 2px 16px rgba(0,0,0,0.08);
-}
-
-:root.dark .hero-label {
-  background: var(--card-bg);
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  margin: 0;
+  padding: 20px 32px;
+  border-radius: 12px;
+  text-align: center;
+  color: #fff;
 }
 
 .hero-label h1 {
   font-size: 1.3rem;
   font-weight: 700;
   margin-bottom: 4px;
-  color: #000;
-}
-
-:root.dark .hero-label h1 {
-  color: #e0e0e0;
+  color: #fff;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 .hero-location {
   font-size: 0.9rem;
-  color: var(--text-secondary);
+  color: rgba(255,255,255,0.7);
   margin-bottom: 8px;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 .hero-meta {
   display: flex;
   gap: 12px;
   font-size: 0.78rem;
-  color: var(--text-tertiary);
+  color: rgba(255,255,255,0.5);
   margin-bottom: 8px;
+  justify-content: center;
 }
 
 .hero-tags {
@@ -296,8 +300,8 @@ onMounted(loadDetail)
 
 .hero-tag {
   font-size: 0.7rem;
-  color: var(--text-secondary);
-  border: 1px solid var(--n-300);
+  color: rgba(255,255,255,0.7);
+  border: 1px solid rgba(255,255,255,0.2);
   padding: 2px 10px;
   border-radius: 10px;
 }

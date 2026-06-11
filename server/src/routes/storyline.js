@@ -164,7 +164,7 @@ router.get('/', async (req, res, next) => {
 
       // 获取照片列表
       const photos = await query(
-        `SELECT id, title, url, thumbnail_url, shot_date, location, mood, width, height
+        `SELECT id, title, url, thumbnail_url, original_url, shot_date, location, mood, width, height
          FROM photos WHERE id IN (${photoIds.map(() => '?').join(',')})
          ORDER BY shot_date`,
         photoIds
@@ -232,7 +232,7 @@ router.get('/:date/:location', async (req, res, next) => {
     const photoIds = result.photos.map(p => p.id);
     
     const fullPhotos = await query(
-      `SELECT id, title, url, thumbnail_url, shot_date, location, mood, width, height, latitude, longitude
+      `SELECT id, title, url, thumbnail_url, original_url, shot_date, location, mood, width, height, latitude, longitude
        FROM photos WHERE id IN (${photoIds.map(() => '?').join(',')})
        ORDER BY shot_date`,
       photoIds
@@ -314,12 +314,21 @@ router.post('/:date/:location/summary', async (req, res, next) => {
       photos: photos.map(p => ({ title: p.title, mood: p.mood }))
     });
 
+    console.log(`[StorySummary] AI 返回结果类型: ${typeof aiResult}, 值:`, JSON.stringify(aiResult)?.slice(0, 200));
+
     if (aiResult && typeof aiResult === 'object' && aiResult.success) {
-      res.json({ summary: aiResult.data });
+      const summaryText = String(aiResult.data || '').trim();
+      if (summaryText.length > 0) {
+        res.json({ summary: summaryText });
+      } else {
+        res.json({ summary: null, error: { message: 'AI 返回内容为空，请稍后重试', code: 'EMPTY_CONTENT' } });
+      }
     } else if (aiResult && typeof aiResult === 'object' && !aiResult.success) {
-      res.json({ summary: null, error: aiResult });
+      res.json({ summary: null, error: { message: aiResult.message || 'AI 生成失败', code: aiResult.error } });
     } else {
-      res.json({ summary: String(aiResult || '') });
+      // aiResult 不是预期的对象格式
+      console.warn('[StorySummary] AI 返回异常格式:', typeof aiResult, aiResult);
+      res.json({ summary: null, error: { message: 'AI 服务响应异常，请检查配置', code: 'INVALID_RESPONSE' } });
     }
   } catch (err) {
     next(err);

@@ -397,7 +397,9 @@ onMounted(() => {
   overflow: hidden;
   min-height: 340px;
   display: flex;
-  align-items: flex-end;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   opacity: 0;
   transform: translateY(30px);
   transition: opacity 0.7s ease, transform 0.7s ease;
@@ -419,15 +421,15 @@ onMounted(() => {
 
 .hero-inner {
   position: relative; z-index: 2;
-  margin: 24px;
-  padding: 28px;
+  margin: 0;
+  padding: 20px 36px;
   border-radius: 16px;
-  background: rgba(255,255,255,0.06);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   color: #fff;
-  width: calc(100% - 48px);
+  text-align: center;
+  width: auto;
 }
 
 .hero-year {
@@ -437,6 +439,7 @@ onMounted(() => {
   opacity: 0.6;
   margin-bottom: 8px;
   text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 .hero-title {
@@ -444,6 +447,7 @@ onMounted(() => {
   align-items: baseline;
   gap: 12px;
   flex-wrap: wrap;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 .counter {
@@ -464,8 +468,8 @@ onMounted(() => {
   margin-top: 10px;
   font-size: 0.84rem;
   opacity: 0.5;
-  font-weight: 400;
   text-shadow: 0 2px 12px rgba(0,0,0,0.4);
+  font-family: 'Georgia', 'Noto Serif SC', serif;
 }
 
 /* ====== Block 2: AI 总叙 ====== */

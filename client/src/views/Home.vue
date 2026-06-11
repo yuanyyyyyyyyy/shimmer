@@ -285,7 +285,7 @@ onMounted(() => {
 .hero-section {
   position: relative;
   height: 460px;
-  max-width: 1200px;
+  max-width: 960px;
   margin: 24px auto 0;
   border-radius: 4px;
   display: flex;
@@ -350,7 +350,7 @@ onMounted(() => {
 
 /* Stats */
 .stats-section {
-  max-width: 1200px;
+  max-width: 960px;
   margin: 32px auto;
   padding: 32px 20px;
 }
@@ -397,14 +397,14 @@ onMounted(() => {
 
 /* Film Strip */
 .film-section {
-  max-width: 1200px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 40px 20px;
 }
 
 /* Filter */
 .filter-section {
-  max-width: 1200px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 0 20px 32px;
 }
@@ -457,7 +457,7 @@ onMounted(() => {
 
 /* Gallery Wall */
 .gallery-section {
-  max-width: 1200px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 0 20px 60px;
 }

@@ -375,7 +375,7 @@ body {
 }
 
 .header-inner {
-  max-width: 1200px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 16px 24px 8px;
   transition: padding 0.3s;
@@ -541,7 +541,7 @@ body {
 }
 
 .search-bar-inner {
-  max-width: 1200px;
+  max-width: 960px;
   margin: 0 auto;
   padding: 12px 24px 16px;
 }
