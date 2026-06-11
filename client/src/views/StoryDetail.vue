@@ -134,7 +134,7 @@ onMounted(loadDetail)
               v-for="tag in tags"
               :key="tag.id"
               class="cloud-tag"
-              :style="{ backgroundColor: tag.color || 'var(--color-primary)' }"
+              :style="{ backgroundColor: tag.color || '#000' }"
             >
               {{ tag.name }}
             </span>
@@ -184,8 +184,8 @@ onMounted(loadDetail)
   animation: spin 0.7s linear infinite;
   margin: 0 auto 16px;
 }
-.spinner { width: 40px; height: 40px; border: 3px solid oklch(94% 0.008 75); border-top-color: var(--color-primary); }
-.mini-spinner { width: 22px; height: 22px; border: 2px solid oklch(94% 0.008 75); border-top-color: var(--color-primary); }
+    .spinner { width: 40px; height: 40px; border: 3px solid var(--n-300); border-top-color: #000; }
+.mini-spinner { width: 22px; height: 22px; border: 2px solid var(--n-300); border-top-color: #000; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
@@ -193,7 +193,7 @@ onMounted(loadDetail)
   margin-top: 14px;
   padding: 8px 24px;
   border: none;
-  background: var(--color-primary);
+  background: #000;
   color: white;
   border-radius: 20px;
   cursor: pointer;
@@ -283,13 +283,13 @@ onMounted(loadDetail)
   margin-bottom: 16px;
   color: var(--text-primary);
   padding-bottom: 10px;
-  border-bottom: 2px solid oklch(94% 0.008 75);
+  border-bottom: 2px solid var(--n-300);
 }
 
 /* AI 摘要 */
 .summary-block {
-  background: linear-gradient(135deg, oklch(97% 0.015 75), oklch(96% 0.01 250));
-  border: 1px solid oklch(88% 0.02 75);
+  background: oklch(97% 0.003 260);
+  border: 1px solid var(--n-300);
   border-radius: 16px;
   padding: 24px;
 }
@@ -300,14 +300,14 @@ onMounted(loadDetail)
 .ai-text {
   font-size: 1rem;
   line-height: 1.85;
-  color: oklch(33% 0.015 75);
+  color: var(--text-primary);
   white-space: pre-wrap;
 }
 
 .ai-prompt { text-align: center; padding: 8px 0; }
 
 .ai-prompt button {
-  background: linear-gradient(135deg, var(--color-primary), oklch(48% 0.14 75));
+  background: #000;
   border: none;
   color: white;
   padding: 12px 28px;
@@ -315,11 +315,11 @@ onMounted(loadDetail)
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition: filter 0.2s, transform 0.2s;
+  transition: opacity 0.2s, transform 0.2s;
 }
-.ai-prompt button:hover { filter: brightness(1.06); transform: scale(1.02); }
+.ai-prompt button:hover { opacity: 0.85; transform: scale(1.02); }
 
-.ai-error { color: oklch(55% 0.18 25); font-size: 0.88rem; margin-top: 8px; }
+.ai-error { color: var(--text-secondary); font-size: 0.88rem; margin-top: 8px; }
 
 /* 标签云 */
 .tag-cloud {
@@ -403,14 +403,14 @@ onMounted(loadDetail)
 }
 
 .action-btn.primary {
-  background: var(--color-primary);
+  background: #000;
   color: white;
 }
-.action-btn.primary:hover { filter: brightness(1.07); }
+.action-btn.primary:hover { opacity: 0.85; }
 
 .action-btn.ghost {
-  background: oklch(94% 0.008 75);
+  background: var(--n-200);
   color: var(--text-secondary);
 }
-.action-btn.ghost:hover { background: oklch(90% 0.01 75); }
+.action-btn.ghost:hover { background: var(--n-300); }
 </style>

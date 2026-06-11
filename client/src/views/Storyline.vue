@@ -160,10 +160,7 @@ onMounted(async () => {
 .page-header h1 {
   font-size: 1.9rem;
   font-weight: 800;
-  background: linear-gradient(135deg, oklch(45% 0.16 75), oklch(38% 0.12 250));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: #000;
   letter-spacing: -0.02em;
   margin-bottom: 8px;
 }
@@ -195,15 +192,14 @@ onMounted(async () => {
 }
 
 .year-filter button.active {
-  background: var(--color-primary);
+  background: #000;
   color: white;
-  box-shadow: 0 3px 12px oklch(55% 0.16 75 / 30%);
   transform: scale(1.03);
 }
 
 .year-filter button:hover:not(.active) {
-  border-color: oklch(55% 0.12 75 / 25%);
-  color: var(--text-primary);
+  border-color: #000;
+  color: #000;
 }
 
 /* 故事列表 */
@@ -230,8 +226,8 @@ onMounted(async () => {
 .spinner {
   width: 36px;
   height: 36px;
-  border: 3px solid oklch(94% 0.008 75);
-  border-top-color: var(--color-primary);
+  border: 3px solid var(--n-300);
+  border-top-color: #000;
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
   margin: 0 auto;
@@ -244,7 +240,7 @@ onMounted(async () => {
 .link-btn {
   display: inline-block;
   margin-top: 12px;
-  color: var(--color-primary);
+  color: #000;
   text-decoration: none;
   font-weight: 500;
   font-size: 0.92rem;
@@ -255,7 +251,7 @@ onMounted(async () => {
   margin-top: 14px;
   padding: 8px 24px;
   border: none;
-  background: var(--color-primary);
+  background: #000;
   color: white;
   border-radius: 20px;
   cursor: pointer;
@@ -270,7 +266,7 @@ onMounted(async () => {
 
 .load-more button {
   padding: 10px 32px;
-  border: 1px solid oklch(88% 0.02 75);
+  border: 1px solid var(--n-300);
   border-radius: 24px;
   background: transparent;
   color: var(--text-secondary);
@@ -280,8 +276,8 @@ onMounted(async () => {
 }
 
 .load-more button:hover:not(:disabled) {
-  border-color: var(--color-primary);
-  color: var(--color-primary);
+  border-color: #000;
+  color: #000;
 }
 
 .all-loaded {

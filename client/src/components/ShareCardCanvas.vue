@@ -134,30 +134,30 @@ const getGridArea = (i) => {
 .caption { font-size: 1.15rem; line-height: 1.5; margin: 0 0 12px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
 .meta-row { font-size: 0.84rem; opacity: 0.7; letter-spacing: 0.04em; }
 .brand-bar { position: absolute; top: 20px; left: 24px; z-index: 2; }
-.brand-bar span { background: oklch(55% 0.16 75); color: white; padding: 5px 14px; border-radius: 14px; font-size: 0.78rem; font-weight: 600; }
+.brand-bar span { background: #000; color: white; padding: 5px 14px; border-radius: 14px; font-size: 0.78rem; font-weight: 600; }
 
 /* ---- 日历 ---- */
 .tmpl.calendar { padding: 24px; background: linear-gradient(160deg, #fffef8, #f8f5ee); }
 .cal-header { margin-bottom: 18px; }
-.cal-date-big { font-size: 2.4rem; font-weight: 800; color: oklch(35% 0.14 75); letter-spacing: -0.02em; }
+.cal-date-big { font-size: 2.4rem; font-weight: 800; color: #000; letter-spacing: -0.02em; }
 .cal-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 16px; }
 .cal-cell { border-radius: 8px; overflow: hidden; aspect-ratio: 1; }
 .cal-cell.big { grid-column: span 2; grid-row: span 2; aspect-ratio: auto; }
 .cal-cell img { width: 100%; height: 100%; object-fit: cover; }
 .cal-footer { text-align: center; }
-.cal-caption { font-size: 0.98rem; color: oklch(30% 0.014 75); line-height: 1.6; margin-bottom: 8px; }
-.cal-loc { font-size: 0.84rem; color: oklch(50% 0.01 75); }
+.cal-caption { font-size: 0.98rem; color: var(--text-primary); line-height: 1.6; margin-bottom: 8px; }
+.cal-loc { font-size: 0.84rem; color: var(--text-secondary); }
 .cal-brand { display: block; margin-top: 10px; font-size: 0.78rem; color: var(--text-t); }
 
 /* ---- 杂志 ---- */
 .tmpl.magazine { padding: 28px 26px; background: #fafafa; }
-.mag-title { font-size: 1.5rem; font-weight: 800; color: oklch(25% 0.02 75); margin: 0 0 18px; line-height: 1.25; }
+.mag-title { font-size: 1.5rem; font-weight: 800; color: #000; margin: 0 0 18px; line-height: 1.25; }
 .mag-layout { display: flex; gap: 8px; margin-bottom: 18px; }
 .mag-main { flex: 2; border-radius: 12px; overflow: hidden; aspect-ratio: 4/3; }
 .mag-main img { width: 100%; height: 100%; object-fit: cover; }
 .mag-side { flex: 1; display: flex; flex-direction: column; gap: 8px; }
 .mag-side img { flex: 1; border-radius: 10px; object-fit: cover; min-height: 90px; }
-.mag-info { border-top: 1px solid oklch(92% 0.005 75); padding-top: 14px; }
+.mag-info { border-top: 1px solid var(--n-300); padding-top: 14px; }
 .mag-meta { font-size: 0.82rem; color: var(--text-s); margin-bottom: 8px; }
 .mag-meta span { margin-right: 8px; }
 .mag-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }

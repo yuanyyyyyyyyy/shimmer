@@ -166,7 +166,7 @@ const formatDate = (dateStr) => {
           v-for="tag in story.tags.slice(0, 5)"
           :key="tag.id"
           class="tag-pill"
-          :style="{ backgroundColor: tag.color || 'var(--color-primary)' }"
+          :style="{ backgroundColor: tag.color || '#000' }"
         >
           {{ tag.name }}
         </span>
@@ -212,9 +212,9 @@ const formatDate = (dateStr) => {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background: var(--color-primary);
+  background: #000;
   flex-shrink: 0;
-  box-shadow: 0 0 0 4px oklch(55% 0.16 75 / 15%);
+  box-shadow: 0 0 0 4px var(--n-300);
 }
 
 .timeline-line {
@@ -222,7 +222,7 @@ const formatDate = (dateStr) => {
   flex: 1;
   min-height: 40px;
   margin-top: 8px;
-  background: linear-gradient(to bottom, oklch(55% 0.16 75 / 30%), transparent);
+  background: linear-gradient(to bottom, var(--n-300), transparent);
 }
 
 /* 内容区 */
@@ -255,15 +255,10 @@ const formatDate = (dateStr) => {
   opacity: 0.85;
 }
 
-.story-location svg {
-  color: var(--color-primary);
-  opacity: 0.7;
-}
-
 .photo-count {
   font-size: 0.78rem;
   color: var(--text-tertiary);
-  background: oklch(94% 0.008 75);
+  background: var(--n-200);
   padding: 2px 8px;
   border-radius: 10px;
   margin-left: auto;
@@ -292,7 +287,7 @@ const formatDate = (dateStr) => {
   aspect-ratio: 1;
   overflow: hidden;
   border-radius: 6px;
-  background: oklch(94% 0.008 75);
+  background: var(--n-200);
 }
 
 .thumb img {
@@ -310,7 +305,7 @@ const formatDate = (dateStr) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: oklch(55% 0.16 75 / 80%);
+  background: rgba(0,0,0,0.6);
   color: white;
   font-size: 0.85rem;
   font-weight: 600;
@@ -340,7 +335,7 @@ const formatDate = (dateStr) => {
 .toggle-btn {
   background: none;
   border: none;
-  color: var(--color-primary);
+  color: #000;
   font-size: 0.82rem;
   cursor: pointer;
   padding: 2px 0;
@@ -348,12 +343,12 @@ const formatDate = (dateStr) => {
 }
 
 .generate-btn {
-  background: linear-gradient(135deg, oklch(94% 0.04 75), oklch(96% 0.02 75));
-  border: 1px dashed oklch(55% 0.12 75 / 35%);
+  background: var(--n-200);
+  border: 1px dashed var(--n-300);
   border-radius: 8px;
   padding: 8px 16px;
   font-size: 0.86rem;
-  color: oklch(45% 0.12 75);
+  color: var(--text-secondary);
   cursor: pointer;
   transition: all 0.2s;
   margin-bottom: 10px;
@@ -361,8 +356,8 @@ const formatDate = (dateStr) => {
 }
 
 .generate-btn:hover {
-  background: linear-gradient(135deg, oklch(90% 0.05 75), oklch(93% 0.03 75));
-  border-color: oklch(55% 0.12 75 / 60%);
+  background: var(--n-300);
+  border-color: #000;
 }
 
 .generate-btn.loading {
@@ -388,7 +383,7 @@ const formatDate = (dateStr) => {
 .retry-btn {
   background: none;
   border: none;
-  color: var(--color-primary);
+  color: #000;
   font-size: 0.82rem;
   cursor: pointer;
   padding: 0;
@@ -426,12 +421,12 @@ const formatDate = (dateStr) => {
 }
 
 .action-btn.primary {
-  background: var(--color-primary);
+  background: #000;
   color: white;
 }
 
 .action-btn.primary:hover {
-  filter: brightness(1.08);
+  opacity: 0.85;
   transform: translateX(2px);
 }
 </style>
