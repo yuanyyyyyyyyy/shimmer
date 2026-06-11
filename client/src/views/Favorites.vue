@@ -1,31 +1,35 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { favorites } from '../api'
 import { useAuthStore, getFingerprint } from '../stores'
-import { error } from '../composables/useToast'
 import Lightbox from '../components/Lightbox.vue'
+import DarkroomPrint from '../components/DarkroomPrint.vue'
 
-const router = useRouter()
 const authStore = useAuthStore()
+const fp = getFingerprint()
 const list = ref([])
 const loading = ref(true)
-const fp = getFingerprint()
 
-// Lightbox 状态
 const lightboxVisible = ref(false)
 const lightboxIndex = ref(0)
 
-// 转换为 Lightbox 需要的照片格式
+const darkroomPhoto = ref(null)
+const showDarkroom = ref(false)
+
 const photoList = computed(() =>
   list.value.map(item => ({
     id: item.photo_id,
     url: item.url,
-    thumbnail_url: item.thumbnail_url,
+    thumbnail_url: item.thumbnail_url || item.url,
     title: item.title,
     mood: item.mood,
     shot_date: item.shot_date,
-    location: item.location
+    location: item.location,
+    camera: item.camera,
+    lens: item.lens,
+    aperture: item.aperture,
+    shutter_speed: item.shutter_speed,
+    iso: item.iso
   }))
 )
 
@@ -33,7 +37,10 @@ const loadFavorites = async () => {
   loading.value = true
   try {
     const res = await favorites.list()
-    list.value = res.favorites
+    list.value = res.favorites.map(item => ({
+      ...item,
+      _rotation: (Math.random() * 2 - 1).toFixed(1)
+    }))
   } catch (e) {
     console.error(e)
   } finally {
@@ -41,153 +48,289 @@ const loadFavorites = async () => {
   }
 }
 
-const removeFavorite = async (photoId, e) => {
-  e.preventDefault()
-  e.stopPropagation()
-  try {
-    await favorites.remove(photoId)
-    list.value = list.value.filter(f => f.photo_id !== photoId)
-  } catch (e) {
-    error(e.response?.data?.error || '操作失败')
-  }
-}
-
-const viewDetail = (id) => router.push(`/photo/${id}`)
-
-// 打开 Lightbox
 const openLightbox = (index) => {
   lightboxIndex.value = index
   lightboxVisible.value = true
 }
 
-// Lightbox 关闭后跳转详情
 const handleLightboxClose = () => {
-  const item = list.value[lightboxIndex.value]
   lightboxVisible.value = false
-  if (item) {
-    router.push(`/photo/${item.photo_id}`)
-  }
+}
+
+const handleDarkroomDetail = (photo) => {
+  darkroomPhoto.value = photo
+  showDarkroom.value = true
+}
+
+const handleDarkroomClose = () => {
+  showDarkroom.value = false
+  darkroomPhoto.value = null
+}
+
+const formatDate = (d) => {
+  if (!d) return ''
+  const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (m) return `${m[2]}.${m[3]}`
+  return d.slice(0, 10)
+}
+
+const exifString = (item) => {
+  const parts = []
+  if (item.camera) parts.push(item.camera)
+  if (item.lens) parts.push(item.lens)
+  if (item.aperture) parts.push(item.aperture)
+  if (item.shutter_speed) parts.push(item.shutter_speed)
+  if (item.iso) parts.push(`ISO${item.iso}`)
+  return parts.join(' · ')
 }
 
 onMounted(loadFavorites)
 </script>
 
 <template>
-  <div class="favorites">
-    <div class="container">
-      <h2>我的收藏</h2>
-      <div v-if="loading" class="loading">加载中...</div>
-      <template v-else>
-        <div v-if="list.length === 0" class="empty">
-          <p>暂无收藏</p>
-          <p class="hint">点击照片上的 ♥ 收藏</p>
-          <p v-if="!authStore.isLoggedIn" class="login-hint">
-            <router-link to="/login">登录</router-link> 后收藏将同步保存
-          </p>
-        </div>
-        <div v-else class="fav-grid">
-          <div
-            v-for="(item, index) in list"
-            :key="item.id"
-            class="fav-card"
-            @click="openLightbox(index)"
-          >
-            <img :src="item.thumbnail_url || item.url" :alt="item.title" />
-            <div class="fav-overlay">
-              <button class="remove-btn" @click="removeFavorite(item.photo_id, $event)">✕</button>
-              <div v-if="item.mood" class="fav-mood">{{ item.mood }}</div>
-            </div>
-          </div>
-        </div>
-      </template>
-
-      <!-- Lightbox -->
-      <Lightbox
-        :photos="photoList"
-        :start-index="lightboxIndex"
-        :visible="lightboxVisible"
-        @close="handleLightboxClose"
-      />
+  <div class="favorites-page">
+    <div class="fav-header">
+      <h1 class="fav-title">收藏</h1>
+      <span v-if="list.length > 0" class="fav-count">{{ list.length }}</span>
     </div>
+
+    <div v-if="loading" class="loading">加载中...</div>
+
+    <template v-else-if="list.length === 0">
+      <div class="empty">
+        <div class="empty-icon">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3">
+            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+          </svg>
+        </div>
+        <p class="empty-text">还没有收藏</p>
+        <p class="empty-hint">浏览照片时点击 ♡ 即可收藏</p>
+        <router-link to="/" class="empty-link">去发现照片</router-link>
+      </div>
+    </template>
+
+    <div v-else class="fav-list">
+      <div
+        v-for="(item, index) in list"
+        :key="item.id || item.photo_id"
+        class="fav-entry"
+        @click="openLightbox(index)"
+      >
+        <div class="entry-photo">
+          <div class="photo-paper" :style="{ transform: `rotate(${item._rotation}deg)` }">
+            <img
+              :src="item.thumbnail_url || item.url"
+              :alt="item.title"
+              class="photo-img"
+              loading="lazy"
+              crossorigin="anonymous"
+            />
+          </div>
+
+        </div>
+
+        <div class="entry-meta">
+          <div class="meta-date">{{ formatDate(item.shot_date) }}</div>
+          <div v-if="item.title" class="meta-title">{{ item.title }}</div>
+          <div v-if="item.mood" class="meta-mood">{{ item.mood }}</div>
+          <div v-if="item.location" class="meta-location">{{ item.location }}</div>
+          <div v-if="exifString(item)" class="meta-exif">{{ exifString(item) }}</div>
+        </div>
+      </div>
+    </div>
+
+    <Lightbox
+      :photos="photoList"
+      :start-index="lightboxIndex"
+      :visible="lightboxVisible"
+      @close="handleLightboxClose"
+      @detail="handleDarkroomDetail"
+    />
+
+    <DarkroomPrint
+      :photo="darkroomPhoto"
+      :visible="showDarkroom"
+      @close="handleDarkroomClose"
+    />
   </div>
 </template>
 
 <style scoped>
-h2 { margin-bottom: 24px; }
-
-.fav-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+.favorites-page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 20px 80px;
 }
 
-.fav-card {
-  position: relative;
-  border-radius: 8px;
-  overflow: hidden;
-  cursor: pointer;
-  aspect-ratio: 1;
-}
-
-.fav-card img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.fav-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.4);
-  opacity: 0;
-  transition: opacity 0.2s;
+/* Header */
+.fav-header {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 36px;
 }
 
-.fav-card:hover .fav-overlay {
-  opacity: 1;
+.fav-title {
+  font-size: 1rem;
+  font-weight: 400;
+  letter-spacing: 0.02em;
+  margin: 0;
+  color: var(--text-color);
 }
 
-.remove-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  background: rgba(0,0,0,0.5);
-  border: none;
-  color: var(--card-bg);
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  cursor: pointer;
-}
-
-.fav-mood {
-  color: var(--card-bg);
-  text-align: center;
-  padding: 12px;
-}
-
-.loading, .empty {
-  text-align: center;
-  padding: 60px;
+.fav-count {
+  font-size: 0.8rem;
+  font-family: 'SFMono-Regular', Consolas, monospace;
   color: var(--text-tertiary);
 }
 
-.empty p { margin-bottom: 8px; }
-.hint { font-size: 0.9rem; }
-.login-hint {
-  margin-top: 16px;
+/* List */
+.fav-list {
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+}
+
+.fav-entry {
+  display: flex;
+  gap: 32px;
+  cursor: pointer;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--n-200);
+  transition: opacity 0.2s;
+}
+
+.fav-entry:hover {
+  opacity: 0.85;
+}
+
+.fav-entry:last-child {
+  border-bottom: none;
+}
+
+/* Photo side */
+.entry-photo {
+  flex: 0 0 200px;
+  position: relative;
+}
+
+.photo-paper {
+  background: #fff;
+  padding: 6px;
+  border-radius: 2px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+  line-height: 0;
+}
+
+.photo-img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+/* Meta side */
+.entry-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.meta-date {
+  font-family: 'Georgia', 'Times New Roman', serif;
+  font-style: italic;
+  font-size: 1.1rem;
+  color: var(--text-tertiary);
+  margin-bottom: 2px;
+}
+
+.meta-title {
+  font-size: 1.15rem;
+  font-weight: 600;
+  line-height: 1.4;
+  margin-bottom: 2px;
+}
+
+.meta-mood {
+  font-size: 0.92rem;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.meta-location {
+  font-size: 0.88rem;
+  color: var(--text-tertiary);
+}
+
+.meta-exif {
+  margin-top: 6px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--text-tertiary);
+  line-height: 1.5;
+}
+
+/* Empty State */
+.empty {
+  text-align: center;
+  padding: 80px 20px;
+}
+
+.empty-icon {
+  margin-bottom: 16px;
+}
+
+.empty-text {
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+  margin: 0 0 6px;
+}
+
+.empty-hint {
+  font-size: 0.84rem;
+  color: var(--text-tertiary);
+  margin: 0 0 20px;
+}
+
+.empty-link {
+  display: inline-block;
+  font-size: 0.88rem;
+  color: #000;
+  text-decoration: none;
+  border-bottom: 1px solid #000;
+  padding-bottom: 2px;
+}
+
+.empty-link:hover {
+  opacity: 0.7;
+}
+
+/* Loading */
+.loading {
+  text-align: center;
+  padding: 60px 20px;
+  color: var(--text-tertiary);
   font-size: 0.9rem;
 }
 
-.login-hint a {
-  color: var(--secondary-color);
-  text-decoration: none;
-}
+/* Responsive */
+@media (max-width: 640px) {
+  .fav-entry {
+    flex-direction: column;
+    gap: 16px;
+  }
 
-.login-hint a:hover {
-  text-decoration: underline;
+  .entry-photo {
+    flex: none;
+    width: 100%;
+    max-width: 300px;
+  }
+
+  .remove-btn {
+    top: 2px;
+    right: 2px;
+  }
 }
 </style>

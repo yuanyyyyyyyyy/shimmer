@@ -14,6 +14,7 @@ const popularTags = ref([])
 const showTags = ref(false)
 const isDarkMode = ref(false)
 const showUserMenu = ref(false)
+const showMoreMenu = ref(false)
 const scrolled = ref(false)
 const showPopularTags = computed(() => showTags.value && !searchQuery.value.trim())
 
@@ -102,6 +103,9 @@ const handleClickOutside = (e) => {
   if (showUserMenu.value && !e.target.closest('.user-menu-wrapper')) {
     showUserMenu.value = false
   }
+  if (showMoreMenu.value && !e.target.closest('.more-menu-wrapper')) {
+    showMoreMenu.value = false
+  }
 }
 
 // 初始化
@@ -162,8 +166,9 @@ onBeforeUnmount(() => {
 })
 
 // 监听用户菜单状态
-watch(showUserMenu, (newVal) => {
-  if (newVal) {
+watch([showUserMenu, showMoreMenu], () => {
+  const anyOpen = showUserMenu.value || showMoreMenu.value
+  if (anyOpen) {
     document.addEventListener('click', handleClickOutside)
   } else {
     document.removeEventListener('click', handleClickOutside)
@@ -225,21 +230,23 @@ watch(showUserMenu, (newVal) => {
         <nav class="nav">
           <RouterLink to="/">首页</RouterLink>
           <RouterLink to="/timeline">时间轴</RouterLink>
-          <RouterLink to="/story">故事</RouterLink>
-          <RouterLink to="/darkroom">暗房</RouterLink>
 
-          <!-- 未登录状态 -->
-          <template v-if="!authStore.isLoggedIn">
-            <RouterLink to="/login">登录</RouterLink>
-          </template>
+          <!-- 更多 下拉 -->
+          <div class="more-menu-wrapper">
+            <button class="more-btn" @click.stop="showMoreMenu = !showMoreMenu">
+              更多
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :class="{ rotated: showMoreMenu }"><path d="M6 9l6 6 6-6"/></svg>
+            </button>
+            <div v-if="showMoreMenu" class="more-dropdown">
+              <RouterLink to="/story" class="dropdown-item" @click="showMoreMenu = false">故事线</RouterLink>
+              <RouterLink to="/darkroom" class="dropdown-item" @click="showMoreMenu = false">暗房</RouterLink>
+              <RouterLink to="/review" class="dropdown-item" @click="showMoreMenu = false">回顾</RouterLink>
+              <RouterLink to="/albums" class="dropdown-item" @click="showMoreMenu = false">相册</RouterLink>
+            </div>
+          </div>
 
-          <!-- 已登录状态 -->
-          <template v-else>
-            <RouterLink to="/favorites">收藏</RouterLink>
-          </template>
-
-          <RouterLink to="/review">回顾</RouterLink>
-          <RouterLink to="/albums">相册</RouterLink>
+          <!-- 登录（未登录） -->
+          <RouterLink v-if="!authStore.isLoggedIn" to="/login">登录</RouterLink>
 
           <button class="dark-toggle" @click="toggleDarkMode" :title="isDarkMode ? '切换亮色模式' : '切换深色模式'">
             {{ isDarkMode ? '☀️' : '🌙' }}
@@ -475,19 +482,84 @@ body {
 .nav {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
 }
 
-.nav a {
+.nav > a {
   text-decoration: none;
   color: var(--text-color);
   font-weight: 500;
+  font-size: 0.92rem;
   transition: color 0.2s;
 }
 
-.nav a:hover,
-.nav a.router-link-active {
+.nav > a:hover,
+.nav > a.router-link-active {
   color: #000;
+}
+
+/* More menu */
+.more-menu-wrapper {
+  position: relative;
+}
+
+.more-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  font-size: 0.92rem;
+  font-weight: 500;
+  color: var(--text-color);
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.2s;
+}
+
+.more-btn:hover {
+  color: #000;
+}
+
+.more-btn svg {
+  transition: transform 0.2s;
+}
+
+.more-btn svg.rotated {
+  transform: rotate(180deg);
+}
+
+.more-dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--card-bg);
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  min-width: 130px;
+  padding: 6px 0;
+  z-index: 200;
+}
+
+.more-dropdown .dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 9px 18px;
+  text-align: left;
+  text-decoration: none;
+  color: var(--text-color);
+  font-size: 0.88rem;
+  font-weight: 400;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+
+.more-dropdown .dropdown-item:hover {
+  background: var(--hover-bg);
 }
 
 .admin-link {

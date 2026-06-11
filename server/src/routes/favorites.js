@@ -14,7 +14,8 @@ router.get('/', optionalAuth, async (req, res, next) => {
     if (req.user) {
       const favorites = await query(
         `SELECT f.id, f.created_at, f.photo_id,
-                p.title, p.url, p.thumbnail_url, p.mood, p.shot_date, p.location
+                p.title, p.url, p.thumbnail_url, p.mood, p.shot_date, p.location,
+                p.camera, p.lens, p.aperture, p.shutter_speed, p.iso
          FROM favorites f
          JOIN photos p ON f.photo_id = p.id
          WHERE f.user_id = ? AND p.visibility != 'hidden'
@@ -32,7 +33,8 @@ router.get('/', optionalAuth, async (req, res, next) => {
 
     const favorites = await query(
       `SELECT f.id, f.created_at, f.photo_id,
-              p.title, p.url, p.thumbnail_url, p.mood, p.shot_date, p.location
+              p.title, p.url, p.thumbnail_url, p.mood, p.shot_date, p.location,
+              p.camera, p.lens, p.aperture, p.shutter_speed, p.iso
        FROM favorites f
        JOIN photos p ON f.photo_id = p.id
        WHERE f.fingerprint = ? AND f.user_id IS NULL AND p.visibility != 'hidden'
