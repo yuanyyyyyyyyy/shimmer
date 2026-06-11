@@ -1,86 +1,69 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { photos } from '../api'
+import { photos, favorites, tags as tagApi, stats as statsApi } from '../api'
 import { getFingerprint } from '../stores'
 import { useAuthStore } from '../stores'
-import { favorites } from '../api'
-import { error } from '../composables/useToast'
+import { error as showError } from '../composables/useToast'
+import ParticlesBg from '../components/ParticlesBg.vue'
+import FilmStrip from '../components/FilmStrip.vue'
 import Lightbox from '../components/Lightbox.vue'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const fp = getFingerprint()
+
 const photoList = ref([])
 const loading = ref(false)
 const page = ref(1)
 const total = ref(0)
 const hasMore = computed(() => photoList.value.length < total.value)
 const favoriteIds = ref(new Set())
+const stats = ref(null)
+const popularTags = ref([])
+const activeTagId = ref(null)
 
-// 当前筛选状态
-const currentSearch = ref('')
-const currentTag = ref(null)
-
-// 视图切换和排序
-const viewMode = ref('public') // 'public' | 'my'
-const sortOption = ref('random')
-const sortOptions = [
-  { value: 'random', label: '随机排列' },
-  { value: 'taken_date_desc', label: '拍摄日期（新→旧）' },
-  { value: 'taken_date_asc', label: '拍摄日期（旧→新）' },
-  { value: 'created_desc', label: '上传日期（新→旧）' },
-  { value: 'created_asc', label: '上传日期（旧→新）' }
-]
-
-// Lightbox 状态
 const lightboxVisible = ref(false)
 const lightboxIndex = ref(0)
 
-const fp = getFingerprint()
+const featuredPhoto = computed(() => {
+  if (photoList.value.length === 0) return null
+  return photoList.value[0]
+})
 
-// 切换视图模式
-const switchView = (mode) => {
-  if (mode === viewMode.value) return
-  viewMode.value = mode
-  loadPhotos(true)
+const loadStats = async () => {
+  try {
+    const res = await statsApi.get()
+    stats.value = res
+  } catch (e) {}
 }
 
-// 切换排序
-const changeSort = () => {
-  loadPhotos(true)
+const loadPopularTags = async () => {
+  try {
+    const res = await tagApi.getPopular(8)
+    popularTags.value = res.tags || []
+  } catch (e) {}
 }
 
-// 加载照片
 const loadPhotos = async (reset = false) => {
   if (loading.value) return
   loading.value = true
-  
-  // 获取搜索参数
+
   const search = route.query.search || ''
   const tag = route.query.tag || ''
-  
-  currentSearch.value = search
-  currentTag.value = tag
-  
+  activeTagId.value = tag || null
+
   try {
-    const params = { 
-      page: reset ? 1 : page.value, 
-      limit: 12,
-      sort: sortOption.value
+    const params = {
+      page: reset ? 1 : page.value,
+      limit: 20,
+      sort: 'random'
     }
-    
-    if (search) {
-      params.search = search
-    }
-    if (tag) {
-      params.tag = tag
-    }
+    if (search) params.search = search
+    if (tag) params.tag = tag
 
-    const res = viewMode.value === 'my' && authStore.isLoggedIn
-      ? await photos.getMyPhotos(params)
-      : await photos.list(params)
-
+    const res = await photos.list(params)
     if (reset) {
       photoList.value = res.data
       page.value = 1
@@ -88,7 +71,6 @@ const loadPhotos = async (reset = false) => {
       photoList.value = [...photoList.value, ...res.data]
     }
     total.value = res.total
-    // 检查收藏状态
     checkFavorites(res.data)
   } catch (e) {
     console.error(e)
@@ -97,7 +79,6 @@ const loadPhotos = async (reset = false) => {
   }
 }
 
-// 检查收藏状态
 const checkFavorites = async (list) => {
   for (const p of list) {
     try {
@@ -107,7 +88,6 @@ const checkFavorites = async (list) => {
   }
 }
 
-// 切换收藏
 const toggleFavorite = async (photo, e) => {
   e.preventDefault()
   e.stopPropagation()
@@ -121,23 +101,20 @@ const toggleFavorite = async (photo, e) => {
     }
     favoriteIds.value = new Set(favoriteIds.value)
   } catch (e) {
-    error(e.response?.data?.error || '操作失败')
+    showError(e.response?.data?.error || '操作失败')
   }
 }
 
-// 加载更多
 const loadMore = () => {
   page.value++
   loadPhotos()
 }
 
-// 查看详情 - 打开 Lightbox
 const viewDetail = (index) => {
   lightboxIndex.value = index
   lightboxVisible.value = true
 }
 
-// Lightbox 关闭时跳转详情
 const handleLightboxClose = () => {
   const photo = photoList.value[lightboxIndex.value]
   lightboxVisible.value = false
@@ -146,306 +123,466 @@ const handleLightboxClose = () => {
   }
 }
 
-// 清除筛选
+const filterByTag = (tagId) => {
+  if (activeTagId.value === String(tagId)) {
+    router.push({ path: '/' })
+  } else {
+    router.push({ path: '/', query: { tag: tagId } })
+  }
+}
+
 const clearFilters = () => {
   router.push({ path: '/' })
 }
 
-// 监听路由参数变化
+const addToFade = (el) => {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        entry.target.classList.add('fade-in')
+        observer.unobserve(entry.target)
+      }
+    })
+  }, { threshold: 0.1 })
+  observer.observe(el)
+}
+
 watch(() => route.query, () => {
   loadPhotos(true)
 }, { immediate: true })
+
+onMounted(() => {
+  loadStats()
+  loadPopularTags()
+})
 </script>
 
 <template>
   <div class="home">
-    <div class="container">
-      <!-- 视图切换和排序 -->
-      <div class="view-controls">
-        <!-- 视图切换标签（仅登录后显示） -->
-        <div v-if="authStore.isLoggedIn" class="view-tabs">
-          <button 
-            :class="{ active: viewMode === 'public' }"
-            @click="switchView('public')"
-          >
-            全部公开
-          </button>
-          <button 
-            :class="{ active: viewMode === 'my' }"
-            @click="switchView('my')"
-          >
-            我的照片
-          </button>
-        </div>
-        
-        <!-- 排序选择 -->
-        <div class="sort-control">
-          <label>排序：</label>
-          <select v-model="sortOption" @change="changeSort">
-            <option v-for="opt in sortOptions" :key="opt.value" :value="opt.value">
-              {{ opt.label }}
-            </option>
-          </select>
-        </div>
+    <!-- Hero -->
+    <section class="hero-section" :style="featuredPhoto ? { backgroundImage: `url(${featuredPhoto.url || featuredPhoto.thumbnail_url})` } : {}">
+      <ParticlesBg />
+      <div class="hero-overlay"></div>
+      <div class="hero-body">
+        <h1 class="hero-title">光影手记</h1>
+        <p class="hero-subtitle">用光影记录生活</p>
+        <p v-if="featuredPhoto" class="hero-meta">
+          {{ featuredPhoto.location || '每一次按下快门' }}
+          <span v-if="featuredPhoto.shot_date"> · {{ featuredPhoto.shot_date.slice(0, 10) }}</span>
+        </p>
       </div>
-      
-      <!-- 当前筛选状态 -->
-      <div v-if="currentSearch || currentTag" class="filter-status">
-        <span v-if="currentSearch">搜索: "{{ currentSearch }}"</span>
-        <span v-if="currentTag">标签筛选中</span>
-        <button @click="clearFilters">清除筛选</button>
+      <div class="scroll-hint">
+        <span class="scroll-dot"></span>
       </div>
-      
-      <div class="photo-grid">
-        <div 
-          v-for="(photo, index) in photoList" 
-          :key="photo.id" 
-          class="photo-card"
-          @click="viewDetail(index)"
-        >
-          <img 
-            :src="photo.thumbnail_url || photo.url" 
-            :alt="photo.title"
-            loading="lazy"
-          />
-          <div class="photo-overlay">
-            <button 
-              class="favorite-btn" 
-              :class="{ active: favoriteIds.has(photo.id) }"
-              @click="toggleFavorite(photo, $event)"
-            >
-              {{ favoriteIds.has(photo.id) ? '♥' : '♡' }}
-            </button>
-            <!-- 标签显示 -->
-            <div v-if="photo.tags && photo.tags.length" class="photo-tags">
-              <span 
-                v-for="tag in photo.tags.slice(0, 3)" 
-                :key="tag.id" 
-                class="tag"
-                :style="{ backgroundColor: tag.color }"
-              >
-                {{ tag.name }}
-              </span>
-            </div>
-            <div v-if="photo.mood" class="photo-mood">{{ photo.mood }}</div>
-            <div v-if="photo.location" class="photo-location">{{ photo.location }}</div>
-          </div>
+    </section>
+
+    <!-- Stats -->
+    <section v-if="stats" class="stats-section" ref="statsRef">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-number">{{ stats.photos }}</span>
+          <span class="stat-label">张照片</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">{{ stats.stories }}</span>
+          <span class="stat-label">个故事</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">{{ stats.albums }}</span>
+          <span class="stat-label">本相册</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-number">{{ stats.days }}</span>
+          <span class="stat-label">天记录</span>
         </div>
       </div>
-      <div v-if="loading" class="loading">加载中...</div>
-      <div v-else-if="hasMore" class="load-more">
-        <button @click="loadMore">加载更多</button>
+    </section>
+
+    <!-- Film Strip -->
+    <section v-if="photoList.length > 0" class="film-section">
+      <div class="section-label">光影长廊</div>
+      <FilmStrip :photos="photoList" @select="viewDetail(photoList.indexOf($event))" />
+    </section>
+
+    <!-- Category Filter -->
+    <section v-if="popularTags.length > 0" class="filter-section">
+      <div class="section-label">探索分类</div>
+      <div class="filter-pills">
+        <button
+          :class="{ active: !activeTagId }"
+          @click="clearFilters"
+        >全部</button>
+        <button
+          v-for="tag in popularTags"
+          :key="tag.id"
+          :class="{ active: activeTagId === String(tag.id) }"
+          @click="filterByTag(tag.id)"
+        >{{ tag.name }}</button>
       </div>
-      <div v-else-if="photoList.length === 0" class="empty">
-        暂无照片
+    </section>
+
+    <!-- Waterfall Gallery -->
+    <section class="gallery-section">
+      <div v-if="route.query.search || route.query.tag" class="filter-status">
+        <span v-if="route.query.search">搜索: "{{ route.query.search }}"</span>
+        <span v-if="route.query.tag">标签筛选</span>
+        <button @click="clearFilters">清除</button>
       </div>
 
-      <!-- Lightbox -->
-      <Lightbox
-        :photos="photoList"
-        :start-index="lightboxIndex"
-        :visible="lightboxVisible"
-        @close="handleLightboxClose"
-      />
-    </div>
+      <div v-if="loading && photoList.length === 0" class="loading">加载中...</div>
+
+      <div v-else-if="photoList.length === 0" class="empty">
+        <p>暂无照片</p>
+        <router-link to="/" class="link-btn">去看看</router-link>
+      </div>
+
+      <template v-else>
+        <div class="waterfall">
+          <div
+            v-for="(photo, index) in photoList"
+            :key="photo.id"
+            class="waterfall-item"
+            @click="viewDetail(index)"
+          >
+            <div class="waterfall-img-wrap">
+              <img
+                :src="photo.thumbnail_url || photo.url"
+                :alt="photo.title"
+                :style="{ aspectRatio: (photo.width && photo.height) ? `${photo.width}/${photo.height}` : '1/1' }"
+                loading="lazy"
+              />
+              <div class="waterfall-overlay">
+                <div class="overlay-top">
+                  <button
+                    class="fav-btn"
+                    :class="{ active: favoriteIds.has(photo.id) }"
+                    @click="toggleFavorite(photo, $event)"
+                  >{{ favoriteIds.has(photo.id) ? '♥' : '♡' }}</button>
+                </div>
+                <div class="overlay-bottom">
+                  <div v-if="photo.tags && photo.tags.length" class="overlay-tags">
+                    <span v-for="tag in photo.tags.slice(0, 2)" :key="tag.id" class="overlay-tag">{{ tag.name }}</span>
+                  </div>
+                  <p v-if="photo.title" class="overlay-title">{{ photo.title }}</p>
+                  <p v-if="photo.location || photo.mood" class="overlay-meta">
+                    {{ photo.location }}{{ photo.mood ? ' · ' + photo.mood : '' }}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="loading" class="loading">加载中...</div>
+        <div v-else-if="hasMore" class="load-more">
+          <button @click="loadMore">加载更多</button>
+        </div>
+        <div v-else-if="photoList.length > 0" class="all-loaded">已经到底了</div>
+      </template>
+    </section>
+
+    <Lightbox
+      :photos="photoList"
+      :start-index="lightboxIndex"
+      :visible="lightboxVisible"
+      @close="handleLightboxClose"
+    />
   </div>
 </template>
 
 <style scoped>
-/* 视图控制和排序 */
-.view-controls {
+/* Hero */
+.hero-section {
+  position: relative;
+  height: 100vh;
+  min-height: 500px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
+  justify-content: center;
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+}
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.7));
+  z-index: 1;
+}
+.hero-body {
+  position: relative;
+  z-index: 2;
+  text-align: center;
+  color: #fff;
+  padding: 0 24px;
+}
+.hero-title {
+  font-size: clamp(3rem, 8vw, 6rem);
+  font-weight: 200;
+  letter-spacing: 0.15em;
+  margin: 0 0 16px;
+  text-shadow: 0 4px 40px rgba(0,0,0,0.5);
+}
+.hero-subtitle {
+  font-size: clamp(1rem, 2vw, 1.3rem);
+  opacity: 0.7;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+}
+.hero-meta {
+  font-size: 0.85rem;
+  opacity: 0.5;
+  font-weight: 300;
+  margin: 0;
+}
+.scroll-hint {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  animation: bounceDown 2s ease infinite;
+}
+.scroll-dot {
+  display: block;
+  width: 2px;
+  height: 24px;
+  background: rgba(255,255,255,0.4);
+  border-radius: 2px;
+}
+@keyframes bounceDown {
+  0%, 100% { transform: translateX(-50%) translateY(0); opacity: 1; }
+  50% { transform: translateX(-50%) translateY(8px); opacity: 0.3; }
 }
 
-.view-tabs {
+/* Stats */
+.stats-section {
+  padding: 48px 20px;
+  background: #000;
+}
+.stats-grid {
+  max-width: 800px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+}
+@media (max-width: 640px) {
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.stat-card {
+  text-align: center;
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat-number {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #fff;
+  letter-spacing: -0.02em;
+}
+.stat-label {
+  font-size: 0.82rem;
+  color: rgba(255,255,255,0.4);
+  font-weight: 400;
+}
+
+/* Section labels */
+.section-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+  margin-bottom: 16px;
+  padding: 0 20px;
+}
+
+/* Film Strip */
+.film-section {
+  padding: 40px 0;
+}
+
+/* Filter */
+.filter-section {
+  padding: 0 20px 32px;
+}
+.filter-pills {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
-
-.view-tabs button {
-  padding: 8px 16px;
-  border: 1px solid #ddd;
+.filter-pills button {
+  padding: 6px 18px;
   border-radius: 20px;
-  background: var(--card-bg);
-  color: var(--text-color);
+  border: 1px solid var(--n-300);
+  background: transparent;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
   cursor: pointer;
-  font-size: 14px;
   transition: all 0.2s;
 }
-
-.view-tabs button:hover {
-  background: var(--hover-bg);
+.filter-pills button:hover {
+  border-color: #000;
+  color: #000;
 }
-
-.view-tabs button.active {
-  background: var(--secondary-color);
+.filter-pills button.active {
+  background: #000;
   color: #fff;
-  border-color: var(--secondary-color);
-}
-
-.sort-control {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.sort-control label {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.sort-control select {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  background: var(--card-bg);
-  color: var(--text-color);
-  font-size: 14px;
-  cursor: pointer;
-  outline: none;
-}
-
-.sort-control select:focus {
-  border-color: var(--secondary-color);
+  border-color: #000;
 }
 
 .filter-status {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  background: var(--input-bg, #f5f5f5);
-  border-radius: 8px;
+  padding: 10px 16px;
+  background: var(--n-200);
+  border-radius: 10px;
   margin-bottom: 20px;
-  font-size: 14px;
+  font-size: 0.84rem;
 }
-
-.filter-status span {
-  color: var(--text-color);
-  opacity: 0.7;
-}
-
+.filter-status span { color: var(--text-secondary); }
 .filter-status button {
-  background: var(--hover-bg, #e0e0e0);
-  border: none;
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--n-300);
   padding: 4px 12px;
   border-radius: 12px;
   cursor: pointer;
-  font-size: 12px;
-  margin-left: auto;
+  font-size: 0.78rem;
+  color: var(--text-secondary);
 }
 
-.photo-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
-  gap: 16px;
+/* Waterfall Gallery */
+.gallery-section {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px 60px;
 }
-
-.photo-card {
-  position: relative;
-  border-radius: 8px;
+.waterfall {
+  columns: 3;
+  column-gap: 16px;
+}
+@media (max-width: 900px) {
+  .waterfall { columns: 2; }
+}
+@media (max-width: 540px) {
+  .waterfall { columns: 1; }
+}
+.waterfall-item {
+  break-inside: avoid;
+  margin-bottom: 16px;
+  border-radius: 10px;
   overflow: hidden;
   cursor: pointer;
-  aspect-ratio: 1;
-  background: var(--card-bg);
 }
-
-.photo-card img {
+.waterfall-img-wrap {
+  position: relative;
+  overflow: hidden;
+  border-radius: 10px;
+}
+.waterfall-item img {
   width: 100%;
-  height: 100%;
+  display: block;
+  transition: transform 0.4s;
   object-fit: cover;
-  transition: transform 0.3s;
+}
+.waterfall-item:hover img {
+  transform: scale(1.04);
 }
 
-.photo-card:hover img {
-  transform: scale(1.05);
-}
-
-.photo-overlay {
+/* Hover overlay */
+.waterfall-overlay {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.6), transparent);
+  background: linear-gradient(to top, rgba(0,0,0,0.65) 0%, transparent 50%);
   opacity: 0;
   transition: opacity 0.3s;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  justify-content: space-between;
   padding: 12px;
 }
-
-.photo-card:hover .photo-overlay {
+.waterfall-item:hover .waterfall-overlay {
   opacity: 1;
 }
-
-.favorite-btn {
-  position: absolute;
-  top: 8px;
-  right: 8px;
+.overlay-top {
+  display: flex;
+  justify-content: flex-end;
+}
+.fav-btn {
   background: rgba(255,255,255,0.9);
   border: none;
   border-radius: 50%;
-  width: 36px;
-  height: 36px;
-  font-size: 18px;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
   cursor: pointer;
   transition: transform 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+.fav-btn:hover { transform: scale(1.1); }
+.fav-btn.active { color: #e74c3c; }
 
-.favorite-btn:hover {
-  transform: scale(1.1);
+.overlay-bottom {
+  color: #fff;
 }
-
-.favorite-btn.active {
-  color: #e74c3c;
-}
-
-.photo-tags {
+.overlay-tags {
   display: flex;
   gap: 4px;
-  flex-wrap: wrap;
   margin-bottom: 4px;
 }
-
-.photo-tags .tag {
-  padding: 2px 8px;
+.overlay-tag {
+  background: rgba(255,255,255,0.2);
+  backdrop-filter: blur(4px);
+  padding: 1px 8px;
   border-radius: 8px;
-  font-size: 10px;
-  color: #fff;
+  font-size: 0.7rem;
 }
-
-.photo-mood {
-  color: #fff;
+.overlay-title {
   font-size: 0.9rem;
-  margin-bottom: 4px;
+  font-weight: 600;
+  margin: 0 0 2px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+.overlay-meta {
+  font-size: 0.75rem;
+  opacity: 0.75;
+  margin: 0;
 }
 
-.photo-location {
-  color: rgba(255,255,255,0.8);
-  font-size: 0.8rem;
-}
-
-.loading, .load-more, .empty {
+/* Loading & More */
+.loading, .empty, .load-more, .all-loaded {
   text-align: center;
-  padding: 40px;
+  padding: 40px 20px;
   color: var(--text-tertiary);
+  font-size: 0.9rem;
 }
-
 .load-more button {
-  background: var(--secondary-color);
-  color: var(--card-bg);
+  background: #000;
+  color: #fff;
   border: none;
-  padding: 12px 32px;
+  padding: 10px 32px;
   border-radius: 24px;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+  transition: opacity 0.2s;
 }
+.load-more button:hover { opacity: 0.85; }
 
-.load-more button:hover {
-  opacity: 0.9;
+.link-btn {
+  display: inline-block;
+  margin-top: 12px;
+  color: #000;
+  text-decoration: none;
+  font-weight: 500;
+  border-bottom: 1px solid #000;
+  padding-bottom: 2px;
 }
 </style>

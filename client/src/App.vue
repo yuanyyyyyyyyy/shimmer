@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch, computed, onBeforeUnmount } from 'vue'
+import { ref, onMounted, watch, computed, onBeforeUnmount, onBeforeMount } from 'vue'
 import { RouterLink, RouterView, useRouter, useRoute } from 'vue-router'
 import { tags, ai } from './api'
 import { useAuthStore } from './stores'
@@ -14,6 +14,7 @@ const popularTags = ref([])
 const showTags = ref(false)
 const isDarkMode = ref(false)
 const showUserMenu = ref(false)
+const scrolled = ref(false)
 const showPopularTags = computed(() => showTags.value && !searchQuery.value.trim())
 
 // 加载热门标签
@@ -127,7 +128,15 @@ onMounted(async () => {
 
   // 添加点击事件监听
   document.addEventListener('click', handleClickOutside)
+
+  // 滚动监听 — 毛玻璃导航
+  const onScroll = () => { scrolled.value = window.scrollY > 50 }
+  window.addEventListener('scroll', onScroll, { passive: true })
+  onScroll()
+  cleanupScroll = () => window.removeEventListener('scroll', onScroll)
 })
+
+let cleanupScroll = null
 
 watch(() => route.query.search, (newSearch) => {
   searchQuery.value = newSearch || ''
@@ -149,6 +158,7 @@ watch(searchQuery, (newQuery) => {
 
 onBeforeUnmount(() => {
   clearTimeout(searchDebounceTimer)
+  if (cleanupScroll) cleanupScroll()
 })
 
 // 监听用户菜单状态
@@ -163,7 +173,7 @@ watch(showUserMenu, (newVal) => {
 
 <template>
   <div class="app">
-    <header class="header">
+    <header class="header" :class="{ scrolled }">
       <div class="container">
         <RouterLink to="/" class="logo">光影手记</RouterLink>
         <div class="header-center">
@@ -333,11 +343,20 @@ body {
 }
 
 .header {
-  background: var(--card-bg);
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
   position: sticky;
   top: 0;
   z-index: 100;
+  background: transparent;
+  transition: background 0.3s, box-shadow 0.3s, backdrop-filter 0.3s;
+}
+.header.scrolled {
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+}
+:root.dark .header.scrolled {
+  background: rgba(26,26,26,0.88);
 }
 
 .header .container {
@@ -404,16 +423,18 @@ body {
   font-size: 12px;
 }
 .search-suggestions .suggestion-pill {
-  background: #eef6ff;
-  border: 1px solid #d6e8ff;
-  color: #1558b5;
+  background: var(--n-200);
+  border: 1px solid var(--n-300);
+  color: var(--text-color);
   border-radius: 999px;
   padding: 6px 12px;
   font-size: 12px;
   cursor: pointer;
+  transition: all 0.2s;
 }
 .search-suggestions .suggestion-pill:hover {
-  background: #d6e8ff;
+  border-color: #000;
+  color: #000;
 }
 .search-suggestions .suggestion-loading {
   color: var(--text-tertiary);
@@ -466,7 +487,7 @@ body {
 
 .nav a:hover,
 .nav a.router-link-active {
-  color: var(--secondary-color);
+  color: #000;
 }
 
 .admin-link {
@@ -512,7 +533,7 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  background: var(--secondary-color);
+  background: #000;
   color: #fff;
   display: flex;
   align-items: center;
@@ -563,7 +584,7 @@ body {
 }
 
 .role-badge.admin {
-  background: var(--secondary-color);
+  background: #000;
   color: #fff;
 }
 
@@ -586,7 +607,8 @@ body {
 }
 
 .dropdown-item.admin {
-  color: var(--secondary-color);
+  color: #000;
+  font-weight: 600;
 }
 
 .dropdown-item.logout {

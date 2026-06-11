@@ -113,6 +113,11 @@ export const storylines = {
   generateSummary: (date, location, body) => api.post(`/storylines/${encodeURIComponent(date)}/${encodeURIComponent(location)}/summary`, body || { regenerate: true })
 }
 
+// 统计
+export const stats = {
+  get: () => api.get('/stats')
+}
+
 // 分享卡片
 export const share = {
   create: (data) => api.post('/share', data),

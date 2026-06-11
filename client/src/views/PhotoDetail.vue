@@ -14,7 +14,6 @@ const loading = ref(true)
 const isFavorited = ref(false)
 const fp = getFingerprint()
 
-// Lightbox 状态
 const lightboxVisible = ref(false)
 
 const loadPhoto = async () => {
@@ -22,7 +21,6 @@ const loadPhoto = async () => {
   try {
     const res = await photos.get(route.params.id)
     photo.value = res.photo
-    // 检查收藏状态
     const favRes = await favorites.check(photo.value.id, fp)
     isFavorited.value = favRes.isFavorited
   } catch (e) {
@@ -48,114 +46,139 @@ const toggleFavorite = async () => {
 }
 
 const goBack = () => router.back()
+const formatDate = (d) => d ? d.slice(0, 10) : ''
 
 onMounted(loadPhoto)
 </script>
 
 <template>
-  <div class="detail">
+  <div class="page">
     <div class="container">
-      <button class="back-btn" @click="goBack">← 返回</button>
+      <button class="back-btn" @click="goBack">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M15 18l-6-6 6-6"/></svg>
+        返回
+      </button>
+
       <div v-if="loading" class="loading">加载中...</div>
-      <div v-else-if="photo" class="photo-detail">
-        <div class="photo-wrapper" @click="lightboxVisible = true">
+
+      <template v-else-if="photo">
+        <div class="hero" @click="lightboxVisible = true">
           <img :src="photo.url" :alt="photo.title" />
         </div>
-        <div class="photo-info">
-          <h2>{{ photo.title || '无题' }}</h2>
-          <div class="meta">
-            <span v-if="photo.shot_date">📅 {{ photo.shot_date }}</span>
-            <span v-if="photo.location">📍 {{ photo.location }}</span>
-          </div>
-          <p v-if="photo.mood" class="mood">{{ photo.mood }}</p>
-          <button class="fav-btn" :class="{ active: isFavorited }" @click="toggleFavorite">
-            {{ isFavorited ? '♥ 已收藏' : '♡ 收藏' }}
-          </button>
-        </div>
-      </div>
 
-      <!-- Lightbox -->
-      <Lightbox
-        v-if="photo"
-        :photos="[photo]"
-        :start-index="0"
-        :visible="lightboxVisible"
-        @close="lightboxVisible = false"
-      />
+        <div class="info">
+          <div class="info-main">
+            <h1 class="photo-title">{{ photo.title || '无题' }}</h1>
+            <div class="meta-row">
+              <span v-if="photo.shot_date" class="meta-item">{{ formatDate(photo.shot_date) }}</span>
+              <span v-if="photo.location" class="meta-item">{{ photo.location }}</span>
+              <span v-if="photo.mood" class="meta-item mood">{{ photo.mood }}</span>
+            </div>
+          </div>
+          <div class="info-side">
+            <button class="fav-btn" :class="{ active: isFavorited }" @click="toggleFavorite">
+              <svg v-if="isFavorited" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+              {{ isFavorited ? '已收藏' : '收藏' }}
+            </button>
+          </div>
+        </div>
+
+        <Lightbox
+          v-if="photo"
+          :photos="[photo]"
+          :start-index="0"
+          :visible="lightboxVisible"
+          @close="lightboxVisible = false"
+        />
+      </template>
     </div>
   </div>
 </template>
 
 <style scoped>
-.detail {
-  min-height: calc(100vh - 140px);
-}
+.page { min-height: calc(100vh - 140px); }
 
 .back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   background: none;
   border: none;
-  font-size: 1rem;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
   cursor: pointer;
-  color: var(--secondary-color);
-  margin-bottom: 20px;
+  padding: 10px 0;
+  transition: color 0.2s;
 }
+.back-btn:hover { color: #000; }
 
-.photo-detail {
-  display: grid;
-  grid-template-columns: 1fr 300px;
-  gap: 32px;
-}
-
-.photo-wrapper {
-  background: var(--bg-color);
-  border-radius: 8px;
+.hero {
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
+  background: var(--n-200);
+  margin-bottom: 28px;
 }
-
-.photo-wrapper img {
+.hero img {
   width: 100%;
   display: block;
 }
 
-.photo-info h2 {
-  margin-bottom: 16px;
-}
-
-.meta {
+.info {
   display: flex;
-  gap: 16px;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding-bottom: 48px;
+}
+.info-main { flex: 1; min-width: 0; }
+.photo-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  margin: 0 0 10px;
+  line-height: 1.3;
+}
+.meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
   color: var(--text-secondary);
-  margin-bottom: 16px;
+  font-size: 0.88rem;
+}
+.meta-item {
+  display: inline-block;
+}
+.meta-item.mood {
+  font-style: italic;
+  color: var(--text-tertiary);
 }
 
-.mood {
-  font-size: 1.1rem;
-  line-height: 1.8;
-  margin-bottom: 24px;
-}
+.info-side { flex-shrink: 0; }
 
 .fav-btn {
-  background: var(--input-bg);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #000;
+  color: #fff;
   border: none;
-  padding: 12px 24px;
+  padding: 10px 22px;
   border-radius: 24px;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.88rem;
+  transition: opacity 0.2s;
 }
-
+.fav-btn:hover { opacity: 0.85; }
 .fav-btn.active {
-  color: var(--secondary-color);
+  background: #fff;
+  color: #e74c3c;
+  border: 1px solid #eee;
 }
 
-.loading {
-  text-align: center;
-  padding: 40px;
-}
+.loading { text-align: center; padding: 60px 20px; color: var(--text-tertiary); }
 
-@media (max-width: 768px) {
-  .photo-detail {
-    grid-template-columns: 1fr;
-  }
+@media (max-width: 600px) {
+  .info { flex-direction: column; }
 }
 </style>
