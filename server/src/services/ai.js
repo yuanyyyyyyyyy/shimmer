@@ -7,7 +7,7 @@ const AI_PROVIDER = process.env.AI_PROVIDER || '';
 const AI_MODEL = process.env.AI_MODEL || 'llama2';
 const AI_BASE_URL = process.env.AI_BASE_URL || (AI_PROVIDER === 'ollama' ? 'http://127.0.0.1:11434' : 'https://api.openai.com');
 const AI_API_KEY = process.env.AI_API_KEY || '';
-const AI_TIMEOUT = Number(process.env.AI_TIMEOUT || 10000);
+const AI_TIMEOUT = Number(process.env.AI_TIMEOUT || 120000);
 
 const DEFAULT_AI_CONFIG = {
   enabled: Boolean(AI_PROVIDER),
@@ -21,13 +21,13 @@ const DEFAULT_AI_CONFIG = {
 async function loadAiSettings() {
   try {
     let rows = await query(
-      'SELECT provider, model, base_url, api_key, enabled FROM ai_settings WHERE is_active = 1 LIMIT 1'
+      'SELECT provider, model, base_url, api_key, timeout, enabled FROM ai_settings WHERE is_active = 1 LIMIT 1'
     );
 
     // 无活跃预设时回退到最新一条
     if (rows.length === 0) {
       rows = await query(
-        'SELECT provider, model, base_url, api_key, enabled FROM ai_settings ORDER BY id DESC LIMIT 1'
+        'SELECT provider, model, base_url, api_key, timeout, enabled FROM ai_settings ORDER BY id DESC LIMIT 1'
       );
     }
 
@@ -42,7 +42,7 @@ async function loadAiSettings() {
       model: row.model || DEFAULT_AI_CONFIG.model,
       baseUrl: row.base_url || DEFAULT_AI_CONFIG.baseUrl,
       apiKey: row.api_key || DEFAULT_AI_CONFIG.apiKey,
-      timeout: DEFAULT_AI_CONFIG.timeout
+      timeout: row.timeout || DEFAULT_AI_CONFIG.timeout
     };
   } catch (err) {
     console.error('[AI] loadAiSettings error:', err.message || err);
@@ -122,6 +122,7 @@ async function makeChatCompletion(messages, options = {}) {
   const timeoutId = setTimeout(() => controller.abort(), aiConfig.timeout);
 
   try {
+    console.log(`[AI] 请求 ${provider} 模型: ${model}, url: ${url}`);
     const response = await fetch(url, {
       method: 'POST',
       headers,
@@ -129,16 +130,24 @@ async function makeChatCompletion(messages, options = {}) {
       signal: controller.signal
     });
     const result = await response.json();
+    
+    // 详细日志：打印完整响应
+    console.log(`[AI] 响应状态: ${response.status}, 完整响应:`, JSON.stringify(result).slice(0, 500));
+    
     if (!response.ok) {
+      console.error('[AI] 请求失败:', result.error || result);
       throw new Error(result.error?.message || `AI 请求失败: ${response.status}`);
     }
 
     const choice = result.choices?.[0];
     if (!choice) {
+      console.error('[AI] 响应中无 choices:', result);
       throw new Error('AI 返回内容空');
     }
 
-    return choice.message?.content || choice.text || '';
+    const content = choice.message?.content || choice.text || '';
+    console.log(`[AI] 返回内容长度: ${content.length}, 前100字符:`, content.slice(0, 100));
+    return content;
   } finally {
     clearTimeout(timeoutId);
   }
@@ -261,7 +270,7 @@ async function summarizeReview(reviewStats = {}, options = {}) {
 
   try {
     console.log(`[AI] summarizeReview: 开始生成回顾 (provider=${aiConfig.provider}, model=${aiConfig.model})`);
-    const raw = await makeChatCompletion(messages, { maxTokens: 250 });
+    const raw = await makeChatCompletion(messages, { maxTokens: 1000 });
     const result = String(raw).trim();
 
     if (!result || result.length === 0) {

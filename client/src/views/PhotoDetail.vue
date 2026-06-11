@@ -29,7 +29,7 @@ onMounted(loadPhoto)
 <template>
   <div class="detail-page">
     <div v-if="loading" class="loading">加载中...</div>
-    <DarkroomPrint v-else-if="photo" :photo="photo" :page-mode="true" />
+    <DarkroomPrint v-else-if="photo" :photo="photo" :page-mode="true" @close="router.back()" />
   </div>
 </template>
 

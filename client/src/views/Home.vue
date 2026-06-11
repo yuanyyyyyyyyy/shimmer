@@ -145,14 +145,6 @@ const clearFilters = () => {
   router.push({ path: '/' })
 }
 
-const getSizeClass = (index) => {
-  const p = index % 8
-  if (p === 0) return 'size-big'
-  if (p === 1) return 'size-tall'
-  if (p === 4) return 'size-wide'
-  return 'size-normal'
-}
-
 watch(() => route.query, () => {
   loadPhotos(true)
 }, { immediate: true })
@@ -248,21 +240,18 @@ onMounted(() => {
             v-for="(photo, index) in photoList"
             :key="photo.id"
             class="g-item"
-            :class="getSizeClass(index)"
             @click="viewDetail(index)"
           >
-            <div class="g-thumb">
-              <img
-                :src="photo.url || photo.thumbnail_url"
-                :alt="photo.title"
-                :style="{ aspectRatio: (photo.width && photo.height) ? `${photo.width}/${photo.height}` : '1/1' }"
-                loading="lazy"
-              />
-              <div class="g-label">
-                <span v-if="photo.location" class="g-location">{{ photo.location }}</span>
-                <span v-if="photo.title" class="g-title">{{ photo.title }}</span>
-                <span v-if="photo.mood && !photo.title" class="g-mood">{{ photo.mood }}</span>
-              </div>
+            <img
+              :src="photo.url || photo.thumbnail_url"
+              :alt="photo.title"
+              :style="{ aspectRatio: (photo.width && photo.height) ? `${photo.width}/${photo.height}` : '1/1' }"
+              loading="lazy"
+            />
+            <div class="g-label">
+              <span v-if="photo.location" class="g-location">{{ photo.location }}</span>
+              <span v-if="photo.title" class="g-title">{{ photo.title }}</span>
+              <span v-if="photo.mood && !photo.title" class="g-mood">{{ photo.mood }}</span>
             </div>
           </div>
         </div>
@@ -473,44 +462,36 @@ onMounted(() => {
   padding: 0 20px 60px;
 }
 .gallery {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 16px;
+  column-count: 5;
+  column-gap: 8px;
 }
-@media (max-width: 900px) {
-  .gallery { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 1100px) {
+  .gallery { column-count: 3; }
 }
 @media (max-width: 600px) {
-  .gallery { grid-template-columns: repeat(2, 1fr); }
+  .gallery { column-count: 2; }
 }
 
 .g-item {
+  display: inline-block;
+  width: 100%;
+  margin-bottom: 8px;
+  break-inside: avoid;
   border: 1px solid var(--n-300);
   background: var(--card-bg);
   border-radius: 2px;
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.3s, box-shadow 0.3s;
+  position: relative;
 }
 .g-item:hover {
   transform: translateY(-4px);
   box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 }
-
-.g-item.size-big  { grid-column: span 2; grid-row: span 2; }
-.g-item.size-tall { grid-row: span 2; }
-.g-item.size-wide { grid-column: span 2; }
-
-.g-thumb {
-  position: relative;
-  overflow: hidden;
-  height: 100%;
-}
-.g-thumb img {
+.g-item img {
   width: 100%;
-  height: 100%;
   display: block;
-  object-fit: cover;
 }
 
 .g-label {
@@ -538,12 +519,6 @@ onMounted(() => {
   font-size: 0.75rem;
   font-style: italic;
   opacity: 0.75;
-}
-
-@media (max-width: 600px) {
-  .g-item.size-big  { grid-column: span 1; grid-row: span 1; }
-  .g-item.size-tall { grid-row: span 1; }
-  .g-item.size-wide { grid-column: span 2; }
 }
 
 /* Loading & More */

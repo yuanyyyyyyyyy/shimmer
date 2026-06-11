@@ -104,6 +104,8 @@ const formatSize = (kb) => {
   return `${(kb / 1024).toFixed(1)} MB`
 }
 
+const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月']
+
 const heroPhotoStyle = computed(() => {
   if (!reviewData.value?.heroPhoto?.url) return {}
   return { backgroundImage: `url(${reviewData.value.heroPhoto.url})` }
@@ -115,11 +117,7 @@ const statPhotoStyle = (index) => {
   return { backgroundImage: `url(${photo.url})` }
 }
 
-const hasStatPhotos = computed(() => reviewData.value?.statPhotos?.length > 0)
-
-const monthNames = ['一月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '十一月', '十二月']
-
-// 热力图辅助
+// 柱状图辅助
 const maxMonthCount = computed(() => {
   if (!reviewData.value?.monthlyStats) return 1
   return Math.max(...reviewData.value.monthlyStats.map(m => m.count), 1)
@@ -134,6 +132,20 @@ const getHeatHeight = (m) => {
 const getHeatOpacity = (m) => { const c = getCount(m); return maxMonthCount.value > 0 ? 0.25 + (c / maxMonthCount.value) * 0.55 : 0.2 }
 const getHeatLightness = (m) => { const c = getCount(m); return Math.round(85 - (c / maxMonthCount.value) * 55) }
 const getHeatHue = (m) => { const c = getCount(m); return maxMonthCount.value > 0 ? Math.round(260 - (c / maxMonthCount.value) * 20) : 260 }
+
+// 折线图
+const linePoints = computed(() => {
+  if (!reviewData.value?.monthlyStats?.length) return ''
+  const max = maxMonthCount.value
+  const points = []
+  for (let m = 1; m <= 12; m++) {
+    const count = getCount(m)
+    const x = ((m - 1) / 11) * 100
+    const y = max > 0 ? (1 - count / max) * 36 + 2 : 38
+    points.push(`${x},${y}`)
+  }
+  return points.join(' ')
+})
 
 onMounted(() => {
   loadYears().then(() => {
@@ -177,8 +189,8 @@ onMounted(() => {
     <template v-else>
       <!-- Block 1: Hero with photo background -->
       <section class="hero-block" :class="{ visible: showContent }">
-        <div class="hero-bg" :style="heroPhotoStyle"></div>
-        <div class="hero-overlay"></div>
+        <div class="hero-bg"></div>
+        <div class="hero-photo" :style="heroPhotoStyle" v-if="reviewData?.heroPhoto?.url"></div>
         <div class="hero-inner">
           <p class="hero-year">{{ selectedYear }}</p>
           <h1 class="hero-title">
@@ -215,29 +227,37 @@ onMounted(() => {
 
       <!-- Block 3: 数据概览 — 照片背景卡片 -->
       <section class="stats-grid" :class="{ visible: showContent }">
-        <div class="stat-card main" :style="statPhotoStyle(0)">
-          <div class="stat-overlay"></div>
+        <div class="stat-card main">
+          <div class="stat-bg"></div>
+          <div class="stat-photo" :style="statPhotoStyle(0)" v-if="reviewData?.statPhotos?.[0]?.url"></div>
+          <div class="stat-frost"></div>
           <div class="stat-content">
             <span class="stat-value">{{ reviewData.totalPhotos }}</span>
             <span class="stat-label">全年照片</span>
           </div>
         </div>
-        <div class="stat-card" :style="statPhotoStyle(1)">
-          <div class="stat-overlay"></div>
+        <div class="stat-card">
+          <div class="stat-bg"></div>
+          <div class="stat-photo" :style="statPhotoStyle(1)" v-if="reviewData?.statPhotos?.[1]?.url"></div>
+          <div class="stat-frost"></div>
           <div class="stat-content">
             <span class="stat-value">{{ formatSize(reviewData.totalSize) }}</span>
             <span class="stat-label">存储空间</span>
           </div>
         </div>
-        <div class="stat-card" :style="statPhotoStyle(2)">
-          <div class="stat-overlay"></div>
+        <div class="stat-card">
+          <div class="stat-bg"></div>
+          <div class="stat-photo" :style="statPhotoStyle(2)" v-if="reviewData?.statPhotos?.[2]?.url"></div>
+          <div class="stat-frost"></div>
           <div class="stat-content">
             <span class="stat-value">{{ reviewData.photosWithGps || 0 }}</span>
             <span class="stat-label">带定位</span>
           </div>
         </div>
-        <div class="stat-card" :style="statPhotoStyle(3)">
-          <div class="stat-overlay"></div>
+        <div class="stat-card">
+          <div class="stat-bg"></div>
+          <div class="stat-photo" :style="statPhotoStyle(3)" v-if="reviewData?.statPhotos?.[3]?.url"></div>
+          <div class="stat-frost"></div>
           <div class="stat-content">
             <span class="stat-value">{{ reviewData.avgWidth || 0 }}×{{ reviewData.avgHeight || 0 }}</span>
             <span class="stat-label">平均尺寸</span>
@@ -245,7 +265,20 @@ onMounted(() => {
         </div>
       </section>
 
-      <!-- Block 4: 月度热力图 -->
+      <!-- Block 4: 月度折线图 -->
+      <section class="block-section" v-if="reviewData.monthlyStats?.length" :class="{ visible: showContent }">
+        <h2 class="sec-title">月度趋势</h2>
+        <div class="line-chart-wrap">
+          <svg viewBox="0 0 100 38" preserveAspectRatio="none" class="line-chart">
+            <polyline :points="linePoints" fill="none" stroke="oklch(60% 0.06 250)" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+          </svg>
+          <div class="line-labels">
+            <span v-for="m in 12" :key="m" class="line-label">{{ monthNames[m - 1].replace('月', '') }}</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Block 5: 月度柱状图 -->
       <section class="block-section" v-if="reviewData.monthlyStats?.length" :class="{ visible: showContent }">
         <h2 class="sec-title">月度拍摄分布</h2>
         <div class="heatmap-grid">
@@ -265,7 +298,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <!-- Block 5: 热门标签 -->
+      <!-- Block 6: 热门标签 -->
       <section class="block-section" v-if="reviewData.topTags?.length" :class="{ visible: showContent }">
         <h2 class="sec-title">热门标签</h2>
         <div class="tag-cloud">
@@ -276,7 +309,7 @@ onMounted(() => {
         </div>
       </section>
 
-      <!-- Block 6: 地点足迹 -->
+      <!-- Block 7: 地点足迹 -->
       <section class="block-section" v-if="reviewData.topLocations?.length" :class="{ visible: showContent }">
         <h2 class="sec-title">地点足迹</h2>
         <div class="location-list">
@@ -373,31 +406,37 @@ onMounted(() => {
 
 .hero-bg {
   position: absolute; inset: 0;
-  background-color: #111;
-  background-size: cover;
-  background-position: center;
-}
-.hero-bg:not([style*="backgroundImage"]) {
-  background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+  background: oklch(28% 0.04 250);
 }
 
-.hero-overlay {
+.hero-photo {
   position: absolute; inset: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.85) 10%, rgba(0,0,0,0.2) 50%, rgba(0,0,0,0.4) 100%);
+  background-size: cover;
+  background-position: center;
+  opacity: 0.12;
+  mix-blend-mode: screen;
 }
 
 .hero-inner {
-  position: relative; z-index: 1;
-  padding: 40px 28px 32px;
+  position: relative; z-index: 2;
+  margin: 24px;
+  padding: 28px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.08);
   color: #fff;
+  width: calc(100% - 48px);
 }
 
 .hero-year {
   font-size: 0.82rem;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  opacity: 0.5;
+  opacity: 0.6;
   margin-bottom: 8px;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.4);
 }
 
 .hero-title {
@@ -412,6 +451,7 @@ onMounted(() => {
   font-weight: 800;
   letter-spacing: -0.03em;
   line-height: 1;
+  text-shadow: 0 2px 20px rgba(0,0,0,0.3);
 }
 
 .hero-unit {
@@ -423,8 +463,9 @@ onMounted(() => {
 .hero-dates {
   margin-top: 10px;
   font-size: 0.84rem;
-  opacity: 0.45;
+  opacity: 0.5;
   font-weight: 400;
+  text-shadow: 0 2px 12px rgba(0,0,0,0.4);
 }
 
 /* ====== Block 2: AI 总叙 ====== */
@@ -475,15 +516,34 @@ onMounted(() => {
   border-radius: 12px;
   overflow: hidden;
   min-height: 120px;
-  background-color: #f0f0f0;
-  background-size: cover;
-  background-position: center;
   display: flex;
   align-items: center;
   justify-content: center;
 }
-.stat-card:not([style*="backgroundImage"]) {
-  background: #f5f5f5;
+
+.stat-bg {
+  position: absolute; inset: 0;
+}
+.stat-card.main .stat-bg { background: oklch(30% 0.04 250); }
+.stat-card:nth-child(2) .stat-bg { background: oklch(26% 0.04 255); }
+.stat-card:nth-child(3) .stat-bg { background: oklch(32% 0.04 245); }
+.stat-card:nth-child(4) .stat-bg { background: oklch(28% 0.04 260); }
+
+.stat-photo {
+  position: absolute; inset: 0;
+  background-size: cover;
+  background-position: center;
+  opacity: 0.12;
+  mix-blend-mode: screen;
+}
+
+.stat-frost {
+  position: absolute; inset: 0;
+  background: rgba(255,255,255,0.06);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 12px;
 }
 
 .stat-card.main {
@@ -491,13 +551,8 @@ onMounted(() => {
   min-height: 250px;
 }
 
-.stat-overlay {
-  position: absolute; inset: 0;
-  background: linear-gradient(to top, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.15) 60%, rgba(0,0,0,0.3) 100%);
-}
-
 .stat-content {
-  position: relative; z-index: 1;
+  position: relative; z-index: 3;
   text-align: center;
   color: #fff;
   padding: 16px;
@@ -515,7 +570,7 @@ onMounted(() => {
 .stat-label {
   display: block;
   font-size: 0.78rem;
-  opacity: 0.65;
+  opacity: 0.7;
   margin-top: 4px;
   font-weight: 400;
   letter-spacing: 0.04em;
@@ -527,10 +582,11 @@ onMounted(() => {
   .stat-card.main .stat-value { font-size: 2.2rem; }
 }
 
-/* ====== Block 4-6: 通用区块 ====== */
+/* ====== Block 4-7: 通用区块 ====== */
 .block-section { margin: 32px 0; opacity: 0; transform: translateY(20px); transition: all 0.6s ease; }
-.block-section:nth-of-type(5) { transition-delay: 0.35s; }
-.block-section:nth-of-type(6) { transition-delay: 0.45s; }
+.block-section:nth-of-type(2) { transition-delay: 0.15s; }
+.block-section:nth-of-type(3) { transition-delay: 0.25s; }
+.block-section:nth-of-type(4) { transition-delay: 0.35s; }
 .block-section.visible { opacity: 1; transform: translateY(0); }
 
 .sec-title { font-size: 0.88rem; font-weight: 600; margin-bottom: 16px; color: var(--text-s); text-transform: uppercase; letter-spacing: 0.08em; padding-bottom: 8px; border-bottom: 1px solid var(--border-divider); }
@@ -547,6 +603,32 @@ onMounted(() => {
 .heat-cell:hover { transform: scaleY(1.04); }
 .cell-month { font-size: 8px; color: #fff; opacity: 0.75; }
 .cell-count { font-size: 8px; color: #fff; opacity: 0.85; font-weight: 600; }
+
+/* 月度折线图 */
+.line-chart-wrap {
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: 12px;
+  padding: 20px 16px 0;
+}
+.line-chart {
+  width: 100%;
+  height: 140px;
+  display: block;
+}
+.line-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 6px 0 0;
+  margin-top: 4px;
+  border-top: 1px solid var(--border-divider);
+}
+.line-label {
+  font-size: 8px;
+  color: var(--text-t);
+  width: 8.33%;
+  text-align: center;
+}
 
 /* 黑白标签云 */
 .tag-cloud { display: flex; flex-wrap: wrap; gap: 8px; }

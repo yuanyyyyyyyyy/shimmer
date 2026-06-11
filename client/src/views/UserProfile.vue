@@ -95,13 +95,6 @@ const loadMore = () => {
   }
 }
 
-const getPhotoStyle = (photo) => {
-  const aspectRatio = photo.width && photo.height
-    ? photo.width / photo.height
-    : 1
-  return { aspectRatio: aspectRatio.toFixed(2) }
-}
-
 onMounted(async () => {
   await fetchUser()
   await fetchPhotos(true)
@@ -158,23 +151,23 @@ onMounted(async () => {
         <p>还没有公开照片</p>
       </div>
 
-      <div v-else class="photo-grid">
+      <div v-else class="gallery">
         <div
           v-for="photo in photos"
           :key="photo.id"
-          class="photo-card"
+          class="g-item"
         >
-          <router-link :to="`/photo/${photo.id}`" class="photo-link">
-            <div class="photo-wrapper" :style="getPhotoStyle(photo)">
-              <img
-                :src="photo.thumbnail_url || photo.url"
-                :alt="photo.title"
-                loading="lazy"
-              />
-            </div>
-            <div class="photo-info">
-              <h3>{{ photo.title || '无标题' }}</h3>
-              <p class="date">{{ photo.shot_date || '未知日期' }}</p>
+          <router-link :to="`/photo/${photo.id}`" class="g-thumb">
+            <img
+              :src="photo.url"
+              :alt="photo.title"
+              style="aspect-ratio: 1/1"
+              loading="lazy"
+            />
+            <div class="g-label">
+              <span v-if="photo.location" class="g-location">{{ photo.location }}</span>
+              <span v-if="photo.title" class="g-title">{{ photo.title }}</span>
+              <span v-if="photo.mood && !photo.title" class="g-mood">{{ photo.mood }}</span>
             </div>
           </router-link>
         </div>
@@ -436,59 +429,76 @@ onMounted(async () => {
   color: #999;
 }
 
-.photo-grid {
+.gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 16px;
 }
 
-.photo-card {
-  background: #fff;
-  border-radius: 12px;
+@media (max-width: 1100px) {
+  .gallery { grid-template-columns: repeat(3, 1fr); }
+}
+@media (max-width: 600px) {
+  .gallery { grid-template-columns: repeat(2, 1fr); }
+}
+
+.g-item {
+  border: 1px solid var(--n-300);
+  background: var(--card-bg);
+  border-radius: 2px;
   overflow: hidden;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.06);
-  transition: transform 0.2s, box-shadow 0.2s;
+  transition: transform 0.3s, box-shadow 0.3s;
 }
 
-.photo-card:hover {
+.g-item:hover {
   transform: translateY(-4px);
-  box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.08);
 }
 
-.photo-link {
+.g-thumb {
+  position: relative;
+  overflow: hidden;
+  height: 100%;
+  display: block;
   text-decoration: none;
   color: inherit;
 }
 
-.photo-wrapper {
-  position: relative;
-  width: 100%;
-  overflow: hidden;
-  background: #f5f5f5;
-}
-
-.photo-wrapper img {
+.g-thumb img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
   display: block;
+  object-fit: cover;
 }
 
-.photo-info {
-  padding: 16px;
+.g-label {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 10px 12px;
+  background: linear-gradient(to top, rgba(0,0,0,0.55), transparent);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.photo-info h3 {
-  font-size: 1rem;
-  margin-bottom: 4px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+.g-location {
+  font-size: 0.68rem;
+  opacity: 0.8;
+  letter-spacing: 0.04em;
 }
 
-.photo-info .date {
-  font-size: 0.85rem;
-  color: #999;
+.g-title {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.g-mood {
+  font-size: 0.75rem;
+  font-style: italic;
+  opacity: 0.75;
 }
 
 .load-more {

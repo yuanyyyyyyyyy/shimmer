@@ -16,21 +16,22 @@ router.get('/config', async (req, res, next) => {
 
 router.post('/config', authenticateToken, requireAdmin, async (req, res, next) => {
   try {
-    const { provider, model, base_url, api_key, enabled } = req.body;
+    const { provider, model, base_url, api_key, timeout, enabled } = req.body;
     const rows = await query('SELECT id, api_key FROM ai_settings WHERE is_active = 1 LIMIT 1');
     const currentApiKey = rows[0]?.api_key || null;
     const finalApiKey = api_key === undefined ? currentApiKey : api_key || null;
+    const finalTimeout = timeout === undefined ? 120000 : timeout || 120000;
     const enabledValue = enabled ? 1 : 0;
 
     if (rows.length > 0) {
       await query(
-        `UPDATE ai_settings SET provider = ?, model = ?, base_url = ?, api_key = ?, enabled = ? WHERE id = ?`,
-        [provider || null, model || null, base_url || null, finalApiKey, enabledValue, rows[0].id]
+        `UPDATE ai_settings SET provider = ?, model = ?, base_url = ?, api_key = ?, timeout = ?, enabled = ? WHERE id = ?`,
+        [provider || null, model || null, base_url || null, finalApiKey, finalTimeout, enabledValue, rows[0].id]
       );
     } else {
       await query(
-        `INSERT INTO ai_settings (name, is_active, provider, model, base_url, api_key, enabled) VALUES (?, 1, ?, ?, ?, ?, ?)`,
-        ['默认配置', provider || null, model || null, base_url || null, finalApiKey, enabledValue]
+        `INSERT INTO ai_settings (name, is_active, provider, model, base_url, api_key, timeout, enabled) VALUES (?, 1, ?, ?, ?, ?, ?, ?)`,
+        ['默认配置', provider || null, model || null, base_url || null, finalApiKey, finalTimeout, enabledValue]
       );
     }
 
@@ -44,7 +45,7 @@ router.post('/config', authenticateToken, requireAdmin, async (req, res, next) =
 router.get('/presets', authenticateToken, requireAdmin, async (req, res, next) => {
   try {
     const rows = await query(
-      'SELECT id, name, is_active, provider, model, base_url, api_key, enabled, updated_at FROM ai_settings ORDER BY is_active DESC, updated_at DESC'
+      'SELECT id, name, is_active, provider, model, base_url, api_key, timeout, enabled, updated_at FROM ai_settings ORDER BY is_active DESC, updated_at DESC'
     );
     res.json({ presets: rows });
   } catch (err) {
@@ -54,13 +55,14 @@ router.get('/presets', authenticateToken, requireAdmin, async (req, res, next) =
 
 router.post('/presets', authenticateToken, requireAdmin, async (req, res, next) => {
   try {
-    const { name, provider, model, base_url, api_key, enabled } = req.body;
+    const { name, provider, model, base_url, api_key, timeout, enabled } = req.body;
     const presetName = name && name.trim() ? name.trim() : '未命名配置';
     const enabledValue = enabled ? 1 : 0;
+    const timeoutValue = timeout || 120000;
 
     const result = await query(
-      `INSERT INTO ai_settings (name, is_active, provider, model, base_url, api_key, enabled) VALUES (?, 1, ?, ?, ?, ?, ?)`,
-      [presetName, provider || null, model || null, base_url || null, api_key || null, enabledValue]
+      `INSERT INTO ai_settings (name, is_active, provider, model, base_url, api_key, timeout, enabled) VALUES (?, 1, ?, ?, ?, ?, ?, ?)`,
+      [presetName, provider || null, model || null, base_url || null, api_key || null, timeoutValue, enabledValue]
     );
 
     // 新预设创建后自动激活（其它预设取消激活）
@@ -75,7 +77,7 @@ router.post('/presets', authenticateToken, requireAdmin, async (req, res, next) 
 router.put('/presets/:id', authenticateToken, requireAdmin, async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { name, provider, model, base_url, api_key, enabled } = req.body;
+    const { name, provider, model, base_url, api_key, timeout, enabled } = req.body;
 
     // 只更新提供的字段
     const fields = [];
@@ -85,6 +87,7 @@ router.put('/presets/:id', authenticateToken, requireAdmin, async (req, res, nex
     if (model !== undefined) { fields.push('model = ?'); values.push(model || null); }
     if (base_url !== undefined) { fields.push('base_url = ?'); values.push(base_url || null); }
     if (api_key !== undefined) { fields.push('api_key = ?'); values.push(api_key || null); }
+    if (timeout !== undefined) { fields.push('timeout = ?'); values.push(timeout || 120000); }
     if (enabled !== undefined) { fields.push('enabled = ?'); values.push(enabled ? 1 : 0); }
 
     if (fields.length === 0) {

@@ -83,11 +83,11 @@ watch(() => props.photo, () => {
       v-if="visible || pageMode"
       class="darkroom-overlay"
       :class="{ 'page-mode': pageMode, visible: visible || pageMode }"
-      @click.self="emit('close')"
+      @click="emit('close')"
     >
       <div class="darkroom-glow"></div>
 
-      <div class="darkroom-panel" :class="{ loaded }">
+      <div class="darkroom-panel" :class="{ loaded }" @click.stop>
         <div class="photo-paper" :style="{ transform: `rotate(${rotation}deg)` }">
           <div class="photo-border">
             <img
@@ -123,7 +123,7 @@ watch(() => props.photo, () => {
           </a>
         </div>
 
-        <div v-if="!pageMode" class="close-hint">点击遮罩关闭</div>
+        <div class="close-hint">点击遮罩关闭</div>
       </div>
     </div>
   </Teleport>
@@ -148,7 +148,7 @@ watch(() => props.photo, () => {
 .darkroom-overlay.page-mode {
   position: fixed;
   opacity: 1;
-  z-index: 1;
+  z-index: 10000;
 }
 
 .darkroom-glow {
