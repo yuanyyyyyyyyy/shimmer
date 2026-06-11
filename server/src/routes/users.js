@@ -82,8 +82,8 @@ router.get('/:id/photos', async (req, res, next) => {
        FROM photos
        WHERE user_id = ? AND visibility = 'public'
        ORDER BY created_at DESC
-       LIMIT ? OFFSET ?`,
-      [userId, limit, offset]
+       LIMIT ${limit} OFFSET ${offset}`,
+      [userId]
     );
 
     // 获取总数
