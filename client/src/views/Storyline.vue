@@ -201,23 +201,23 @@ onMounted(async () => {
 
 .page-header {
   text-align: center;
-  padding: 40px 0 8px;
+  padding: 24px 0 0;
 }
 
 .page-header h1 {
-  font-size: 2.4rem;
-  font-weight: 800;
+  font-size: 1.4rem;
+  font-weight: 200;
+  letter-spacing: 0.3em;
   color: #000;
-  letter-spacing: -0.02em;
   margin-bottom: 4px;
 }
 
 .section-sub {
   color: var(--text-tertiary);
-  font-size: 0.78rem;
-  letter-spacing: 0.12em;
+  font-size: 0.72rem;
+  letter-spacing: 0.15em;
   text-transform: uppercase;
-  margin-bottom: 36px;
+  margin-bottom: 28px;
 }
 
 /* Year strip */
@@ -225,8 +225,8 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 40px;
+  gap: 8px;
+  margin-bottom: 32px;
   flex-wrap: wrap;
 }
 
@@ -263,14 +263,14 @@ onMounted(async () => {
 
 /* Spreads */
 .spreads {
-  max-width: 960px;
+  max-width: 720px;
   margin: 0 auto;
 }
 
 .spread {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  margin-bottom: 36px;
+  margin-bottom: 40px;
   background: var(--card-bg);
   border-radius: 4px;
   overflow: hidden;
@@ -294,7 +294,7 @@ onMounted(async () => {
 .spread-img {
   position: relative;
   overflow: hidden;
-  min-height: 320px;
+  min-height: 240px;
   background: var(--n-200);
 }
 
@@ -324,26 +324,28 @@ onMounted(async () => {
 }
 
 .spread-text {
-  padding: 36px 36px 32px;
+  padding: 24px 28px;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 
 .spread-date {
-  font-size: 0.72rem;
+  font-size: 0.7rem;
   letter-spacing: 0.06em;
   color: var(--text-tertiary);
-  margin-bottom: 8px;
+  margin-bottom: 6px;
+  font-weight: 200;
   font-feature-settings: "tnum";
 }
 
 .spread-title {
-  font-size: 1.5rem;
-  font-weight: 700;
+  font-size: 1.05rem;
+  font-weight: 300;
+  letter-spacing: 0.06em;
   margin-bottom: 6px;
   color: #000;
-  line-height: 1.3;
+  line-height: 1.4;
 }
 
 :root.dark .spread-title {
@@ -359,13 +361,14 @@ onMounted(async () => {
 }
 
 .spread-pullquote {
-  font-size: 0.95rem;
-  font-style: italic;
+  font-size: 0.82rem;
+  font-weight: 200;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
   color: var(--text-secondary);
   line-height: 1.7;
-  border-left: 3px solid #000;
-  padding-left: 18px;
-  margin-bottom: 16px;
+  border-left: 1px solid #000;
+  padding-left: 14px;
+  margin-bottom: 12px;
 }
 
 :root.dark .spread-pullquote {
@@ -376,14 +379,14 @@ onMounted(async () => {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .spread-tag {
-  font-size: 0.7rem;
+  font-size: 0.65rem;
   color: var(--text-secondary);
   border: 1px solid var(--n-300);
-  padding: 2px 10px;
+  padding: 2px 8px;
   border-radius: 10px;
 }
 
@@ -391,10 +394,11 @@ onMounted(async () => {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 0.84rem;
-  font-weight: 600;
+  font-size: 0.75rem;
+  font-weight: 400;
+  letter-spacing: 0.04em;
   color: #000;
-  border-bottom: 2px solid #000;
+  border-bottom: 1px solid #000;
   padding-bottom: 2px;
   align-self: flex-start;
   transition: gap 0.2s;
@@ -496,16 +500,16 @@ onMounted(async () => {
     order: 1;
   }
   .spread-img {
-    min-height: 200px;
+    min-height: 180px;
   }
   .spread-text {
-    padding: 24px;
+    padding: 18px 20px;
   }
   .spread-title {
-    font-size: 1.2rem;
+    font-size: 0.95rem;
   }
   .page-header h1 {
-    font-size: 1.8rem;
+    font-size: 1.2rem;
   }
 }
 </style>

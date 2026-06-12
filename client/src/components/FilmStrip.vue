@@ -62,9 +62,9 @@ const stripPhotos = computed(() => {
 }
 .film-frame {
   flex-shrink: 0;
-  width: 240px;
-  height: 170px;
-  border-radius: 8px;
+  width: 200px;
+  height: 140px;
+  border-radius: 6px;
   overflow: hidden;
   transition: transform 0.3s, box-shadow 0.3s;
   box-shadow: 0 2px 8px rgba(0,0,0,0.08);

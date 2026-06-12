@@ -36,6 +36,28 @@ const featuredPhoto = computed(() => {
   return photoList.value[0]
 })
 
+const decoPhotos = computed(() => photoList.value.slice(1, 6))
+
+const getWallStyle = (photo, index) => {
+  const anchors = [
+    { top: 8,  left: 18, size: 100, rotate: -3 },
+    { top: 22, left: 45, size: 110, rotate: 2 },
+    { top: 48, left: 22, size: 90,  rotate: -1 },
+    { top: 62, left: 50, size: 105, rotate: 4 },
+    { top: 36, left: 62, size: 95,  rotate: -4 },
+  ]
+  const a = anchors[index]
+  const jitter = (photo.id * 7 + index * 13) % 20
+  return {
+    width: `${a.size}px`,
+    height: `${a.size}px`,
+    top: `${a.top + (jitter % 7) - 3}%`,
+    left: `${a.left + ((jitter * 3) % 9) - 4}%`,
+    transform: `rotate(${(a.rotate + ((jitter % 5) - 2)).toFixed(1)}deg)`,
+    zIndex: index + 1
+  }
+}
+
 const loadStats = async () => {
   try {
     const res = await statsApi.get()
@@ -157,11 +179,13 @@ onMounted(() => {
 const getCardStyle = (photo) => {
   const seed = (photo.id * 7 + 3) % 360
   const rotate = ((seed % 13) - 6) * 1.1
-  const translateY = ((seed * 3 + 11) % 17) - 8
-  const zIndex = (seed % 20) + 1
+  const highlight = (seed % 7) < 2
   return {
-    transform: `rotate(${rotate.toFixed(1)}deg) translateY(${translateY}px)`,
-    zIndex
+    transform: highlight
+      ? `scale(1.18) rotate(${(rotate * 0.3).toFixed(1)}deg)`
+      : 'none',
+    zIndex: highlight ? 10 : (seed % 5) + 1,
+    '--hl': highlight ? '1' : '0'
   }
 }
 </script>
@@ -169,16 +193,29 @@ const getCardStyle = (photo) => {
 <template>
   <div class="home">
     <!-- Hero -->
-    <section class="hero-section" :style="featuredPhoto ? { backgroundImage: `url(${featuredPhoto.url || featuredPhoto.thumbnail_url})` } : {}">
+    <section class="hero-section">
       <ParticlesBg />
-      <div class="hero-overlay"></div>
-      <div class="hero-body">
-        <h1 class="hero-title">光影手记</h1>
-        <p class="hero-subtitle">用光影记录生活</p>
-        <p v-if="featuredPhoto" class="hero-meta">
-          {{ featuredPhoto.location || '每一次按下快门' }}
-          <span v-if="featuredPhoto.shot_date"> · {{ featuredPhoto.shot_date.slice(0, 10) }}</span>
-        </p>
+      <div class="hero-bg"></div>
+      <div class="hero-layout">
+        <div class="hero-text-block">
+          <h1 class="hero-title">光影手记</h1>
+          <div class="hero-rule"></div>
+          <p class="hero-subtitle">用光影记录生活</p>
+          <p v-if="featuredPhoto" class="hero-meta">
+            {{ featuredPhoto.location || '每一次按下快门' }}
+            <span v-if="featuredPhoto.shot_date"> · {{ featuredPhoto.shot_date.slice(0, 10) }}</span>
+          </p>
+        </div>
+        <div class="hero-wall" v-if="decoPhotos.length">
+          <div
+            v-for="(photo, i) in decoPhotos"
+            :key="photo.id"
+            class="wall-photo"
+            :style="getWallStyle(photo, i)"
+          >
+            <img :src="photo.url || photo.thumbnail_url" />
+          </div>
+        </div>
       </div>
       <div class="scroll-hint">
         <span class="scroll-dot"></span>
@@ -294,53 +331,118 @@ const getCardStyle = (photo) => {
 </template>
 
 <style scoped>
-/* Hero */
+/* ===== Hero ===== */
 .hero-section {
   position: relative;
-  height: 460px;
+  height: 380px;
   max-width: 960px;
   margin: 24px auto 0;
   border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-size: cover;
-  background-position: center;
   overflow: hidden;
 }
-.hero-overlay {
+
+.hero-section .hero-bg {
   position: absolute;
   inset: 0;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.3), rgba(0,0,0,0.7));
-  z-index: 1;
+  background: oklch(97% 0 0);
+  z-index: 0;
 }
-.hero-body {
+:root.dark .hero-section .hero-bg {
+  background: oklch(16% 0 0);
+}
+
+.hero-section .hero-layout {
   position: relative;
-  z-index: 2;
-  text-align: center;
-  color: #fff;
-  padding: 0 24px;
+  z-index: 1;
+  height: 100%;
+  display: flex;
+  align-items: stretch;
 }
-.hero-title {
-  font-size: clamp(3rem, 8vw, 6rem);
+
+.hero-section .hero-text-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 0 0 48px;
+  max-width: 500px;
+}
+
+/* --- 字体 --- */
+.hero-section .hero-title {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-weight: 100;
+  letter-spacing: 0.5em;
+  margin: 0 0 12px;
+  font-size: clamp(2.6rem, 5vw, 4rem);
+  color: oklch(20% 0.01 85);
+}
+:root.dark .hero-section .hero-title {
+  color: oklch(88% 0.01 85);
+}
+
+.hero-section .hero-rule {
+  width: 40px;
+  height: 1px;
+  background: oklch(60% 0.02 85 / 0.4);
+  margin: 20px 0;
+}
+:root.dark .hero-section .hero-rule {
+  background: oklch(70% 0.02 85 / 0.3);
+}
+
+.hero-section .hero-subtitle {
   font-weight: 200;
   letter-spacing: 0.15em;
-  margin: 0 0 16px;
-  text-shadow: 0 4px 40px rgba(0,0,0,0.5);
+  margin: 0 0 8px;
+  font-size: clamp(0.85rem, 1.5vw, 1.05rem);
+  color: oklch(40% 0.02 85);
 }
-.hero-subtitle {
-  font-size: clamp(1rem, 2vw, 1.3rem);
-  opacity: 0.7;
-  font-weight: 300;
-  letter-spacing: 0.08em;
-  margin: 0 0 12px;
+:root.dark .hero-section .hero-subtitle {
+  color: oklch(75% 0.02 85);
 }
-.hero-meta {
-  font-size: 0.85rem;
-  opacity: 0.5;
-  font-weight: 300;
+
+.hero-section .hero-meta {
+  font-weight: 200;
+  letter-spacing: 0.06em;
   margin: 0;
+  font-size: 0.78rem;
+  color: oklch(50% 0.02 85);
+  opacity: 0.55;
 }
+:root.dark .hero-section .hero-meta {
+  color: oklch(65% 0.02 85);
+}
+
+/* --- 照片墙 --- */
+.hero-section .hero-wall {
+  position: relative;
+  width: 45%;
+  min-height: 280px;
+  align-self: center;
+  overflow: hidden;
+}
+
+.hero-section .wall-photo {
+  position: absolute;
+  box-sizing: border-box;
+  padding: 5px 5px 18px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+.hero-section .wall-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+:root.dark .hero-section .wall-photo {
+  background: #eee;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.25);
+}
+
+/* --- scroll-hint --- */
 .scroll-hint {
   position: absolute;
   bottom: 40px;
@@ -353,12 +455,27 @@ const getCardStyle = (photo) => {
   display: block;
   width: 2px;
   height: 24px;
-  background: rgba(255,255,255,0.4);
   border-radius: 2px;
+  background: oklch(60% 0 0 / 0.25);
+}
+:root.dark .scroll-dot {
+  background: oklch(70% 0 0 / 0.25);
 }
 @keyframes bounceDown {
   0%, 100% { transform: translateX(-50%) translateY(0); opacity: 1; }
   50% { transform: translateX(-50%) translateY(8px); opacity: 0.3; }
+}
+
+/* ===== Particles overrides ===== */
+.hero-section :deep(.particles-bg) {
+  z-index: 3 !important;
+}
+:root.dark .hero-section :deep(.particles-bg) {
+  opacity: 0.4;
+}
+:root:not(.dark) .hero-section :deep(.particles-bg) {
+  filter: invert(1);
+  opacity: 0.1;
 }
 
 /* Stats */
@@ -470,22 +587,22 @@ const getCardStyle = (photo) => {
   color: var(--text-secondary);
 }
 
-/* Floating Card Gallery */
+/* ===== Floating Card Gallery ===== */
 .gallery-section {
   max-width: 960px;
   margin: 0 auto;
   padding: 0 20px 60px;
 }
+
 .gallery-floating {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
   padding: 32px 0 12px;
+  align-items: start;
 }
 
 .f-card {
-  width: 210px;
   background: #fff;
   border-radius: 12px;
   overflow: hidden;
@@ -495,9 +612,17 @@ const getCardStyle = (photo) => {
   position: relative;
 }
 .f-card:hover {
-  transform: scale(1.04) !important;
+  transform: scale(1.04);
   box-shadow: 0 16px 40px rgba(0,0,0,0.14);
   z-index: 100 !important;
+}
+.f-card[style*="--hl: 1"] {
+  transform: scale(1.18) !important;
+  box-shadow: 0 16px 48px rgba(0,0,0,0.15);
+  z-index: 10 !important;
+}
+.f-card[style*="--hl: 1"]:hover {
+  transform: scale(1.22) !important;
 }
 
 .f-card-img {

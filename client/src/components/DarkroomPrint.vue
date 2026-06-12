@@ -210,7 +210,7 @@ watch(() => props.photo, () => {
 
 .paper-date {
   margin-top: 10px;
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
   font-style: italic;
   font-size: 0.85rem;
   color: #888;

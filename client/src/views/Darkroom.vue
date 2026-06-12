@@ -3,8 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { photos } from '../api'
 import DarkroomSpotlight from '../components/darkroom/DarkroomSpotlight.vue'
-import DarkroomDevelop from '../components/darkroom/DarkroomDevelop.vue'
-import DarkroomLightPaint from '../components/darkroom/DarkroomLightPaint.vue'
+import DarkroomDevelopLight from '../components/darkroom/DarkroomDevelopLight.vue'
 import DarkroomContactSheet from '../components/darkroom/DarkroomContactSheet.vue'
 
 const router = useRouter()
@@ -16,8 +15,7 @@ const currentMode = ref('spotlight')
 
 const modes = [
   { id: 'spotlight', label: '聚光灯' },
-  { id: 'develop', label: '显影盘' },
-  { id: 'lightpaint', label: '光绘' },
+  { id: 'developlight', label: '显影·光绘' },
   { id: 'contactsheet', label: '接触印相' },
 ]
 
@@ -91,15 +89,8 @@ onMounted(async () => {
           @select-photo="handleSelectPhoto"
         />
 
-        <DarkroomDevelop
-          v-show="currentMode === 'develop' && photo"
-          :photo="photo"
-          :photo-list="photoList"
-          @next="handleNext"
-          @select-photo="handleSelectPhoto"
-        />
-        <DarkroomLightPaint
-          v-show="currentMode === 'lightpaint' && photo"
+        <DarkroomDevelopLight
+          v-show="currentMode === 'developlight' && photo"
           :photo="photo"
           :photo-list="photoList"
           @next="handleNext"

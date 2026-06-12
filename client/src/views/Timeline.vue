@@ -311,7 +311,7 @@ onMounted(loadStats)
 }
 
 .card-date {
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
   font-style: italic;
   font-size: 0.82rem;
   color: var(--text-tertiary);

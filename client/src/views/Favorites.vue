@@ -239,7 +239,7 @@ onMounted(loadFavorites)
 }
 
 .meta-date {
-  font-family: 'Georgia', 'Times New Roman', serif;
+  font-family: 'Georgia', 'Noto Serif SC', serif;
   font-style: italic;
   font-size: 1.1rem;
   color: var(--text-tertiary);
