@@ -40,6 +40,10 @@ uploads/
 *.webp
 !uploads/.gitkeep
 
+# Agent skills
+.agents/
+skills-lock.json
+
 # CodeBuddy
 .codebuddy/
 
