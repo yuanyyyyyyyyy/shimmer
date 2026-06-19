@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案B：精修 SVG — 柔和渐变无描边</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #d0daf0 0%, #b8c8e4 50%, #a8bcd8 100%);
+    font-family: -apple-system, sans-serif;
+    gap: 40px;
+    padding: 40px;
+  }
+  h1 { color: #3a5080; font-size: 1.4rem; text-align: center; }
+  .subtitle { color: #6880a8; font-size: 0.85rem; margin-top: -20px; }
+  .cat-wrap {
+    animation: float 3s ease-in-out infinite;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .badge {
+    background: rgba(60,80,120,0.15);
+    color: #3a5080;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+  }
+  .note {
+    color: #6880a8;
+    font-size: 0.75rem;
+    text-align: center;
+    max-width: 320px;
+    line-height: 1.6;
+  }
+
+  /* Dark mode */
+  body.dark {
+    background: linear-gradient(135deg, #1a2040 0%, #1e2848 50%, #222c50 100%);
+  }
+  body.dark h1 { color: #c0d0f0; }
+  body.dark .subtitle { color: #8898b8; }
+  body.dark .badge { background: rgba(160,180,220,0.15); color: #a0b4d8; }
+  body.dark .note { color: #8898b8; }
+  body.dark .toggle-btn { color: #a0b4d8; border-color: #4a5a80; }
+
+  .toggle-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 6px 14px;
+    border: 1px solid #98aac8;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.3);
+    color: #3a5080;
+    font-size: 0.75rem;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+  }
+</style>
+</head>
+<body>
+  <button class="toggle-btn" onclick="document.body.classList.toggle('dark')">切换深色模式</button>
+  <h1>方案B：精修 SVG</h1>
+  <span class="badge">SVG 矢量 · 渐变填充 · 无描边</span>
+
+  <div class="cat-wrap">
+    <svg viewBox="0 0 200 260" width="200" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Body gradient -->
+        <radialGradient id="bodyGrad" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stop-color="#fdfcfa"/>
+          <stop offset="70%" stop-color="#f2ede7"/>
+          <stop offset="100%" stop-color="#e4ded4"/>
+        </radialGradient>
+        <!-- Head gradient -->
+        <radialGradient id="headGrad" cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stop-color="#fefefa"/>
+          <stop offset="60%" stop-color="#f4f0ea"/>
+          <stop offset="100%" stop-color="#e6e0d8"/>
+        </radialGradient>
+        <!-- Ear inner -->
+        <radialGradient id="earInnerGrad" cx="50%" cy="60%" r="50%">
+          <stop offset="0%" stop-color="#d0ccd6"/>
+          <stop offset="100%" stop-color="#b8b4c0"/>
+        </radialGradient>
+        <!-- Scarf gradient -->
+        <radialGradient id="scarfGrad" cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stop-color="#92b0d8"/>
+          <stop offset="50%" stop-color="#7c9ecc"/>
+          <stop offset="100%" stop-color="#6a8ec0"/>
+        </radialGradient>
+        <!-- Scarf tail gradient -->
+        <linearGradient id="scarfTailGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#7c9ecc"/>
+          <stop offset="100%" stop-color="#6a8ec0"/>
+        </linearGradient>
+        <!-- Tail gradient -->
+        <linearGradient id="tailGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0%" stop-color="#f2ede7"/>
+          <stop offset="100%" stop-color="#e0d8cc"/>
+        </linearGradient>
+        <!-- Soft shadow filter -->
+        <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+          <feOffset dx="0" dy="2"/>
+          <feComponentTransfer>
+            <feFuncA type="linear" slope="0.15"/>
+          </feComponentTransfer>
+          <feMerge>
+            <feMergeNode/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <!-- Subtle glow -->
+        <filter id="softGlow">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+        <!-- Dark mode gradients -->
+        <radialGradient id="bodyGradDark" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stop-color="#4a4440"/>
+          <stop offset="70%" stop-color="#3a3530"/>
+          <stop offset="100%" stop-color="#2e2a26"/>
+        </radialGradient>
+        <radialGradient id="headGradDark" cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stop-color="#4e4844"/>
+          <stop offset="60%" stop-color="#3c3834"/>
+          <stop offset="100%" stop-color="#302c28"/>
+        </radialGradient>
+        <radialGradient id="earInnerGradDark" cx="50%" cy="60%" r="50%">
+          <stop offset="0%" stop-color="#5a3838"/>
+          <stop offset="100%" stop-color="#4a2c2c"/>
+        </radialGradient>
+        <radialGradient id="scarfGradDark" cx="50%" cy="45%" r="55%">
+          <stop offset="0%" stop-color="#6a88b0"/>
+          <stop offset="50%" stop-color="#5a78a0"/>
+          <stop offset="100%" stop-color="#4a6890"/>
+        </radialGradient>
+      </defs>
+
+      <g filter="url(#softShadow)">
+        <!-- Tail -->
+        <path d="M 138 215 Q 165 200 160 168 Q 158 152 150 156"
+              fill="none" stroke="url(#tailGrad)" stroke-width="14" stroke-linecap="round"
+              class="light-tail" />
+        <path d="M 138 215 Q 165 200 160 168 Q 158 152 150 156"
+              fill="none" stroke="url(#tailGrad)" stroke-width="14" stroke-linecap="round"
+              class="dark-tail" style="display:none" />
+
+        <!-- Body -->
+        <path class="light-body"
+              d="M 68 140 Q 58 115 100 105 Q 110 104 132 115 Q 140 125 137 165 Q 134 200 100 210 Q 66 200 63 165 Q 60 148 68 140Z"
+              fill="url(#bodyGrad)" />
+        <path class="dark-body" style="display:none"
+              d="M 68 140 Q 58 115 100 105 Q 110 104 132 115 Q 140 125 137 165 Q 134 200 100 210 Q 66 200 63 165 Q 60 148 68 140Z"
+              fill="url(#bodyGradDark)" />
+
+        <!-- Head -->
+        <ellipse class="light-head" cx="100" cy="88" rx="48" ry="44" fill="url(#headGrad)" />
+        <ellipse class="dark-head" cx="100" cy="88" rx="48" ry="44" fill="url(#headGradDark)" style="display:none" />
+
+        <!-- Left ear -->
+        <path class="light-ear" d="M 62 68 L 48 12 L 88 56Z" fill="url(#headGrad)" />
+        <path class="dark-ear" d="M 62 68 L 48 12 L 88 56Z" fill="url(#headGradDark)" style="display:none" />
+        <!-- Right ear -->
+        <path class="light-ear" d="M 138 68 L 152 12 L 112 56Z" fill="url(#headGrad)" />
+        <path class="dark-ear" d="M 138 68 L 152 12 L 112 56Z" fill="url(#headGradDark)" style="display:none" />
+
+        <!-- Inner left ear -->
+        <path class="light-earin" d="M 66 64 L 54 22 L 86 56Z" fill="url(#earInnerGrad)" />
+        <path class="dark-earin" d="M 66 64 L 54 22 L 86 56Z" fill="url(#earInnerGradDark)" style="display:none" />
+        <!-- Inner right ear -->
+        <path class="light-earin" d="M 134 64 L 146 22 L 114 56Z" fill="url(#earInnerGrad)" />
+        <path class="dark-earin" d="M 134 64 L 146 22 L 114 56Z" fill="url(#earInnerGradDark)" style="display:none" />
+
+        <!-- Marking -->
+        <path class="light-mark" d="M 52 46 Q 48 36 54 32 Q 58 36 54 46Z" fill="#3a4a5a" />
+        <path class="dark-mark" d="M 52 46 Q 48 36 54 32 Q 58 36 54 46Z" fill="#c0c8d8" style="display:none" />
+
+        <!-- Eyes -->
+        <ellipse class="light-eye" cx="86" cy="84" rx="9" ry="13" fill="#2c3a4a" />
+        <ellipse class="light-eye" cx="114" cy="84" rx="9" ry="13" fill="#2c3a4a" />
+        <ellipse class="dark-eye" cx="86" cy="84" rx="9" ry="13" fill="#e0e4ea" style="display:none" />
+        <ellipse class="dark-eye" cx="114" cy="84" rx="9" ry="13" fill="#e0e4ea" style="display:none" />
+
+        <!-- Scarf -->
+        <path class="light-scarf"
+              d="M 52 130 Q 58 118 100 112 Q 142 118 148 130 Q 152 140 146 148 Q 100 160 54 148 Q 48 140 52 130Z"
+              fill="url(#scarfGrad)" filter="url(#softGlow)" />
+        <path class="dark-scarf" style="display:none"
+              d="M 52 130 Q 58 118 100 112 Q 142 118 148 130 Q 152 140 146 148 Q 100 160 54 148 Q 48 140 52 130Z"
+              fill="url(#scarfGradDark)" filter="url(#softGlow)" />
+
+        <!-- Scarf tail -->
+        <path class="light-scarftail"
+              d="M 56 148 Q 48 165 44 188 Q 50 194 58 182 Q 64 168 60 148"
+              fill="url(#scarfTailGrad)" />
+        <path class="dark-scarftail" style="display:none"
+              d="M 56 148 Q 48 165 44 188 Q 50 194 58 182 Q 64 168 60 148"
+              fill="url(#scarfTailGrad)" />
+
+        <!-- Paws -->
+        <ellipse class="light-paw" cx="82" cy="206" rx="16" ry="8" fill="#ede8e0" />
+        <ellipse class="light-paw" cx="118" cy="206" rx="16" ry="8" fill="#ede8e0" />
+        <ellipse class="dark-paw" cx="82" cy="206" rx="16" ry="8" fill="#3a3530" style="display:none" />
+        <ellipse class="dark-paw" cx="118" cy="206" rx="16" ry="8" fill="#3a3530" style="display:none" />
+      </g>
+    </svg>
+  </div>
+
+  <p class="note">
+    SVG 矢量绘图，渐变填充 + 微阴影，无描边线条。<br>
+    支持深色模式切换，右上角可预览。
+  </p>
+
+  <script>
+    // Toggle dark/light elements
+    const toggleBtn = document.querySelector('.toggle-btn');
+    toggleBtn.addEventListener('click', () => {
+      const isDark = document.body.classList.contains('dark');
+      document.querySelectorAll('[class^="light-"]').forEach(el => {
+        el.style.display = isDark ? '' : 'none';
+      });
+      document.querySelectorAll('[class^="dark-"]').forEach(el => {
+        el.style.display = isDark ? 'none' : '';
+      });
+    });
+    // Init: hide dark elements
+    document.querySelectorAll('[class^="dark-"]').forEach(el => el.style.display = 'none');
+  </script>
+</body>
+</html>

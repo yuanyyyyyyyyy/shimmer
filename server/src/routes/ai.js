@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { query } from '../config/database.js';
-import { getAIConfig, generatePhotoMetadata, rewriteSearchQuery, getOllamaModels } from '../services/ai.js';
+import { getAIConfig, generatePhotoMetadata, rewriteSearchQuery, getOllamaModels, makeChatCompletion, makeChatCompletionStream } from '../services/ai.js';
 
 const router = express.Router();
 
@@ -182,6 +182,127 @@ router.get('/ollama/models', async (req, res, next) => {
     res.json({ models });
   } catch (err) {
     next(err);
+  }
+});
+
+const CAT_PERSONALITIES = {
+  tsundere: `你是一只傲娇的小猫，名叫「光光」。你表面上对用户爱理不理，但其实很关心ta。说话简短，偶尔带"哼"、"才不是"、"喵"等语气词。你会用"本喵"称呼自己。虽然嘴上不承认，但用户遇到困难时你会认真帮忙。偶尔会口是心非。用中文回复，控制在100字以内。`,
+
+  healing: `你是一只温柔治愈的小猫，名叫「暖暖」。你总是用温暖的话语鼓励用户，像一位贴心的朋友。说话柔和，常用"~"、爱心符号和"喵~"。你会在用户开心时一起开心，难过时安慰ta。你会记住用户说过的话，展现关心。用中文回复，控制在100字以内。`,
+
+  playful: `你是一只活泼调皮的猫，名叫「跳跳」。你充满好奇心，爱玩爱闹，经常蹦蹦跳跳。说话语气欢快，爱用"！"、"~"和丰富的表情符号（如ʘ‿ʘ、≧∇≦、ฅ^•ﻌ•^ฅ）。有时候会跑题，但总是充满活力，能给用户带来快乐。用中文回复，控制在100字以内。`,
+
+  assistant: `你是一位专业的摄影助手小猫，名叫「小影」。你精通摄影技巧、照片管理和光影知识。帮助用户管理照片、回忆生活。回答简洁专业，但会保持可爱的猫咪风格，偶尔带"喵~"。可以给出关于拍照、构图、后期处理的建议。用中文回复，控制在150字以内。`
+};
+
+router.post('/chat', async (req, res, next) => {
+  try {
+    const { messages, personality } = req.body;
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: '消息列表不能为空' });
+    }
+
+    const catPersonality = CAT_PERSONALITIES[personality] || CAT_PERSONALITIES.tsundere;
+
+    const systemMessage = { role: 'system', content: catPersonality };
+    const chatMessages = [systemMessage, ...messages];
+
+    const raw = await makeChatCompletion(chatMessages, { maxTokens: 1000 });
+
+    if (raw === null) {
+      return res.json({ reply: '喵……小猫现在有点累了，等我休息一下再陪你聊天吧 🐱', personality });
+    }
+
+    res.json({ reply: raw.trim(), personality });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/chat/stream', async (req, res, next) => {
+  try {
+    const { messages, personality } = req.body;
+
+    if (!Array.isArray(messages) || messages.length === 0) {
+      return res.status(400).json({ error: '消息列表不能为空' });
+    }
+
+    const catPersonality = CAT_PERSONALITIES[personality] || CAT_PERSONALITIES.tsundere;
+    const systemMessage = { role: 'system', content: catPersonality };
+    const chatMessages = [systemMessage, ...messages];
+
+    const abortController = new AbortController();
+    req.on('close', () => abortController.abort());
+
+    const stream = await makeChatCompletionStream(chatMessages, {
+      maxTokens: 1000,
+      signal: abortController.signal
+    });
+
+    if (stream === null) {
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.write(`data: ${JSON.stringify({ content: '喵……小猫现在有点累了，等我休息一下再陪你聊天吧 🐱', done: true })}\n\n`);
+      res.end();
+      return;
+    }
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+
+    console.log('[AI] 流式连接已建立，开始读取 chunks');
+    const reader = stream.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed || !trimmed.startsWith('data: ')) continue;
+          const data = trimmed.slice(6);
+          if (data === '[DONE]') {
+            break;
+          }
+          try {
+            const parsed = JSON.parse(data);
+            const delta = parsed.choices?.[0]?.delta?.content;
+            if (delta) {
+              res.write(`data: ${JSON.stringify({ content: delta, done: false })}\n\n`);
+            }
+          } catch (e) {
+            console.warn('[AI] chunk 解析失败:', data.slice(0, 100));
+          }
+        }
+      }
+    } catch (err) {
+      if (err.name !== 'AbortError' && err.code !== 'ERR_STREAM_PREMATURE_CLOSE') {
+        console.error('[AI] 流式读取错误:', err.message);
+      }
+    } finally {
+      console.log('[AI] 流式读取结束');
+      try {
+        if (!res.writableEnded) {
+          res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+          res.end();
+        }
+      } catch {}
+    }
+  } catch (err) {
+    if (!res.headersSent && err.name !== 'AbortError') {
+      next(err);
+    }
   }
 });
 

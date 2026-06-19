@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案A：原图风格 — CSS 模拟水彩质感</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #b8c8e8 0%, #a0b4d8 50%, #98acd0 100%);
+    font-family: -apple-system, sans-serif;
+    gap: 40px;
+    padding: 40px;
+  }
+
+  h1 {
+    color: #fff;
+    font-size: 1.4rem;
+    text-shadow: 0 1px 4px rgba(0,0,0,0.15);
+    text-align: center;
+  }
+
+  .subtitle {
+    color: rgba(255,255,255,0.8);
+    font-size: 0.85rem;
+    margin-top: -20px;
+  }
+
+  .cat-scene {
+    position: relative;
+    width: 200px;
+    height: 240px;
+  }
+
+  /* ---- Body ---- */
+  .cat-body {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 100px;
+    height: 110px;
+    background: radial-gradient(ellipse at 50% 40%, #faf8f4 0%, #f0ece6 60%, #e8e2da 100%);
+    border-radius: 48% 52% 50% 50% / 50% 50% 55% 55%;
+    filter: blur(0.3px);
+  }
+
+  /* ---- Head ---- */
+  .cat-head {
+    position: absolute;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90px;
+    height: 82px;
+    background: radial-gradient(ellipse at 50% 45%, #fdfcfa 0%, #f2ede7 50%, #e6e0d8 100%);
+    border-radius: 50% 50% 45% 45%;
+    filter: blur(0.2px);
+  }
+
+  /* ---- Ears ---- */
+  .ear {
+    position: absolute;
+    bottom: 160px;
+    width: 0;
+    height: 0;
+    filter: blur(0.2px);
+  }
+  .ear-left {
+    left: 54px;
+    border-left: 14px solid transparent;
+    border-right: 14px solid transparent;
+    border-bottom: 36px solid #f0ece6;
+    transform: rotate(-8deg);
+  }
+  .ear-right {
+    right: 54px;
+    border-left: 14px solid transparent;
+    border-right: 14px solid transparent;
+    border-bottom: 36px solid #f0ece6;
+    transform: rotate(8deg);
+  }
+
+  /* Inner ears */
+  .ear-inner {
+    position: absolute;
+    bottom: 164px;
+    width: 0;
+    height: 0;
+    filter: blur(0.3px);
+  }
+  .ear-inner-left {
+    left: 58px;
+    border-left: 9px solid transparent;
+    border-right: 9px solid transparent;
+    border-bottom: 26px solid #c8c4cc;
+    transform: rotate(-8deg);
+  }
+  .ear-inner-right {
+    right: 58px;
+    border-left: 9px solid transparent;
+    border-right: 9px solid transparent;
+    border-bottom: 26px solid #c8c4cc;
+    transform: rotate(8deg);
+  }
+
+  /* ---- Eyes ---- */
+  .eye {
+    position: absolute;
+    bottom: 122px;
+    width: 12px;
+    height: 18px;
+    background: #2c3a4a;
+    border-radius: 50%;
+    filter: blur(0.3px);
+  }
+  .eye-left { left: 78px; }
+  .eye-right { right: 78px; }
+
+  /* ---- Marking near ear ---- */
+  .marking {
+    position: absolute;
+    bottom: 168px;
+    left: 52px;
+    width: 8px;
+    height: 14px;
+    background: #3a4a5a;
+    border-radius: 50% 50% 40% 40%;
+    transform: rotate(-15deg);
+    filter: blur(0.4px);
+  }
+
+  /* ---- Scarf ---- */
+  .scarf {
+    position: absolute;
+    bottom: 82px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 38px;
+    background: radial-gradient(ellipse at 50% 50%, #8aa8d0 0%, #7898c4 40%, #6888b8 100%);
+    border-radius: 50%;
+    filter: blur(0.3px);
+  }
+  .scarf-tail {
+    position: absolute;
+    bottom: 50px;
+    left: 62px;
+    width: 30px;
+    height: 44px;
+    background: linear-gradient(180deg, #7898c4 0%, #6888b8 100%);
+    border-radius: 0 0 50% 50%;
+    transform: rotate(8deg);
+    filter: blur(0.4px);
+  }
+
+  /* ---- Tail ---- */
+  .tail {
+    position: absolute;
+    bottom: 14px;
+    right: 38px;
+    width: 60px;
+    height: 40px;
+    border: 8px solid #f0ece6;
+    border-color: #f0ece6 transparent transparent transparent;
+    border-radius: 50% 50% 0 0 / 100% 100% 0 0;
+    transform: rotate(30deg);
+    filter: blur(0.3px);
+  }
+
+  /* ---- Paws hint ---- */
+  .paw {
+    position: absolute;
+    bottom: 14px;
+    width: 22px;
+    height: 12px;
+    background: #f0ece6;
+    border-radius: 50%;
+    filter: blur(0.3px);
+  }
+  .paw-left { left: 68px; }
+  .paw-right { right: 68px; }
+
+  /* ---- Floating animation ---- */
+  .cat-scene {
+    animation: cat-float 3s ease-in-out infinite;
+  }
+
+  @keyframes cat-float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+
+  .note {
+    color: rgba(255,255,255,0.7);
+    font-size: 0.75rem;
+    text-align: center;
+    max-width: 300px;
+    line-height: 1.6;
+  }
+
+  .badge {
+    background: rgba(255,255,255,0.2);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    backdrop-filter: blur(4px);
+  }
+</style>
+</head>
+<body>
+  <h1>方案A：CSS 模拟水彩质感</h1>
+  <span class="badge">纯 CSS 实现</span>
+
+  <div class="cat-scene">
+    <div class="ear ear-left"></div>
+    <div class="ear ear-right"></div>
+    <div class="ear-inner ear-inner-left"></div>
+    <div class="ear-inner ear-inner-right"></div>
+    <div class="marking"></div>
+    <div class="cat-head">
+      <div class="eye eye-left"></div>
+      <div class="eye eye-right"></div>
+    </div>
+    <div class="cat-body"></div>
+    <div class="scarf"></div>
+    <div class="scarf-tail"></div>
+    <div class="paw paw-left"></div>
+    <div class="paw paw-right"></div>
+    <div class="tail"></div>
+  </div>
+
+  <p class="note">
+    使用 CSS 渐变 + blur 模拟水彩柔和质感，无 SVG 无图片。<br>
+    优点：轻量、无依赖、深色模式可切换渐变色<br>
+    缺点：形状控制有限，细节不够精准
+  </p>
+</body>
+</html>

@@ -157,6 +157,85 @@ async function makeChatCompletion(messages, options = {}) {
   }
 }
 
+async function makeChatCompletionStream(messages, options = {}) {
+  const aiConfig = await loadAiSettings();
+  if (!aiConfig.enabled || !aiConfig.provider) {
+    return null;
+  }
+
+  const provider = aiConfig.provider.toLowerCase();
+  const model = options.model || aiConfig.model;
+  const headers = {
+    'Content-Type': 'application/json'
+  };
+  if (aiConfig.apiKey) {
+    headers.Authorization = `Bearer ${aiConfig.apiKey}`;
+  }
+
+  let url;
+  let body;
+
+  if (provider === 'ollama') {
+    url = `${aiConfig.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
+    body = {
+      model,
+      messages,
+      temperature: options.temperature ?? 0.8,
+      max_tokens: options.maxTokens ?? 2048,
+      stream: true
+    };
+  } else if (provider === 'zhipu') {
+    url = `${aiConfig.baseUrl.replace(/\/$/, '')}/chat/completions`;
+    body = {
+      model,
+      messages,
+      temperature: options.temperature ?? 0.8,
+      max_tokens: options.maxTokens ?? 2048,
+      stream: true
+    };
+  } else {
+    url = `${aiConfig.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
+    body = {
+      model,
+      messages,
+      temperature: options.temperature ?? 0.8,
+      max_tokens: options.maxTokens ?? 2048,
+      stream: true
+    };
+  }
+
+  console.log(`[AI] 流式请求 ${provider} 模型: ${model}, url: ${url}`);
+  const response = await fetch(url, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    signal: options.signal
+  });
+
+  if (!response.ok) {
+    const errText = await response.text().catch(() => '');
+    console.error('[AI] 流式请求失败:', response.status, errText.slice(0, 300));
+    throw new Error(`AI 请求失败: ${response.status}`);
+  }
+
+  if (!response.body) {
+    console.warn('[AI] 响应无 body，回退到非流式');
+    const result = await response.json();
+    const content = result.choices?.[0]?.message?.content || '';
+    const fakeStream = new ReadableStream({
+      start(controller) {
+        const encoder = new TextEncoder();
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`));
+        controller.enqueue(encoder.encode('data: [DONE]\n\n'));
+        controller.close();
+      }
+    });
+    return fakeStream;
+  }
+
+  return response.body;
+}
+
 async function getOllamaModels() {
   const aiConfig = await loadAiSettings();
   if (aiConfig.provider?.toLowerCase() !== 'ollama') {
@@ -455,6 +534,8 @@ async function generateShareCaption(photos = [], options = {}) {
 export {
   getAIConfig,
   getOllamaModels,
+  makeChatCompletion,
+  makeChatCompletionStream,
   generatePhotoMetadata,
   summarizeReview,
   rewriteSearchQuery,

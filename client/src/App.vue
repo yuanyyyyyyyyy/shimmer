@@ -7,6 +7,8 @@ import { useAuthStore } from './stores'
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+import CatMascot from './components/CatMascot.vue'
+
 const searchQuery = ref('')
 const searchSuggestions = ref([])
 const suggestionsLoading = ref(false)
@@ -300,6 +302,8 @@ watch(showUserMenu, (newVal) => {
     <footer class="footer">
       <p>© 光影手记 · 用光影记录生活</p>
     </footer>
+
+    <CatMascot />
   </div>
 </template>
 

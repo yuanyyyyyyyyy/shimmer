@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>方案D：SVG + 柔光滤镜特效</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #c0d0ec 0%, #a8bce0 50%, #9cb0d4 100%);
+    font-family: -apple-system, sans-serif;
+    gap: 32px;
+    padding: 40px;
+    transition: background 0.5s;
+  }
+  body.dark {
+    background: linear-gradient(135deg, #141c30 0%, #1a2438 50%, #1e2840 100%);
+  }
+  h1 { color: #3a5080; font-size: 1.4rem; text-align: center; transition: color 0.3s; }
+  body.dark h1 { color: #b0c4e8; }
+  .badge {
+    background: rgba(60,80,120,0.15);
+    color: #3a5080;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    transition: all 0.3s;
+  }
+  body.dark .badge { background: rgba(140,170,220,0.15); color: #8ab0e0; }
+  .cat-wrap {
+    animation: float 3s ease-in-out infinite;
+    position: relative;
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
+  }
+  .toggle-btn {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 6px 14px;
+    border: 1px solid #98aac8;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.3);
+    color: #3a5080;
+    font-size: 0.75rem;
+    cursor: pointer;
+    backdrop-filter: blur(4px);
+    transition: all 0.3s;
+    z-index: 10;
+  }
+  body.dark .toggle-btn { color: #a0b4d8; border-color: #3a4a68; background: rgba(30,40,60,0.5); }
+  .note {
+    color: #6880a8;
+    font-size: 0.75rem;
+    text-align: center;
+    max-width: 340px;
+    line-height: 1.6;
+    transition: color 0.3s;
+  }
+  body.dark .note { color: #7890b0; }
+
+  /* Hover interaction */
+  .cat-wrap:hover .cat-svg {
+    filter: drop-shadow(0 6px 20px rgba(0,0,0,0.2));
+  }
+  .cat-svg {
+    transition: filter 0.3s;
+  }
+
+  /* Pulse glow animation on scarf */
+  @keyframes scarf-pulse {
+    0%, 100% { opacity: 0.6; }
+    50% { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+  <button class="toggle-btn" onclick="toggleDark()">切换深色模式</button>
+  <h1>方案D：SVG + 柔光滤镜</h1>
+  <span class="badge">SVG · filter · drop-shadow · glow</span>
+
+  <div class="cat-wrap">
+    <svg viewBox="0 0 200 260" width="200" class="cat-svg" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <!-- Soft blur filter -->
+        <filter id="watercolor" x="-10%" y="-10%" width="120%" height="120%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" result="noise"/>
+          <feDisplacementMap in="SourceGraphic" in2="noise" scale="3" xChannelSelector="R" yChannelSelector="G"/>
+          <feGaussianBlur stdDeviation="0.8"/>
+        </filter>
+
+        <!-- Drop shadow -->
+        <filter id="dropShadow" x="-30%" y="-30%" width="160%" height="160%">
+          <feGaussianBlur in="SourceAlpha" stdDeviation="4"/>
+          <feOffset dx="0" dy="3"/>
+          <feComponentTransfer>
+            <feFuncA type="linear" slope="0.2"/>
+          </feComponentTransfer>
+          <feMerge>
+            <feMergeNode/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+
+        <!-- Glow effect -->
+        <filter id="glow">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+          <feColorMatrix in="blur" type="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 0.6 0" result="glow"/>
+          <feMerge>
+            <feMergeNode in="glow"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+
+        <!-- Inner glow for eyes -->
+        <filter id="eyeGlow">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="1.5" result="blur"/>
+          <feMerge>
+            <feMergeNode in="blur"/>
+            <feMergeNode in="SourceGraphic"/>
+          </feMerge>
+        </filter>
+
+        <!-- Gradients -->
+        <radialGradient id="bgGlow" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#b8d0f0" stop-opacity="0.4"/>
+          <stop offset="100%" stop-color="#b8d0f0" stop-opacity="0"/>
+        </radialGradient>
+
+        <radialGradient id="bodyGrad" cx="50%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#fefefa"/>
+          <stop offset="60%" stop-color="#f4f0ea"/>
+          <stop offset="100%" stop-color="#e6e0d6"/>
+        </radialGradient>
+
+        <radialGradient id="headGrad" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stop-color="#fefefa"/>
+          <stop offset="50%" stop-color="#f6f2ec"/>
+          <stop offset="100%" stop-color="#e8e2da"/>
+        </radialGradient>
+
+        <radialGradient id="earInnerGrad" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#d4d0da"/>
+          <stop offset="100%" stop-color="#b8b4c0"/>
+        </radialGradient>
+
+        <radialGradient id="scarfGrad" cx="45%" cy="40%" r="60%">
+          <stop offset="0%" stop-color="#96b4dc"/>
+          <stop offset="40%" stop-color="#80a4d0"/>
+          <stop offset="100%" stop-color="#6a94c4"/>
+        </radialGradient>
+
+        <linearGradient id="scarfTailGrad" x1="0" y1="0" x2="0.3" y2="1">
+          <stop offset="0%" stop-color="#80a4d0"/>
+          <stop offset="100%" stop-color="#6a94c4"/>
+        </linearGradient>
+
+        <linearGradient id="tailGrad" x1="0" y1="0" x2="1" y2="0.5">
+          <stop offset="0%" stop-color="#f2ede6"/>
+          <stop offset="100%" stop-color="#e0d8cc"/>
+        </linearGradient>
+
+        <!-- Dark mode gradients -->
+        <radialGradient id="bodyGradD" cx="50%" cy="35%" r="65%">
+          <stop offset="0%" stop-color="#4e4844"/>
+          <stop offset="60%" stop-color="#3e3a36"/>
+          <stop offset="100%" stop-color="#302c28"/>
+        </radialGradient>
+        <radialGradient id="headGradD" cx="50%" cy="40%" r="60%">
+          <stop offset="0%" stop-color="#504a46"/>
+          <stop offset="50%" stop-color="#403c38"/>
+          <stop offset="100%" stop-color="#34302c"/>
+        </radialGradient>
+        <radialGradient id="earInnerGradD" cx="50%" cy="50%" r="50%">
+          <stop offset="0%" stop-color="#5c3838"/>
+          <stop offset="100%" stop-color="#4c2c2c"/>
+        </radialGradient>
+        <radialGradient id="scarfGradD" cx="45%" cy="40%" r="60%">
+          <stop offset="0%" stop-color="#6a8cb8"/>
+          <stop offset="40%" stop-color="#5a7ca8"/>
+          <stop offset="100%" stop-color="#4a6c98"/>
+        </radialGradient>
+      </defs>
+
+      <!-- Background glow -->
+      <circle cx="100" cy="130" r="90" fill="url(#bgGlow)" class="light-bg" />
+      <circle cx="100" cy="130" r="90" fill="none" stroke="rgba(180,200,240,0.15)" stroke-width="0.5" class="light-bg" />
+      <circle cx="100" cy="130" r="90" fill="url(#bgGlow)" class="dark-bg" style="display:none" opacity="0.3" />
+
+      <g filter="url(#dropShadow)">
+        <!-- Tail -->
+        <path class="light-tail"
+              d="M 138 215 Q 168 198 162 165 Q 160 148 150 152"
+              fill="none" stroke="url(#tailGrad)" stroke-width="13" stroke-linecap="round"
+              filter="url(#watercolor)" />
+        <path class="dark-tail" style="display:none"
+              d="M 138 215 Q 168 198 162 165 Q 160 148 150 152"
+              fill="none" stroke="#3e3a36" stroke-width="13" stroke-linecap="round"
+              filter="url(#watercolor)" />
+
+        <!-- Body -->
+        <path class="light-body"
+              d="M 66 142 Q 56 112 100 102 Q 112 100 134 114 Q 142 126 139 168 Q 136 204 100 214 Q 64 204 61 168 Q 58 150 66 142Z"
+              fill="url(#bodyGrad)" filter="url(#watercolor)" />
+        <path class="dark-body" style="display:none"
+              d="M 66 142 Q 56 112 100 102 Q 112 100 134 114 Q 142 126 139 168 Q 136 204 100 214 Q 64 204 61 168 Q 58 150 66 142Z"
+              fill="url(#bodyGradD)" filter="url(#watercolor)" />
+
+        <!-- Head -->
+        <ellipse class="light-head" cx="100" cy="86" rx="48" ry="44"
+                 fill="url(#headGrad)" filter="url(#watercolor)" />
+        <ellipse class="dark-head" cx="100" cy="86" rx="48" ry="44"
+                 fill="url(#headGradD)" filter="url(#watercolor)" style="display:none" />
+
+        <!-- Left ear -->
+        <path class="light-ear" d="M 62 66 L 46 8 L 90 54Z" fill="url(#headGrad)" filter="url(#watercolor)" />
+        <path class="dark-ear" d="M 62 66 L 46 8 L 90 54Z" fill="url(#headGradD)" filter="url(#watercolor)" style="display:none" />
+        <!-- Right ear -->
+        <path class="light-ear" d="M 138 66 L 154 8 L 110 54Z" fill="url(#headGrad)" filter="url(#watercolor)" />
+        <path class="dark-ear" d="M 138 66 L 154 8 L 110 54Z" fill="url(#headGradD)" filter="url(#watercolor)" style="display:none" />
+
+        <!-- Inner left ear -->
+        <path class="light-earin" d="M 66 62 L 54 20 L 86 54Z" fill="url(#earInnerGrad)" filter="url(#watercolor)" />
+        <path class="dark-earin" d="M 66 62 L 54 20 L 86 54Z" fill="url(#earInnerGradD)" filter="url(#watercolor)" style="display:none" />
+        <!-- Inner right ear -->
+        <path class="light-earin" d="M 134 62 L 146 20 L 114 54Z" fill="url(#earInnerGrad)" filter="url(#watercolor)" />
+        <path class="dark-earin" d="M 134 62 L 146 20 L 114 54Z" fill="url(#earInnerGradD)" filter="url(#watercolor)" style="display:none" />
+
+        <!-- Marking -->
+        <path class="light-mark" d="M 50 44 Q 46 34 52 30 Q 56 34 52 44Z" fill="#3a4a5a" filter="url(#eyeGlow)" />
+        <path class="dark-mark" d="M 50 44 Q 46 34 52 30 Q 56 34 52 44Z" fill="#c0c8d8" filter="url(#eyeGlow)" style="display:none" />
+
+        <!-- Eyes with glow -->
+        <ellipse class="light-eye" cx="86" cy="82" rx="9" ry="13" fill="#2c3a4a" filter="url(#eyeGlow)" />
+        <ellipse class="light-eye" cx="114" cy="82" rx="9" ry="13" fill="#2c3a4a" filter="url(#eyeGlow)" />
+        <ellipse class="dark-eye" cx="86" cy="82" rx="9" ry="13" fill="#e0e4ea" filter="url(#eyeGlow)" style="display:none" />
+        <ellipse class="dark-eye" cx="114" cy="82" rx="9" ry="13" fill="#e0e4ea" filter="url(#eyeGlow)" style="display:none" />
+
+        <!-- Scarf with glow -->
+        <path class="light-scarf"
+              d="M 50 132 Q 56 116 100 110 Q 144 116 150 132 Q 154 142 148 150 Q 100 164 52 150 Q 46 142 50 132Z"
+              fill="url(#scarfGrad)" filter="url(#glow)" />
+        <path class="dark-scarf" style="display:none"
+              d="M 50 132 Q 56 116 100 110 Q 144 116 150 132 Q 154 142 148 150 Q 100 164 52 150 Q 46 142 50 132Z"
+              fill="url(#scarfGradD)" filter="url(#glow)" />
+
+        <!-- Scarf tail -->
+        <path class="light-scarftail"
+              d="M 54 150 Q 46 168 42 192 Q 48 198 56 186 Q 62 170 58 150"
+              fill="url(#scarfTailGrad)" filter="url(#watercolor)" />
+        <path class="dark-scarftail" style="display:none"
+              d="M 54 150 Q 46 168 42 192 Q 48 198 56 186 Q 62 170 58 150"
+              fill="#5a7ca8" filter="url(#watercolor)" />
+
+        <!-- Paws -->
+        <ellipse class="light-paw" cx="80" cy="208" rx="16" ry="8" fill="#ece6de" filter="url(#watercolor)" />
+        <ellipse class="light-paw" cx="120" cy="208" rx="16" ry="8" fill="#ece6de" filter="url(#watercolor)" />
+        <ellipse class="dark-paw" cx="80" cy="208" rx="16" ry="8" fill="#3a3530" filter="url(#watercolor)" style="display:none" />
+        <ellipse class="dark-paw" cx="120" cy="208" rx="16" ry="8" fill="#3a3530" filter="url(#watercolor)" style="display:none" />
+      </g>
+    </svg>
+  </div>
+
+  <p class="note">
+    SVG + feTurbulence 水彩滤镜 + drop-shadow + glow 发光效果。<br>
+    hover 加深阴影，围巾有微光脉冲动画。
+  </p>
+
+  <script>
+    let isDark = false;
+    function toggleDark() {
+      isDark = !isDark;
+      document.body.classList.toggle('dark', isDark);
+      document.querySelectorAll('[class^="light-"]').forEach(el => {
+        el.style.display = isDark ? 'none' : '';
+      });
+      document.querySelectorAll('[class^="dark-"]').forEach(el => {
+        el.style.display = isDark ? '' : 'none';
+      });
+    }
+    // Init
+    document.querySelectorAll('[class^="dark-"]').forEach(el => el.style.display = 'none');
+  </script>
+</body>
+</html>
