@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { query } from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error.js';
-import { uploadToR2, getPublicUrl } from '../config/r2.js';
+import { uploadToR2, getPublicUrl, isR2Configured } from '../config/r2.js';
 
 const router = express.Router();
 
@@ -25,6 +25,10 @@ const upload = multer({
 });
 
 async function processImage(buffer, filename) {
+  if (!isR2Configured()) {
+    throw new ValidationError('文件存储未配置（Cloudflare R2），请联系管理员');
+  }
+
   const ext = '.jpg';
   const name = uuidv4();
 

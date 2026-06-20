@@ -1,9 +1,11 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { storylines } from '../api'
+import { useAuthStore } from '../stores'
 
 const router = useRouter()
+const authStore = useAuthStore()
 const stories = ref([])
 const years = ref([])
 const selectedYear = ref(null)
@@ -110,6 +112,14 @@ onMounted(async () => {
     await loadStories()
   } else {
     loading.value = false
+  }
+})
+
+watch(() => authStore.token, async () => {
+  selectedYear.value = null
+  await loadYears()
+  if (selectedYear.value) {
+    await loadStories(true)
   }
 })
 </script>

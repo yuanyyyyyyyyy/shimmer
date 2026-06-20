@@ -2,7 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores'
-import { photos, upload, tags, ai } from '../api'
+import { photos, upload, tags, ai, users } from '../api'
 import { success, error, confirm } from '../composables/useToast'
 import DragDropUpload from '../components/DragDropUpload.vue'
 import { extractExif } from '../composables/useExif'
@@ -24,6 +24,15 @@ const uploadedPhotos = ref([])
 // 标签列表
 const allTags = ref([])
 const selectedTags = ref([])
+
+// 标签页
+const activeTab = ref('photos')
+
+// 用户管理
+const userList = ref([])
+const usersLoading = ref(false)
+const usersPage = ref(1)
+const usersTotal = ref(0)
 
 // 表单
 const showForm = ref(false)
@@ -51,18 +60,13 @@ const form = ref({
   longitude: null
 })
 
-// 检查登录和管理员权限
+// 检查登录
 onMounted(async () => {
   if (!authStore.isLoggedIn) {
     router.push('/login')
     return
   }
   await authStore.fetchUser()
-  if (!authStore.isAdmin) {
-    // 非管理员只能看到自己的照片，使用 /my 页面
-    router.push('/my')
-    return
-  }
   loadPhotos()
   loadTags()
 })
@@ -178,17 +182,14 @@ const handleBatchUploading = (isUploading) => {
 const loadPhotos = async () => {
   loading.value = true
   try {
-    const token = localStorage.getItem('token')
-    console.log('Token:', token ? '存在' : '不存在')
-    console.log('User:', authStore.user)
-    
-    const res = await photos.getAdminPhotos({ page: page.value, limit: 20, sort: 'created' })
-    console.log('Admin photos response:', res)
+    const apiCall = authStore.isAdmin
+      ? photos.getAdminPhotos({ page: page.value, limit: 20, sort: 'created' })
+      : photos.getMyPhotos({ page: page.value, limit: 20, sort: 'created' })
+    const res = await apiCall
     photoList.value = res.data
     total.value = res.total
   } catch (e) {
     console.error('加载照片失败:', e)
-    console.error('Error response:', e.response?.data)
     error(e.response?.data?.error || '加载照片失败')
   } finally {
     loading.value = false
@@ -419,6 +420,48 @@ const handleBatchSave = async () => {
   }
 }
 
+// 用户管理
+const loadUsers = async (reset = false) => {
+  if (usersLoading.value) return
+  if (reset) {
+    usersPage.value = 1
+    userList.value = []
+  }
+  usersLoading.value = true
+  try {
+    const res = await users.list({ page: usersPage.value, limit: 20 })
+    if (reset) {
+      userList.value = res.users
+    } else {
+      userList.value.push(...res.users)
+    }
+    usersTotal.value = res.pagination.total
+  } catch (e) {
+    console.error('加载用户列表失败', e)
+  } finally {
+    usersLoading.value = false
+  }
+}
+
+const loadMoreUsers = () => {
+  usersPage.value++
+  loadUsers()
+}
+
+const toggleUserRole = async (user) => {
+  const newRole = user.role === 'admin' ? 'user' : 'admin'
+  const action = newRole === 'admin' ? '设为管理员' : '取消管理员'
+  if (!confirm(`确定要将 ${user.username} ${action}吗？`)) return
+
+  try {
+    await users.updateRole(user.id, newRole)
+    user.role = newRole
+    success(`${user.username} 已${action}`)
+  } catch (e) {
+    error(e.response?.data?.error || '操作失败')
+  }
+}
+
 // 登出
 const handleLogout = () => {
   authStore.logout()
@@ -430,13 +473,21 @@ const handleLogout = () => {
   <div class="admin">
     <div class="container">
       <div class="admin-header">
-        <h2>照片管理</h2>
+        <h2>{{ authStore.isAdmin ? '管理后台' : '我的照片' }}</h2>
         <div class="header-actions">
           <button @click="showForm = true; resetForm()">+ 上传照片</button>
           <router-link to="/settings" class="settings-link-btn">AI 设置</router-link>
           <button class="logout" @click="handleLogout">登出</button>
         </div>
       </div>
+
+      <div class="admin-tabs">
+        <button :class="['tab-btn', { active: activeTab === 'photos' }]" @click="activeTab = 'photos'">照片管理</button>
+        <button v-if="authStore.isAdmin" :class="['tab-btn', { active: activeTab === 'users' }]" @click="activeTab = 'users'; loadUsers(true)">用户管理</button>
+      </div>
+
+      <!-- 照片管理 -->
+      <div v-if="activeTab === 'photos'">
 
       <!-- 照片列表 -->
       <div v-if="loading" class="loading">加载中...</div>
@@ -450,16 +501,49 @@ const handleLogout = () => {
           </div>
           <div class="photo-actions">
             <button 
+              v-if="authStore.isAdmin"
               :class="['visibility-btn', photo.visibility]"
               @click="toggleVisibility(photo)"
             >
               {{ getVisibilityLabel(photo.visibility) }}
             </button>
+            <span v-else :class="['visibility-badge', photo.visibility]">{{ getVisibilityLabel(photo.visibility) }}</span>
             <button @click="handleEdit(photo)">编辑</button>
             <button class="delete" @click="handleDelete(photo)">删除</button>
           </div>
         </div>
         <div v-if="photoList.length === 0" class="empty">暂无照片，点击上方按钮上传</div>
+      </div>
+      </div>
+
+      <!-- 用户管理 -->
+      <div v-if="activeTab === 'users'">
+        <div v-if="usersLoading && userList.length === 0" class="loading">加载中...</div>
+        <div v-else-if="userList.length === 0" class="empty">暂无用户</div>
+        <div v-else class="user-list">
+          <div v-for="u in userList" :key="u.id" class="user-item">
+            <div class="user-info">
+              <span class="user-name">{{ u.nickname || u.username }}</span>
+              <span class="user-username">@{{ u.username }}</span>
+              <span :class="['role-badge', u.role]">{{ u.role === 'admin' ? '管理员' : '用户' }}</span>
+            </div>
+            <div class="user-actions">
+              <button
+                v-if="u.id !== authStore.userId"
+                class="role-toggle-btn"
+                @click="toggleUserRole(u)"
+              >
+                {{ u.role === 'admin' ? '取消管理员' : '设为管理员' }}
+              </button>
+              <span v-else class="self-tag">当前用户</span>
+            </div>
+          </div>
+        </div>
+        <div v-if="userList.length < usersTotal" class="load-more">
+          <button @click="loadMoreUsers" :disabled="usersLoading">
+            {{ usersLoading ? '加载中...' : '加载更多' }}
+          </button>
+        </div>
       </div>
 
       <!-- 上传/编辑表单弹窗 -->
@@ -1046,5 +1130,131 @@ const handleLogout = () => {
   background: var(--secondary-color);
   color: #fff;
   border: none;
+}
+
+/* Tabs */
+.admin-tabs {
+  display: flex;
+  gap: 0;
+  border-bottom: 2px solid #eee;
+  margin-bottom: 20px;
+}
+
+.tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  color: #999;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: color 0.2s, border-color 0.2s;
+}
+
+.tab-btn:hover {
+  color: #333;
+}
+
+.tab-btn.active {
+  color: var(--secondary-color);
+  border-bottom-color: var(--secondary-color);
+  font-weight: 600;
+}
+
+/* User list */
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.user-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px;
+  background: var(--card-bg);
+  border: 1px solid #eee;
+  border-radius: 8px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.user-name {
+  font-weight: 600;
+}
+
+.user-username {
+  color: #999;
+  font-size: 0.85rem;
+}
+
+.role-badge {
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.role-badge.admin {
+  background: #e74c3c;
+  color: #fff;
+}
+
+.role-badge.user {
+  background: #ecf0f1;
+  color: #666;
+}
+
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.role-toggle-btn {
+  padding: 6px 12px;
+  border: 1px solid #ddd;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.82rem;
+  transition: background 0.15s;
+}
+
+.role-toggle-btn:hover {
+  background: #f5f5f5;
+}
+
+.self-tag {
+  font-size: 0.8rem;
+  color: #999;
+}
+
+.visibility-badge {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.visibility-badge.public {
+  background: #d4edda;
+  color: #155724;
+}
+
+.visibility-badge.private {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.visibility-badge.hidden {
+  background: #f8d7da;
+  color: #721c24;
 }
 </style>

@@ -13,6 +13,10 @@ if (!R2_ENDPOINT || !R2_ACCESS_KEY_ID || !R2_SECRET_ACCESS_KEY) {
   console.warn('[R2] 未完整配置 Cloudflare R2，文件上传将不可用');
 }
 
+export function isR2Configured() {
+  return !!(R2_ENDPOINT && R2_ACCESS_KEY_ID && R2_SECRET_ACCESS_KEY);
+}
+
 const s3Client = new S3Client({
   region: 'auto',
   endpoint: R2_ENDPOINT,

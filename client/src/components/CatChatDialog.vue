@@ -1,14 +1,14 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount, nextTick, watch, computed } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import { chat } from '../api/chat.js'
 
 const emit = defineEmits(['close'])
 
 const PERSONALITIES = [
-  { id: 'tsundere', label: '傲娇', color: '#e67e22', greeting: '哼！又是你……想跟本喵聊什么？' },
-  { id: 'healing', label: '治愈', color: '#e84393', greeting: '你来找我啦~ 今天过得好吗？' },
-  { id: 'playful', label: '话痨', color: '#fdcb6e', greeting: '呀！你终于来啦！我跟你说我今天……' },
-  { id: 'assistant', label: '助手', color: '#3498db', greeting: '你好，我是小影。需要我帮忙整理照片或回忆吗？' }
+  { id: 'tsundere', label: '傲娇', color: '#c4a882', greeting: '哼！又是你……想跟本喵聊什么？' },
+  { id: 'healing', label: '治愈', color: '#d4a0a0', greeting: '你来找我啦~ 今天过得好吗？' },
+  { id: 'playful', label: '话痨', color: '#b5c4b1', greeting: '呀！你终于来啦！我跟你说我今天……' },
+  { id: 'assistant', label: '助手', color: '#96aec4', greeting: '你好，我是小影。需要我帮忙整理照片或回忆吗？' }
 ]
 
 const personality = ref(localStorage.getItem('catPersonality') || 'tsundere')
@@ -20,8 +20,35 @@ const messagesRef = ref(null)
 const inputRef = ref(null)
 const showPersonalityMenu = ref(false)
 let abortController = null
+let saveTimer = null
+
+const activeConvId = ref(null)
+const conversations = ref([])
+const showHistory = ref(false)
+const historyLoading = ref(false)
 
 const currentPersona = computed(() => PERSONALITIES.find(p => p.id === personality.value))
+
+const PERSONALITY_MAP = Object.fromEntries(PERSONALITIES.map(p => [p.id, p]))
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr)
+  const now = new Date()
+  const isToday = d.toDateString() === now.toDateString()
+  const yesterday = new Date(now)
+  yesterday.setDate(yesterday.getDate() - 1)
+  const isYesterday = d.toDateString() === yesterday.toDateString()
+  const time = d.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+  if (isToday) return `今天 ${time}`
+  if (isYesterday) return `昨天 ${time}`
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${time}`
+}
+
+function genTitle(msgs) {
+  const firstUser = msgs.find(m => m.role === 'user')
+  if (!firstUser) return '新对话'
+  return firstUser.content.slice(0, 20) + (firstUser.content.length > 20 ? '...' : '')
+}
 
 const setPersonality = (id) => {
   if (id === personality.value) {
@@ -37,6 +64,10 @@ const setPersonality = (id) => {
   if (firstMsg && firstMsg.role === 'assistant' && allGreetings.includes(firstMsg.content)) {
     const newGreeting = currentPersona.value?.greeting || '喵~'
     messages.value[0] = { ...firstMsg, content: newGreeting }
+  }
+
+  if (activeConvId.value) {
+    chat.updateHistory(activeConvId.value, { personality: id }).catch(() => {})
   }
 }
 
@@ -77,8 +108,7 @@ const send = async () => {
           }
         }
         scrollToBottom()
-      },
-      abortController.signal
+      }
     )
 
     if (firstChunk) {
@@ -95,6 +125,7 @@ const send = async () => {
     streaming.value = false
     abortController = null
     scrollToBottom()
+    debounceSave()
   }
 }
 
@@ -105,16 +136,95 @@ const scrollToBottom = async () => {
   }
 }
 
-const startNewChat = () => {
+function debounceSave() {
+  if (saveTimer) clearTimeout(saveTimer)
+  saveTimer = setTimeout(() => {
+    saveCurrentConversation()
+  }, 1000)
+}
+
+async function saveCurrentConversation() {
+  if (messages.value.length === 0) return
+
+  const title = genTitle(messages.value)
+  const payload = {
+    title,
+    personality: personality.value,
+    messages: messages.value
+  }
+
+  try {
+    if (activeConvId.value) {
+      await chat.updateHistory(activeConvId.value, payload)
+    } else {
+      const res = await chat.saveHistory(payload)
+      if (res.id) activeConvId.value = res.id
+    }
+  } catch {}
+}
+
+const startNewChat = async () => {
+  await saveCurrentConversation()
+  activeConvId.value = null
   messages.value = []
   const greeting = currentPersona.value?.greeting || '喵~'
   messages.value.push({ role: 'assistant', content: greeting })
+}
+
+const loadConversation = async (conv) => {
+  await saveCurrentConversation()
+  activeConvId.value = conv.id
+  showHistory.value = false
+
+  try {
+    const res = await chat.getHistory(conv.id)
+    if (res.conversation) {
+      messages.value = res.conversation.messages || []
+      if (res.conversation.personality) {
+        personality.value = res.conversation.personality
+        localStorage.setItem('catPersonality', res.conversation.personality)
+      }
+    }
+  } catch {
+    messages.value = [{ role: 'assistant', content: '喵……加载对话失败了' }]
+  }
+}
+
+const deleteConversation = async (conv, e) => {
+  e.stopPropagation()
+  try {
+    await chat.deleteHistory(conv.id)
+    conversations.value = conversations.value.filter(c => c.id !== conv.id)
+    if (activeConvId.value === conv.id) {
+      activeConvId.value = null
+      messages.value = []
+      const greeting = currentPersona.value?.greeting || '喵~'
+      messages.value.push({ role: 'assistant', content: greeting })
+    }
+  } catch {}
+}
+
+const loadHistory = async () => {
+  showHistory.value = !showHistory.value
+  if (!showHistory.value) return
+
+  historyLoading.value = true
+  try {
+    const res = await chat.listHistory()
+    conversations.value = res.conversations || []
+  } catch {
+    conversations.value = []
+  } finally {
+    historyLoading.value = false
+  }
 }
 
 const handleKeydown = (e) => {
   if (e.key === 'Escape') {
     if (showPersonalityMenu.value) {
       showPersonalityMenu.value = false
+    } else if (showHistory.value) {
+      showHistory.value = false
     } else {
       emit('close')
     }
@@ -122,17 +232,6 @@ const handleKeydown = (e) => {
 }
 
 onMounted(() => {
-  const savedMessages = sessionStorage.getItem('catChatMessages')
-  if (savedMessages) {
-    try {
-      const parsed = JSON.parse(savedMessages)
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        messages.value = parsed
-        return
-      }
-    } catch {}
-  }
-
   const greeting = currentPersona.value?.greeting || '喵~'
   messages.value.push({ role: 'assistant', content: greeting })
   nextTick(() => inputRef.value?.focus())
@@ -140,13 +239,9 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (abortController) abortController.abort()
+  if (saveTimer) clearTimeout(saveTimer)
+  saveCurrentConversation()
 })
-
-watch(messages, (val) => {
-  try {
-    sessionStorage.setItem('catChatMessages', JSON.stringify(val))
-  } catch {}
-}, { deep: true })
 </script>
 
 <template>
@@ -194,6 +289,13 @@ watch(messages, (val) => {
           </Transition>
         </div>
 
+        <button class="header-btn history-btn" @click="loadHistory" title="历史对话">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="10"/>
+            <polyline points="12 6 12 12 16 14"/>
+          </svg>
+        </button>
+
         <button class="header-btn new-btn" @click="startNewChat" title="新对话">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
@@ -213,22 +315,19 @@ watch(messages, (val) => {
         <div v-if="msg.role === 'assistant'" class="msg-avatar">
           <img src="/cat.png" alt="小猫" class="mini-avatar-img" />
         </div>
-        <div class="msg-bubble">
+        <div :class="['msg-bubble', { streaming: streaming && i === messages.length - 1 && msg.role === 'assistant' }]">
           {{ msg.content }}
         </div>
       </div>
 
-      <div v-if="loading || streaming" class="msg-row assistant">
+      <div v-if="loading" class="msg-row assistant">
         <div class="msg-avatar">
           <img src="/cat.png" alt="小猫" class="mini-avatar-img" />
         </div>
-        <div v-if="loading" class="msg-bubble typing">
+        <div class="msg-bubble typing">
           <span class="typing-dot">·</span>
           <span class="typing-dot">·</span>
           <span class="typing-dot">·</span>
-        </div>
-        <div v-else class="msg-bubble streaming-cursor">
-          <span class="stream-cursor">|</span>
         </div>
       </div>
     </div>
@@ -254,6 +353,45 @@ watch(messages, (val) => {
         </svg>
       </button>
     </div>
+
+    <Transition name="drawer">
+      <div v-if="showHistory" class="history-drawer">
+        <div class="history-header">
+          <span class="history-title">历史对话</span>
+          <button class="history-close" @click="showHistory = false">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+        <div class="history-list">
+          <div v-if="historyLoading" class="history-empty">加载中...</div>
+          <div v-else-if="conversations.length === 0" class="history-empty">暂无历史对话</div>
+          <div
+            v-for="conv in conversations"
+            :key="conv.id"
+            class="history-item"
+            :class="{ active: activeConvId === conv.id }"
+            @click="loadConversation(conv)"
+          >
+            <div class="history-item-main">
+              <div class="history-item-title">{{ conv.title }}</div>
+              <div class="history-item-meta">
+                <span class="history-item-personality" :style="{ background: PERSONALITY_MAP[conv.personality]?.color || '#999' }">
+                  {{ PERSONALITY_MAP[conv.personality]?.label || conv.personality }}
+                </span>
+                <span class="history-item-time">{{ formatDate(conv.updated_at) }}</span>
+              </div>
+            </div>
+            <button class="history-item-delete" @click="deleteConversation(conv, $event)" title="删除">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -270,6 +408,7 @@ watch(messages, (val) => {
   margin-bottom: 12px;
   border: 1px solid var(--n-300, #e0e0e0);
   transition: background 0.3s, border-color 0.3s;
+  position: relative;
 }
 
 :root.dark .chat-dialog {
@@ -503,18 +642,17 @@ watch(messages, (val) => {
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
-.streaming-cursor {
-  padding: 10px 14px;
-}
-
-.stream-cursor {
+.msg-bubble.streaming::after {
+  content: '|';
   display: inline-block;
   color: var(--text-color, #333);
   font-weight: 300;
+  margin-left: 2px;
   animation: cursor-blink 0.8s step-end infinite;
+  vertical-align: baseline;
 }
 
-:root.dark .stream-cursor {
+:root.dark .msg-bubble.streaming::after {
   color: #e0e0e0;
 }
 
@@ -611,6 +749,156 @@ watch(messages, (val) => {
   background: #64b5f6;
 }
 
+/* ===== HISTORY DRAWER ===== */
+.history-drawer {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 280px;
+  height: 100%;
+  background: var(--card-bg, #fff);
+  border-left: 1px solid var(--n-200, #eee);
+  display: flex;
+  flex-direction: column;
+  z-index: 5;
+}
+
+:root.dark .history-drawer {
+  background: #252525;
+  border-color: #333;
+}
+
+.history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--n-200, #eee);
+  flex-shrink: 0;
+}
+
+:root.dark .history-header {
+  border-color: #333;
+}
+
+.history-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-color, #333);
+}
+
+.history-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary, #999);
+  cursor: pointer;
+}
+
+.history-close:hover {
+  background: var(--hover-bg, rgba(0,0,0,0.05));
+}
+
+.history-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.history-empty {
+  text-align: center;
+  color: var(--text-tertiary, #999);
+  font-size: 0.8rem;
+  padding: 32px 16px;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: background 0.15s;
+  margin-bottom: 2px;
+}
+
+.history-item:hover {
+  background: var(--hover-bg, rgba(0,0,0,0.05));
+}
+
+.history-item.active {
+  background: var(--n-200, #f0f0f0);
+}
+
+:root.dark .history-item.active {
+  background: #333;
+}
+
+.history-item-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.history-item-title {
+  font-size: 0.82rem;
+  color: var(--text-color, #333);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.history-item-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.history-item-personality {
+  display: inline-block;
+  font-size: 0.55rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: #fff;
+  font-weight: 500;
+}
+
+.history-item-time {
+  font-size: 0.65rem;
+  color: var(--text-tertiary, #999);
+}
+
+.history-item-delete {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  border: none;
+  background: transparent;
+  color: var(--text-tertiary, #999);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+
+.history-item:hover .history-item-delete {
+  opacity: 1;
+}
+
+.history-item-delete:hover {
+  background: rgba(220, 53, 69, 0.1);
+  color: #dc3545;
+}
+
 /* ===== MENU TRANSITION ===== */
 .menu-enter-active {
   animation: menu-in 0.15s ease-out;
@@ -625,16 +913,33 @@ watch(messages, (val) => {
   to { opacity: 1; transform: translateY(0); }
 }
 
+/* ===== DRAWER TRANSITION ===== */
+.drawer-enter-active {
+  animation: drawer-in 0.25s ease-out;
+}
+
+.drawer-leave-active {
+  animation: drawer-in 0.2s ease-in reverse;
+}
+
+@keyframes drawer-in {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
 /* ===== SCROLLBAR ===== */
-.chat-messages::-webkit-scrollbar {
+.chat-messages::-webkit-scrollbar,
+.history-list::-webkit-scrollbar {
   width: 4px;
 }
 
-.chat-messages::-webkit-scrollbar-track {
+.chat-messages::-webkit-scrollbar-track,
+.history-list::-webkit-scrollbar-track {
   background: transparent;
 }
 
-.chat-messages::-webkit-scrollbar-thumb {
+.chat-messages::-webkit-scrollbar-thumb,
+.history-list::-webkit-scrollbar-thumb {
   background: var(--n-300, #ddd);
   border-radius: 2px;
 }
@@ -647,6 +952,9 @@ watch(messages, (val) => {
     position: fixed;
     bottom: 76px;
     right: 16px;
+  }
+  .history-drawer {
+    width: 240px;
   }
 }
 </style>

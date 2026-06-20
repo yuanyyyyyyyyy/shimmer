@@ -54,11 +54,3 @@ export const requireAdmin = (req, res, next) => {
   }
   next();
 };
-
-// 角色检查中间件 - 需要登录
-export const requireAuth = (req, res, next) => {
-  if (!req.user) {
-    return res.status(401).json({ error: '请先登录' });
-  }
-  next();
-};

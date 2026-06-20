@@ -81,10 +81,6 @@ onMounted(async () => {
     return
   }
   await authStore.fetchUser()
-  if (!authStore.isAdmin) {
-    router.push('/')
-    return
-  }
   await loadPresets()
 })
 

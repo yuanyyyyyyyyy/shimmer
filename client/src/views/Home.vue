@@ -171,6 +171,10 @@ watch(() => route.query, () => {
   loadPhotos(true)
 }, { immediate: true })
 
+watch(() => authStore.token, () => {
+  loadPhotos(true)
+})
+
 onMounted(() => {
   loadStats()
   loadPopularTags()

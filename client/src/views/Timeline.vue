@@ -1,8 +1,11 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { photos } from '../api'
+import { useAuthStore } from '../stores'
 import Lightbox from '../components/Lightbox.vue'
 import DarkroomPrint from '../components/DarkroomPrint.vue'
+
+const authStore = useAuthStore()
 
 const stats = ref([])
 const loading = ref(true)
@@ -67,6 +70,11 @@ const handleDarkroomClose = () => {
 }
 
 onMounted(loadStats)
+
+watch(() => authStore.token, () => {
+  selectedYear.value = null
+  loadStats()
+})
 </script>
 
 <template>

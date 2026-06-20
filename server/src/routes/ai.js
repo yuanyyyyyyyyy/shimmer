@@ -233,14 +233,14 @@ router.post('/chat/stream', async (req, res, next) => {
     const chatMessages = [systemMessage, ...messages];
 
     const abortController = new AbortController();
-    req.on('close', () => abortController.abort());
+    res.on('close', () => abortController.abort());
 
-    const stream = await makeChatCompletionStream(chatMessages, {
+    const result = await makeChatCompletionStream(chatMessages, {
       maxTokens: 1000,
       signal: abortController.signal
     });
 
-    if (stream === null) {
+    if (result === null) {
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
@@ -249,40 +249,72 @@ router.post('/chat/stream', async (req, res, next) => {
       return;
     }
 
+    const { stream, format } = result;
+
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
 
-    console.log('[AI] 流式连接已建立，开始读取 chunks');
+    console.log(`[AI] 流式连接已建立，format: ${format}，开始读取 chunks`);
     const reader = stream.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
+    let streamDone = false;
+
+    let idleTimer = setTimeout(() => {
+      console.warn('[AI] 流式读取超时（60s 无数据）');
+      abortController.abort();
+    }, 60000);
+
+    const resetIdleTimer = () => {
+      clearTimeout(idleTimer);
+      idleTimer = setTimeout(() => {
+        console.warn('[AI] 流式读取超时（60s 无数据）');
+        abortController.abort();
+      }, 60000);
+    };
 
     try {
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read();
         if (done) break;
 
+        resetIdleTimer();
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
 
         for (const line of lines) {
           const trimmed = line.trim();
-          if (!trimmed || !trimmed.startsWith('data: ')) continue;
-          const data = trimmed.slice(6);
-          if (data === '[DONE]') {
-            break;
-          }
+          if (!trimmed) continue;
+
           try {
-            const parsed = JSON.parse(data);
-            const delta = parsed.choices?.[0]?.delta?.content;
+            let delta = null;
+
+            if (format === 'ndjson') {
+              const parsed = JSON.parse(trimmed);
+              if (parsed.done) {
+                streamDone = true;
+                break;
+              }
+              delta = parsed.message?.content;
+            } else {
+              if (!trimmed.startsWith('data: ')) continue;
+              const data = trimmed.slice(6);
+              if (data === '[DONE]') {
+                streamDone = true;
+                break;
+              }
+              const parsed = JSON.parse(data);
+              delta = parsed.choices?.[0]?.delta?.content;
+            }
+
             if (delta) {
               res.write(`data: ${JSON.stringify({ content: delta, done: false })}\n\n`);
             }
           } catch (e) {
-            console.warn('[AI] chunk 解析失败:', data.slice(0, 100));
+            console.warn('[AI] chunk 解析失败:', trimmed.slice(0, 100));
           }
         }
       }
@@ -291,6 +323,7 @@ router.post('/chat/stream', async (req, res, next) => {
         console.error('[AI] 流式读取错误:', err.message);
       }
     } finally {
+      clearTimeout(idleTimer);
       console.log('[AI] 流式读取结束');
       try {
         if (!res.writableEnded) {
@@ -303,6 +336,187 @@ router.post('/chat/stream', async (req, res, next) => {
     if (!res.headersSent && err.name !== 'AbortError') {
       next(err);
     }
+  }
+});
+
+const MAX_CONVERSATIONS = 50;
+
+router.get('/chat/history', async (req, res, next) => {
+  try {
+    let userId = null;
+    let fingerprint = null;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const jwt = await import('jsonwebtoken');
+        const token = authHeader.slice(7);
+        const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'shimmer-secret');
+        userId = decoded.userId || decoded.id;
+      } catch {}
+    }
+    if (!userId) {
+      fingerprint = req.headers['x-fingerprint'] || null;
+    }
+
+    if (!userId && !fingerprint) {
+      return res.json({ conversations: [] });
+    }
+
+    let rows;
+    if (userId) {
+      rows = await query(
+        `SELECT id, title, personality, created_at, updated_at FROM chat_conversations WHERE user_id = ? ORDER BY updated_at DESC LIMIT ${MAX_CONVERSATIONS}`,
+        [userId]
+      );
+    } else {
+      rows = await query(
+        `SELECT id, title, personality, created_at, updated_at FROM chat_conversations WHERE fingerprint = ? AND user_id IS NULL ORDER BY updated_at DESC LIMIT ${MAX_CONVERSATIONS}`,
+        [fingerprint]
+      );
+    }
+
+    res.json({ conversations: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/chat/history/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const rows = await query(
+      'SELECT id, title, personality, messages, created_at, updated_at FROM chat_conversations WHERE id = ?',
+      [id]
+    );
+    if (rows.length === 0) {
+      return res.status(404).json({ error: '对话不存在' });
+    }
+    const conv = rows[0];
+    if (typeof conv.messages === 'string') {
+      conv.messages = JSON.parse(conv.messages);
+    }
+    res.json({ conversation: conv });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/chat/history', async (req, res, next) => {
+  try {
+    let userId = null;
+    let fingerprint = null;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const jwt = await import('jsonwebtoken');
+        const token = authHeader.slice(7);
+        const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'shimmer-secret');
+        userId = decoded.userId || decoded.id;
+      } catch {}
+    }
+    if (!userId) {
+      fingerprint = req.headers['x-fingerprint'] || null;
+    }
+
+    const { title, personality, messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: '消息列表无效' });
+    }
+
+    const convTitle = (title || '').slice(0, 100) || '新对话';
+    const convPersonality = personality || 'tsundere';
+    const messagesJson = JSON.stringify(messages);
+
+    const result = await query(
+      'INSERT INTO chat_conversations (user_id, fingerprint, title, personality, messages) VALUES (?, ?, ?, ?, ?)',
+      [userId, fingerprint, convTitle, convPersonality, messagesJson]
+    );
+
+    const convId = result.insertId;
+
+    if (userId) {
+      const count = await query(
+        'SELECT COUNT(*) as cnt FROM chat_conversations WHERE user_id = ?',
+        [userId]
+      );
+      const over = count[0].cnt - MAX_CONVERSATIONS;
+      if (over > 0) {
+        await query(
+          `DELETE FROM chat_conversations WHERE user_id = ? ORDER BY updated_at ASC LIMIT ${over}`,
+          [userId]
+        );
+      }
+    }
+
+    res.json({ id: convId, message: '对话已保存' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.put('/chat/history/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { title, personality, messages } = req.body;
+
+    const fields = [];
+    const values = [];
+    if (title !== undefined) { fields.push('title = ?'); values.push(title.slice(0, 100)); }
+    if (personality !== undefined) { fields.push('personality = ?'); values.push(personality); }
+    if (messages !== undefined) { fields.push('messages = ?'); values.push(JSON.stringify(messages)); }
+
+    if (fields.length === 0) {
+      return res.status(400).json({ error: '没有需要更新的字段' });
+    }
+
+    values.push(id);
+    await query(`UPDATE chat_conversations SET ${fields.join(', ')} WHERE id = ?`, values);
+
+    res.json({ message: '对话已更新' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/chat/history/:id', async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    await query('DELETE FROM chat_conversations WHERE id = ?', [id]);
+    res.json({ message: '对话已删除' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.delete('/chat/history', async (req, res, next) => {
+  try {
+    let userId = null;
+    let fingerprint = null;
+
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const jwt = await import('jsonwebtoken');
+        const token = authHeader.slice(7);
+        const decoded = jwt.default.verify(token, process.env.JWT_SECRET || 'shimmer-secret');
+        userId = decoded.userId || decoded.id;
+      } catch {}
+    }
+    if (!userId) {
+      fingerprint = req.headers['x-fingerprint'] || null;
+    }
+
+    if (userId) {
+      await query('DELETE FROM chat_conversations WHERE user_id = ?', [userId]);
+    } else if (fingerprint) {
+      await query('DELETE FROM chat_conversations WHERE fingerprint = ? AND user_id IS NULL', [fingerprint]);
+    }
+
+    res.json({ message: '所有对话已清空' });
+  } catch (err) {
+    next(err);
   }
 });
 

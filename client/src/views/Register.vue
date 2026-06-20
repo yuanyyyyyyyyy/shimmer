@@ -12,6 +12,7 @@ const password = ref('')
 const confirmPassword = ref('')
 const loading = ref(false)
 const error = ref('')
+const success = ref('')
 
 const handleRegister = async () => {
   if (!username.value || !password.value) {
@@ -31,10 +32,12 @@ const handleRegister = async () => {
 
   loading.value = true
   error.value = ''
+  success.value = ''
 
   try {
     await authStore.register(username.value, password.value, nickname.value || username.value)
-    router.push('/')
+    success.value = '注册成功，正在登录...'
+    setTimeout(() => router.push('/'), 800)
   } catch (e) {
     error.value = e.response?.data?.error || '注册失败'
   } finally {
@@ -84,6 +87,7 @@ const handleRegister = async () => {
             />
           </div>
           <div v-if="error" class="error">{{ error }}</div>
+          <div v-if="success" class="success">{{ success }}</div>
           <button type="submit" :disabled="loading">
             {{ loading ? '注册中...' : '注册' }}
           </button>
@@ -158,6 +162,13 @@ button:disabled {
 
 .error {
   color: #e74c3c;
+  text-align: center;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+
+.success {
+  color: #27ae60;
   text-align: center;
   margin-bottom: 12px;
   font-size: 0.9rem;

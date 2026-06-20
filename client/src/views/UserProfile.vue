@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute } from 'vue-router'
-import { users } from '../api'
+import { users, auth } from '../api'
 import { useAuthStore } from '../stores'
 
 const route = useRoute()
@@ -19,6 +19,17 @@ const editForm = ref({
   bio: ''
 })
 const saving = ref(false)
+
+// 修改密码相关状态
+const showPasswordModal = ref(false)
+const passwordForm = ref({
+  oldPassword: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+const passwordSaving = ref(false)
+const passwordError = ref('')
+const passwordSuccess = ref('')
 
 const hasMore = computed(() => page.value < totalPages.value)
 const isOwnProfile = computed(() => {
@@ -49,6 +60,44 @@ const saveProfile = async () => {
     alert(e.response?.data?.error || '保存失败')
   } finally {
     saving.value = false
+  }
+}
+
+// 修改密码
+const openPasswordModal = () => {
+  passwordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
+  passwordError.value = ''
+  passwordSuccess.value = ''
+  showPasswordModal.value = true
+}
+
+const changePassword = async () => {
+  passwordError.value = ''
+  passwordSuccess.value = ''
+
+  if (!passwordForm.value.oldPassword || !passwordForm.value.newPassword) {
+    passwordError.value = '请填写旧密码和新密码'
+    return
+  }
+  if (passwordForm.value.newPassword.length < 6) {
+    passwordError.value = '新密码长度至少为6位'
+    return
+  }
+  if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
+    passwordError.value = '两次输入的新密码不一致'
+    return
+  }
+
+  passwordSaving.value = true
+  try {
+    await auth.changePassword(passwordForm.value.oldPassword, passwordForm.value.newPassword)
+    passwordSuccess.value = '密码修改成功'
+    passwordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
+    setTimeout(() => { showPasswordModal.value = false }, 1500)
+  } catch (e) {
+    passwordError.value = e.response?.data?.error || '密码修改失败'
+  } finally {
+    passwordSaving.value = false
   }
 }
 
@@ -133,6 +182,7 @@ onMounted(async () => {
           <!-- 操作按钮 -->
           <div v-if="isOwnProfile" class="profile-actions">
             <button class="btn-edit" @click="openEditModal">编辑资料</button>
+            <button class="btn-edit" @click="openPasswordModal">修改密码</button>
             <router-link to="/admin" class="btn-link">管理照片</router-link>
             <router-link to="/favorites" class="btn-link">我的收藏</router-link>
           </div>
@@ -206,6 +256,47 @@ onMounted(async () => {
               <button type="button" class="btn-cancel" @click="showEditModal = false">取消</button>
               <button type="submit" class="btn-save" :disabled="saving">
                 {{ saving ? '保存中...' : '保存' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- 修改密码弹窗 -->
+      <div v-if="showPasswordModal" class="modal-overlay" @click.self="showPasswordModal = false">
+        <div class="modal-content">
+          <h2>修改密码</h2>
+          <form @submit.prevent="changePassword">
+            <div class="form-group">
+              <label>旧密码</label>
+              <input
+                v-model="passwordForm.oldPassword"
+                type="password"
+                placeholder="请输入当前密码"
+              />
+            </div>
+            <div class="form-group">
+              <label>新密码</label>
+              <input
+                v-model="passwordForm.newPassword"
+                type="password"
+                placeholder="至少6位"
+              />
+            </div>
+            <div class="form-group">
+              <label>确认新密码</label>
+              <input
+                v-model="passwordForm.confirmPassword"
+                type="password"
+                placeholder="再次输入新密码"
+              />
+            </div>
+            <div v-if="passwordError" class="form-error">{{ passwordError }}</div>
+            <div v-if="passwordSuccess" class="form-success">{{ passwordSuccess }}</div>
+            <div class="form-actions">
+              <button type="button" class="btn-cancel" @click="showPasswordModal = false">取消</button>
+              <button type="submit" class="btn-save" :disabled="passwordSaving">
+                {{ passwordSaving ? '修改中...' : '确认修改' }}
               </button>
             </div>
           </form>
@@ -415,6 +506,18 @@ onMounted(async () => {
 .btn-save:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+.form-error {
+  color: #e74c3c;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
+}
+
+.form-success {
+  color: #27ae60;
+  font-size: 0.85rem;
+  margin-bottom: 12px;
 }
 
 .divider {

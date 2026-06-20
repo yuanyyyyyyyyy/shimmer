@@ -1,4 +1,6 @@
 import dotenv from 'dotenv';
+import http from 'node:http';
+import https from 'node:https';
 import { query } from '../config/database.js';
 
 dotenv.config();
@@ -174,16 +176,16 @@ async function makeChatCompletionStream(messages, options = {}) {
 
   let url;
   let body;
+  let format = 'sse';
 
   if (provider === 'ollama') {
-    url = `${aiConfig.baseUrl.replace(/\/$/, '')}/v1/chat/completions`;
+    url = `${aiConfig.baseUrl.replace(/\/$/, '')}/api/chat`;
     body = {
       model,
       messages,
-      temperature: options.temperature ?? 0.8,
-      max_tokens: options.maxTokens ?? 2048,
       stream: true
     };
+    format = 'ndjson';
   } else if (provider === 'zhipu') {
     url = `${aiConfig.baseUrl.replace(/\/$/, '')}/chat/completions`;
     body = {
@@ -204,13 +206,140 @@ async function makeChatCompletionStream(messages, options = {}) {
     };
   }
 
-  console.log(`[AI] 流式请求 ${provider} 模型: ${model}, url: ${url}`);
-  const response = await fetch(url, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-    signal: options.signal
+  console.log(`[AI] 流式请求 ${provider} 模型: ${model}, url: ${url}, format: ${format}`);
+
+  if (provider === 'ollama') {
+    return makeOllamaStream(url, body, headers, options);
+  }
+
+  return makeFetchStream(url, body, headers, options);
+}
+
+function makeOllamaStream(url, body, headers, options) {
+  const parsedUrl = new URL(url);
+  const isHttps = parsedUrl.protocol === 'https:';
+  const requestFn = isHttps ? https.request : http.request;
+
+  return new Promise((resolve, reject) => {
+    const reqBody = JSON.stringify(body);
+    const reqPath = parsedUrl.pathname + parsedUrl.search;
+
+    console.log(`[AI] Ollama http.request: ${parsedUrl.hostname}:${parsedUrl.port || (isHttps ? 443 : 80)}${reqPath}`);
+
+    const req = requestFn({
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: reqPath,
+      method: 'POST',
+      headers: {
+        ...headers,
+        'Content-Length': String(Buffer.byteLength(reqBody))
+      },
+      timeout: 120000
+    }, (response) => {
+      console.log(`[AI] Ollama 响应状态: ${response.statusCode}`);
+
+      if (response.statusCode < 200 || response.statusCode >= 300) {
+        let errBody = '';
+        response.on('data', (chunk) => { errBody += chunk; });
+        response.on('end', () => {
+          console.error('[AI] Ollama 请求失败:', response.statusCode, errBody.slice(0, 300));
+          reject(new Error(`AI 请求失败: ${response.statusCode}: ${errBody.slice(0, 200)}`));
+        });
+        return;
+      }
+
+      console.log('[AI] Ollama 流式连接已建立');
+
+      let chunkCount = 0;
+      let idleTimer = setTimeout(() => {
+        console.warn('[AI] Ollama 流式读取超时（60s 无数据）');
+        req.destroy();
+      }, 60000);
+
+      const resetIdleTimer = () => {
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => {
+          console.warn('[AI] Ollama 流式读取超时（60s 无数据）');
+          req.destroy();
+        }, 60000);
+      };
+
+      const stream = new ReadableStream({
+        start(controller) {
+          response.on('data', (chunk) => {
+            chunkCount++;
+            resetIdleTimer();
+            controller.enqueue(chunk);
+          });
+          response.on('end', () => {
+            clearTimeout(idleTimer);
+            console.log(`[AI] Ollama 流式结束，共 ${chunkCount} 个 chunk`);
+            try { controller.close(); } catch {}
+          });
+          response.on('error', (err) => {
+            clearTimeout(idleTimer);
+            if (err.name !== 'AbortError') {
+              console.error('[AI] Ollama 流式读取错误:', err.message);
+            }
+            try { controller.close(); } catch {}
+          });
+        },
+        cancel() {
+          req.destroy();
+        }
+      });
+
+      if (options.signal) {
+        const abortHandler = () => req.destroy();
+        if (options.signal.aborted) {
+          req.destroy();
+        } else {
+          options.signal.addEventListener('abort', abortHandler, { once: true });
+        }
+      }
+
+      resolve({ stream, format: 'ndjson' });
+    });
+
+    req.on('error', (err) => {
+      console.error('[AI] Ollama 请求错误:', err.message);
+      reject(err);
+    });
+
+    req.on('timeout', () => {
+      console.error('[AI] Ollama socket 超时（120s）');
+      req.destroy();
+      reject(new Error('AI 请求超时'));
+    });
+
+    req.write(reqBody);
+    req.end();
   });
+}
+
+async function makeFetchStream(url, body, headers, options) {
+  const fetchCtrl = new AbortController();
+  const fetchTimeout = setTimeout(() => fetchCtrl.abort(), 30000);
+
+  const onExternalAbort = () => fetchCtrl.abort();
+  if (options.signal) {
+    if (options.signal.aborted) fetchCtrl.abort();
+    else options.signal.addEventListener('abort', onExternalAbort, { once: true });
+  }
+
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: fetchCtrl.signal
+    });
+  } finally {
+    clearTimeout(fetchTimeout);
+    if (options.signal) options.signal.removeEventListener('abort', onExternalAbort);
+  }
 
   if (!response.ok) {
     const errText = await response.text().catch(() => '');
@@ -230,10 +359,10 @@ async function makeChatCompletionStream(messages, options = {}) {
         controller.close();
       }
     });
-    return fakeStream;
+    return { stream: fakeStream, format: 'sse' };
   }
 
-  return response.body;
+  return { stream: response.body, format: 'sse' };
 }
 
 async function getOllamaModels() {
@@ -257,6 +386,54 @@ async function getOllamaModels() {
   }
 }
 
+function makeOllamaChat(url, body, options = {}) {
+  const parsedUrl = new URL(url);
+  const isHttps = parsedUrl.protocol === 'https:';
+  const requestFn = isHttps ? https.request : http.request;
+
+  return new Promise((resolve, reject) => {
+    const reqBody = JSON.stringify(body);
+    const reqPath = parsedUrl.pathname + parsedUrl.search;
+
+    console.log(`[AI] Ollama native chat: ${parsedUrl.hostname}:${parsedUrl.port || (isHttps ? 443 : 80)}${reqPath}`);
+
+    const req = requestFn({
+      hostname: parsedUrl.hostname,
+      port: parsedUrl.port || (isHttps ? 443 : 80),
+      path: reqPath,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': String(Buffer.byteLength(reqBody))
+      },
+      timeout: 120000
+    }, (response) => {
+      let body = '';
+      response.on('data', (chunk) => { body += chunk; });
+      response.on('end', () => {
+        if (response.statusCode < 200 || response.statusCode >= 300) {
+          console.error('[AI] Ollama native chat 失败:', response.statusCode, body.slice(0, 300));
+          reject(new Error(`AI 请求失败: ${response.statusCode}: ${body.slice(0, 200)}`));
+          return;
+        }
+        try {
+          const result = JSON.parse(body);
+          const content = result.message?.content || '';
+          console.log(`[AI] Ollama native chat 返回内容长度: ${content.length}`);
+          resolve(content);
+        } catch (err) {
+          reject(new Error(`解析 Ollama 响应失败: ${err.message}`));
+        }
+      });
+    });
+
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('请求超时')); });
+    req.write(reqBody);
+    req.end();
+  });
+}
+
 async function generatePhotoMetadata(photoUrl, options = {}) {
   const aiConfig = await loadAiSettings();
   if (!aiConfig.enabled || !aiConfig.provider) {
@@ -274,11 +451,7 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
 
 不要添加额外的说明文字，也不要输出 markdown。`;
 
-  // 构建多模态消息内容（支持图片理解）
-  const content = [
-    { type: 'text', text: '请分析这张照片，生成标题、心情和标签' },
-    { type: 'image_url', image_url: { url: photoUrl } }
-  ];
+  const provider = aiConfig.provider.toLowerCase();
 
   // 追加附加信息到文本部分
   let textParts = [];
@@ -287,17 +460,70 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
   if (options.title) textParts.push(`已有标题: ${options.title}`);
   if (options.mood) textParts.push(`已有心情: ${options.mood}`);
 
+  if (provider === 'ollama') {
+    // Ollama：使用原生 /api/chat 端点，支持 base64 图片
+    let base64;
+    try {
+      const imageResponse = await fetch(photoUrl);
+      if (!imageResponse.ok) throw new Error(`下载图片失败: ${imageResponse.status}`);
+      const arrayBuffer = await imageResponse.arrayBuffer();
+      base64 = Buffer.from(arrayBuffer).toString('base64');
+    } catch (err) {
+      console.error('[AI] 下载图片转 base64 失败:', err.message);
+      return { title: '', mood: '', tags: [] };
+    }
+
+    let userText = '请分析这张照片，生成标题、心情和标签 /no_think';
+    if (textParts.length > 0) {
+      userText += '\n\n附加信息:\n' + textParts.join('\n');
+    }
+
+    const model = aiConfig.model || 'llama2';
+    const ollamaUrl = `${aiConfig.baseUrl.replace(/\/$/, '')}/api/chat`;
+
+    try {
+      const raw = await makeOllamaChat(ollamaUrl, {
+        model,
+        messages: [
+          { role: 'system', content: prompt },
+          { role: 'user', content: userText, images: [base64] }
+        ],
+        stream: false
+      });
+      const parsed = safeParseJSON(raw);
+      if (!parsed) {
+        return { title: '', mood: '', tags: [] };
+      }
+      return {
+        title: parsed.title || '',
+        mood: parsed.mood || '',
+        tags: Array.isArray(parsed.tags) ? parsed.tags.map(tag => String(tag).trim()).filter(Boolean) : []
+      };
+    } catch (error) {
+      console.error('[AI] generatePhotoMetadata error:', error.message || error);
+      return { title: '', mood: '', tags: [] };
+    }
+  }
+
+  // 其他 provider：使用 OpenAI 兼容的 /v1/chat/completions
+  const imageContent = { type: 'image_url', image_url: { url: photoUrl } };
+
+  const content = [
+    { type: 'text', text: '请分析这张照片，生成标题、心情和标签' },
+    imageContent
+  ];
+
   if (textParts.length > 0) {
     content[0].text += '\n\n附加信息:\n' + textParts.join('\n');
   }
 
   const messages = [
     { role: 'system', content: prompt },
-    { role: 'user', content }  // content 现在是数组格式（多模态）
+    { role: 'user', content }
   ];
 
   try {
-    const raw = await makeChatCompletion(messages, { maxTokens: 250 });
+    const raw = await makeChatCompletion(messages, { maxTokens: 2048 });
     const parsed = safeParseJSON(raw);
     if (!parsed) {
       return { title: '', mood: '', tags: [] };

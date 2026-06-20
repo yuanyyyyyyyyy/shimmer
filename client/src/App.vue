@@ -230,8 +230,8 @@ watch(showUserMenu, (newVal) => {
                   </div>
                   <router-link :to="`/user/${authStore.user?.id}`" class="dropdown-item" @click="closeUserMenu">我的主页</router-link>
                   <router-link to="/favorites" class="dropdown-item" @click="closeUserMenu">我的收藏</router-link>
-                  <router-link v-if="authStore.isAdmin" to="/admin" class="dropdown-item admin" @click="closeUserMenu">管理后台</router-link>
-                  <router-link v-if="authStore.isAdmin" to="/settings" class="dropdown-item admin" @click="closeUserMenu">AI 设置</router-link>
+                  <router-link to="/admin" class="dropdown-item" @click="closeUserMenu">{{ authStore.isAdmin ? '管理后台' : '我的照片' }}</router-link>
+                  <router-link to="/settings" class="dropdown-item" @click="closeUserMenu">AI 设置</router-link>
                   <div class="dropdown-divider"></div>
                   <button class="dropdown-item logout" @click="handleLogout">退出登录</button>
                 </div>

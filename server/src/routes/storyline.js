@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { query } from '../config/database.js';
+import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { generateStorySummary } from '../services/ai.js';
 
 const router = Router();
@@ -19,6 +20,7 @@ const normalizeLocation = (loc) => {
 // ============================================================
 async function findStoryPhotos(date, decodedLocation, options = {}) {
   const logTag = options.logTag || '[Story]';
+  const userId = options.userId || null;
 
   // 从 date (如 '2026-06-01') 提取年月
   const dateObj = new Date(date + 'T00:00:00Z');
@@ -29,14 +31,19 @@ async function findStoryPhotos(date, decodedLocation, options = {}) {
   const nextYear = month === 12 ? year + 1 : year;
   const monthEnd = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
 
-  // 返回当月所有可见照片
+  // 隐私过滤：匿名只看 public，登录用户可看自己的 private
+  const visibilityFilter = userId
+    ? `(visibility = 'public' OR (visibility = 'private' AND user_id = ?))`
+    : `visibility = 'public'`;
+  const params = userId ? [monthStart, monthEnd, userId] : [monthStart, monthEnd];
+
   const photos = await query(
     `SELECT id, title, mood, shot_date, location
      FROM photos 
      WHERE shot_date >= ? AND shot_date < ?
-       AND visibility != 'hidden'
+       AND ${visibilityFilter}
      ORDER BY shot_date`,
-    [monthStart, monthEnd]
+    params
   );
   console.log(`${logTag} 当月(${monthStart} ~ ${monthEnd}): ${photos.length} 条`);
   if (photos.length > 0) return { photos, matchedLevel: 1 };
@@ -46,14 +53,17 @@ async function findStoryPhotos(date, decodedLocation, options = {}) {
 }
 
 // 获取故事线列表 — 按同一月+同一地点聚合
-router.get('/', async (req, res, next) => {
+router.get('/', optionalAuth, async (req, res, next) => {
   try {
     const { year, page = 1, limit = 20 } = req.query;
-    const offset = (parseInt(page) - 1) * parseInt(limit);
+    const userId = req.user?.id || null;
 
-    // 构建基础查询条件
-    let whereClause = `WHERE p.visibility != 'hidden' AND p.shot_date IS NOT NULL`;
-    const params = [];
+    // 构建基础查询条件：匿名只看 public，登录用户可看自己的 private
+    const visibilityFilter = userId
+      ? `(p.visibility = 'public' OR (p.visibility = 'private' AND p.user_id = ?))`
+      : `p.visibility = 'public'`;
+    let whereClause = `WHERE ${visibilityFilter} AND p.shot_date IS NOT NULL`;
+    const params = userId ? [userId] : [];
 
     if (year) {
       whereClause += ` AND YEAR(p.shot_date) = ?`;
@@ -142,15 +152,16 @@ router.get('/', async (req, res, next) => {
 });
 
 // 获取单个故事详情（使用统一的多级查找逻辑，与 summary 接口保持一致）
-router.get('/:date/:location', async (req, res, next) => {
+router.get('/:date/:location', optionalAuth, async (req, res, next) => {
   try {
     const { date, location } = req.params;
     const decodedLocation = decodeURIComponent(location);
+    const userId = req.user?.id || null;
 
     console.log(`[StoryDetail] 查询参数: date="${date}", location="${decodedLocation}"`);
 
     // 使用多级查找（仅获取基础字段用于定位）
-    const result = await findStoryPhotos(date, decodedLocation, { logTag: '[StoryDetail]' });
+    const result = await findStoryPhotos(date, decodedLocation, { logTag: '[StoryDetail]', userId });
 
     if (!result || result.photos.length === 0) {
       return res.status(404).json({ error: '故事不存在' });
@@ -198,11 +209,12 @@ router.get('/:date/:location', async (req, res, next) => {
 
 // 生成/重新生成故事的 AI 叙态摘要（使用统一的多级查找逻辑）
 // 支持 regenerate 参数：true=强制重新调 AI；缺省/false=优先返回缓存
-router.post('/:date/:location/summary', async (req, res, next) => {
+router.post('/:date/:location/summary', authenticateToken, async (req, res, next) => {
   try {
     const { date, location } = req.params;
     const decodedLocation = decodeURIComponent(location);
     const { regenerate } = req.body || {};
+    const userId = req.user?.id;
 
     console.log(`[StorySummary] 查询参数: date="${date}", location="${decodedLocation}", regenerate=${!!regenerate}`);
 
@@ -232,7 +244,7 @@ router.post('/:date/:location/summary', async (req, res, next) => {
       const directPhotos = await query(
         `SELECT id, title, mood, shot_date, location
          FROM photos WHERE id IN (${photoIdsParam.map(() => '?').join(',')})
-           AND visibility != 'hidden'
+           AND visibility = 'public'
          ORDER BY shot_date`,
         photoIdsParam
       );
@@ -242,12 +254,12 @@ router.post('/:date/:location/summary', async (req, res, next) => {
 
     // 否则走标准多级查找
     if (!result) {
-      result = await findStoryPhotos(date, decodedLocation, { logTag: '[StorySummary]' });
+      result = await findStoryPhotos(date, decodedLocation, { logTag: '[StorySummary]', userId });
     }
 
     if (!result || result.photos.length === 0) {
       const nearby = await query(
-        `SELECT id, DATE(shot_date) as d, location, visibility FROM photos ORDER BY shot_date DESC LIMIT 5`
+        `SELECT id, DATE(shot_date) as d, location, visibility FROM photos WHERE visibility = 'public' ORDER BY shot_date DESC LIMIT 5`
       );
       return res.status(404).json({ 
         error: '故事不存在', 

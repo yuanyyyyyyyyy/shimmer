@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理后台 UI 预览</title>
+<style>
+:root {
+  --primary-color: #2c3e50;
+  --secondary-color: #3498db;
+  --text-color: #333;
+  --text-secondary: #666;
+  --text-tertiary: #999;
+  --bg-color: #fafafa;
+  --card-bg: #fff;
+  --hover-bg: rgba(0,0,0,0.05);
+  --input-border: #e0e0e0;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg-color);
+  color: var(--text-color);
+  line-height: 1.6;
+}
+
+/* Header */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(255,255,255,0.88);
+  backdrop-filter: blur(14px);
+  box-shadow: 0 1px 0 rgba(0,0,0,0.06);
+}
+.header-inner {
+  max-width: 960px; margin: 0 auto;
+  padding: 16px 24px 8px;
+  display: flex; justify-content: space-between; align-items: center;
+}
+.brand-cn { font-size: 1.1rem; font-weight: 700; color: var(--text-color); }
+.brand-en { font-size: 0.65rem; color: var(--text-tertiary); letter-spacing: 0.1em; margin-left: 8px; }
+.nav-row { display: flex; gap: 24px; margin-top: 8px; justify-content: center; }
+.nav-link {
+  font-size: 0.85rem; color: var(--text-secondary); text-decoration: none;
+  padding-bottom: 4px; transition: color 0.2s;
+}
+.nav-link:hover { color: var(--text-color); }
+.user-avatar-btn {
+  width: 32px; height: 32px; border-radius: 50%; border: none;
+  background: var(--secondary-color); color: #fff; font-size: 0.85rem; cursor: pointer;
+}
+
+/* Main content */
+.main { max-width: 960px; margin: 0 auto; padding: 40px 24px 80px; }
+
+/* Page title */
+.page-title {
+  font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 8px;
+}
+.page-subtitle { font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 32px; }
+
+/* Header actions */
+.admin-header {
+  display: flex; justify-content: space-between; align-items: flex-end;
+  margin-bottom: 32px;
+}
+.header-actions { display: flex; gap: 12px; align-items: center; }
+.btn-primary {
+  padding: 10px 20px; border: none; border-radius: 8px;
+  background: var(--secondary-color); color: #fff;
+  font-size: 0.85rem; cursor: pointer; transition: opacity 0.2s;
+}
+.btn-primary:hover { opacity: 0.85; }
+.btn-outline {
+  padding: 10px 20px; border: 1px solid var(--input-border); border-radius: 8px;
+  background: var(--card-bg); color: var(--text-color);
+  font-size: 0.85rem; cursor: pointer; text-decoration: none; transition: all 0.2s;
+}
+.btn-outline:hover { border-color: var(--secondary-color); color: var(--secondary-color); }
+.btn-text {
+  padding: 10px 16px; border: none; background: none;
+  color: var(--text-secondary); font-size: 0.85rem; cursor: pointer;
+}
+.btn-text:hover { color: var(--text-color); }
+
+/* Tabs */
+.tabs { display: flex; gap: 0; margin-bottom: 28px; border-bottom: 1px solid var(--input-border); }
+.tab-btn {
+  padding: 10px 20px; border: none; background: none;
+  font-size: 0.85rem; color: var(--text-secondary); cursor: pointer;
+  position: relative; transition: color 0.2s;
+}
+.tab-btn.active { color: var(--secondary-color); font-weight: 600; }
+.tab-btn.active::after {
+  content: ''; position: absolute; bottom: -1px; left: 0; right: 0;
+  height: 2px; background: var(--secondary-color); border-radius: 1px;
+}
+
+/* Photo grid */
+.photo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 20px;
+}
+.photo-card {
+  background: var(--card-bg); border-radius: 12px; overflow: hidden;
+  transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;
+  position: relative;
+}
+.photo-card:hover { transform: translateY(-4px); box-shadow: 0 8px 24px rgba(0,0,0,0.08); }
+.photo-card-img {
+  width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block;
+  background: var(--n-200);
+}
+.photo-card-body { padding: 14px 16px; }
+.photo-card-title {
+  font-size: 0.9rem; font-weight: 600; color: var(--text-color);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-bottom: 4px;
+}
+.photo-card-meta {
+  font-size: 0.78rem; color: var(--text-tertiary);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.photo-card-tags { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.photo-card-tag {
+  font-size: 0.7rem; padding: 2px 8px; border-radius: 10px;
+  background: var(--hover-bg); color: var(--text-secondary);
+}
+.photo-card-badge {
+  position: absolute; top: 12px; right: 12px;
+  font-size: 0.65rem; padding: 2px 8px; border-radius: 10px; font-weight: 600;
+}
+.badge-public { background: rgba(52,152,219,0.15); color: #3498db; }
+.badge-private { background: rgba(241,196,15,0.15); color: #f39c12; }
+.photo-card-actions {
+  position: absolute; bottom: 0; left: 0; right: 0;
+  padding: 10px 16px; display: flex; gap: 8px; justify-content: flex-end;
+  background: linear-gradient(transparent, rgba(0,0,0,0.5));
+  opacity: 0; transition: opacity 0.2s;
+}
+.photo-card:hover .photo-card-actions { opacity: 1; }
+.photo-card-actions button {
+  padding: 4px 12px; border: none; border-radius: 4px;
+  font-size: 0.75rem; cursor: pointer; background: rgba(255,255,255,0.9);
+  color: var(--text-color);
+}
+.photo-card-actions button.delete { color: #e74c3c; }
+
+/* User list */
+.user-card {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 16px 20px; background: var(--card-bg); border-radius: 10px;
+  margin-bottom: 10px;
+}
+.user-info { display: flex; align-items: center; gap: 12px; }
+.user-avatar {
+  width: 36px; height: 36px; border-radius: 50%; background: var(--secondary-color);
+  color: #fff; display: flex; align-items: center; justify-content: center;
+  font-size: 0.85rem; font-weight: 600;
+}
+.user-name { font-size: 0.9rem; font-weight: 600; }
+.user-username { font-size: 0.78rem; color: var(--text-tertiary); }
+.role-pill {
+  font-size: 0.7rem; padding: 3px 10px; border-radius: 10px; font-weight: 600;
+}
+.role-admin { background: rgba(52,152,219,0.12); color: #3498db; }
+.role-user { background: var(--hover-bg); color: var(--text-secondary); }
+
+/* Empty state */
+.empty-state {
+  text-align: center; padding: 60px 20px; color: var(--text-tertiary);
+}
+.empty-state-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.3; }
+.empty-state-text { font-size: 0.9rem; }
+
+/* Modal */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.5);
+  display: flex; align-items: center; justify-content: center; z-index: 1000;
+}
+.modal-panel {
+  background: var(--card-bg); border-radius: 16px; width: 90%; max-width: 720px;
+  max-height: 90vh; overflow-y: auto; display: flex;
+}
+.modal-preview { flex: 1; background: #f0f0f0; display: flex; align-items: center; justify-content: center; min-height: 400px; border-radius: 16px 0 0 16px; overflow: hidden; }
+.modal-preview img { width: 100%; height: 100%; object-fit: cover; }
+.modal-form { flex: 0 0 380px; padding: 28px; overflow-y: auto; max-height: 90vh; }
+.modal-form h3 { font-size: 1rem; font-weight: 600; margin-bottom: 20px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { display: block; font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
+.form-group input, .form-group textarea {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--input-border);
+  border-radius: 8px; font-size: 0.85rem; background: var(--card-bg);
+  color: var(--text-color); transition: border-color 0.2s;
+}
+.form-group input:focus, .form-group textarea:focus {
+  outline: none; border-color: var(--secondary-color);
+}
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.ai-bar {
+  display: flex; align-items: center; gap: 10px; padding: 12px 0;
+  margin-bottom: 16px; border-bottom: 1px solid var(--input-border);
+}
+.ai-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.ai-tag {
+  font-size: 0.72rem; padding: 4px 10px; border-radius: 10px;
+  border: 1px dashed var(--secondary-color); color: var(--secondary-color);
+  cursor: pointer; transition: all 0.2s;
+}
+.ai-tag:hover { background: var(--secondary-color); color: #fff; }
+.modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+
+/* Footer */
+.footer { text-align: center; padding: 32px; color: var(--text-tertiary); font-size: 0.78rem; }
+</style>
+</head>
+<body>
+
+<!-- Header (simplified) -->
+<header class="header">
+  <div class="header-inner">
+    <div style="display:flex;align-items:baseline;">
+      <span class="brand-cn">光影手记</span>
+      <span class="brand-en">LIGHT & SHADOW JOURNAL</span>
+    </div>
+    <button class="user-avatar-btn">Y</button>
+  </div>
+  <nav class="nav-row">
+    <a class="nav-link" href="#">首页</a>
+    <a class="nav-link" href="#">时间轴</a>
+    <a class="nav-link" href="#">故事</a>
+    <a class="nav-link" href="#">暗房</a>
+    <a class="nav-link" href="#">回顾</a>
+    <a class="nav-link" href="#">相册</a>
+  </nav>
+</header>
+
+<div class="main">
+  <!-- Page title + actions -->
+  <div class="admin-header">
+    <div>
+      <div class="page-title">我的照片</div>
+      <div class="page-subtitle">共 11 张照片 · 9 天记录</div>
+    </div>
+    <div class="header-actions">
+      <button class="btn-primary">+ 上传照片</button>
+      <a class="btn-outline" href="#">AI 设置</a>
+      <button class="btn-text">登出</button>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active">照片管理</button>
+    <button class="tab-btn">用户管理</button>
+  </div>
+
+  <!-- Photo Grid -->
+  <div class="photo-grid">
+    <div class="photo-card">
+      <span class="photo-card-badge badge-public">公开</span>
+      <img class="photo-card-img" src="https://picsum.photos/seed/a1/400/300" alt="">
+      <div class="photo-card-body">
+        <div class="photo-card-title">晨光中的古镇</div>
+        <div class="photo-card-meta">2026.06.15 · 江西庐山</div>
+        <div class="photo-card-tags">
+          <span class="photo-card-tag">风景</span>
+          <span class="photo-card-tag">旅行</span>
+        </div>
+      </div>
+      <div class="photo-card-actions">
+        <button>编辑</button>
+        <button class="delete">删除</button>
+      </div>
+    </div>
+
+    <div class="photo-card">
+      <span class="photo-card-badge badge-private">私密</span>
+      <img class="photo-card-img" src="https://picsum.photos/seed/b2/400/300" alt="">
+      <div class="photo-card-body">
+        <div class="photo-card-title">雨后小巷</div>
+        <div class="photo-card-meta">2026.06.12 · 杭州西湖</div>
+        <div class="photo-card-tags">
+          <span class="photo-card-tag">街拍</span>
+        </div>
+      </div>
+      <div class="photo-card-actions">
+        <button>编辑</button>
+        <button class="delete">删除</button>
+      </div>
+    </div>
+
+    <div class="photo-card">
+      <span class="photo-card-badge badge-public">公开</span>
+      <img class="photo-card-img" src="https://picsum.photos/seed/c3/400/300" alt="">
+      <div class="photo-card-body">
+        <div class="photo-card-title">落日余晖</div>
+        <div class="photo-card-meta">2026.06.10 · 三亚湾</div>
+        <div class="photo-card-tags">
+          <span class="photo-card-tag">日落</span>
+          <span class="photo-card-tag">海边</span>
+          <span class="photo-card-tag">风光</span>
+        </div>
+      </div>
+      <div class="photo-card-actions">
+        <button>编辑</button>
+        <button class="delete">删除</button>
+      </div>
+    </div>
+
+    <div class="photo-card">
+      <span class="photo-card-badge badge-public">公开</span>
+      <img class="photo-card-img" src="https://picsum.photos/seed/d4/400/300" alt="">
+      <div class="photo-card-body">
+        <div class="photo-card-title">街角咖啡馆</div>
+        <div class="photo-card-meta">2026.06.08 · 成都宽窄巷子</div>
+        <div class="photo-card-tags">
+          <span class="photo-card-tag">美食</span>
+          <span class="photo-card-tag">生活</span>
+        </div>
+      </div>
+      <div class="photo-card-actions">
+        <button>编辑</button>
+        <button class="delete">删除</button>
+      </div>
+    </div>
+
+    <div class="photo-card">
+      <span class="photo-card-badge badge-public">公开</span>
+      <img class="photo-card-img" src="https://picsum.photos/seed/e5/400/300" alt="">
+      <div class="photo-card-body">
+        <div class="photo-card-title">白鹿洞书院</div>
+        <div class="photo-card-meta">2026.06.05 · 庐山</div>
+        <div class="photo-card-tags">
+          <span class="photo-card-tag">建筑</span>
+          <span class="photo-card-tag">古迹</span>
+        </div>
+      </div>
+      <div class="photo-card-actions">
+        <button>编辑</button>
+        <button class="delete">删除</button>
+      </div>
+    </div>
+
+    <div class="photo-card">
+      <span class="photo-card-badge badge-private">私密</span>
+      <img class="photo-card-img" src="https://picsum.photos/seed/f6/400/300" alt="">
+      <div class="photo-card-body">
+        <div class="photo-card-title">深夜食堂</div>
+        <div class="photo-card-meta">2026.06.02 · 上海</div>
+        <div class="photo-card-tags">
+          <span class="photo-card-tag">美食</span>
+          <span class="photo-card-tag">夜景</span>
+        </div>
+      </div>
+      <div class="photo-card-actions">
+        <button>编辑</button>
+        <button class="delete">删除</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- User management preview -->
+  <div style="margin-top: 48px;">
+    <div class="page-title" style="margin-bottom: 16px;">用户管理</div>
+    <div class="user-card">
+      <div class="user-info">
+        <div class="user-avatar">Y</div>
+        <div>
+          <div class="user-name">Yuki</div>
+          <div class="user-username">@yuki</div>
+        </div>
+      </div>
+      <span class="role-pill role-admin">管理员</span>
+    </div>
+    <div class="user-card">
+      <div class="user-info">
+        <div class="user-avatar" style="background:#95a5a6;">Z</div>
+        <div>
+          <div class="user-name">张三</div>
+          <div class="user-username">@zhangsan</div>
+        </div>
+      </div>
+      <span class="role-pill role-user">用户</span>
+    </div>
+  </div>
+
+  <!-- Modal preview -->
+  <div style="margin-top: 48px;">
+    <div class="page-title" style="margin-bottom: 16px;">上传/编辑弹窗预览</div>
+    <div style="background: rgba(0,0,0,0.1); border-radius: 16px; padding: 20px;">
+      <div class="modal-panel" style="position: relative; max-height: 480px;">
+        <div class="modal-preview">
+          <img src="https://picsum.photos/seed/e5/600/450" alt="">
+        </div>
+        <div class="modal-form">
+          <h3>编辑照片</h3>
+          <div class="ai-bar">
+            <button class="btn-primary" style="font-size:0.8rem; padding: 8px 14px;">AI 自动补全</button>
+            <span style="font-size:0.78rem; color:var(--text-secondary);">智能生成标题、心情和标签</span>
+          </div>
+          <div class="form-group">
+            <label>标题</label>
+            <input type="text" value="白鹿洞书院" />
+          </div>
+          <div class="form-group">
+            <label>心情/日记</label>
+            <textarea rows="2">古朴的书院，感受到历史的沉淀</textarea>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
+              <label>拍摄日期</label>
+              <input type="date" value="2026-06-05" />
+            </div>
+            <div class="form-group">
+              <label>拍摄地点</label>
+              <input type="text" value="庐山" />
+            </div>
+          </div>
+          <div class="form-group">
+            <label>标签</label>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <span class="photo-card-tag" style="background:var(--secondary-color);color:#fff;border:none;">建筑 ×</span>
+              <span class="photo-card-tag" style="background:var(--secondary-color);color:#fff;border:none;">古迹 ×</span>
+              <span class="photo-card-tag" style="border:1px dashed var(--secondary-color);color:var(--secondary-color);cursor:pointer;">+ 添加</span>
+            </div>
+          </div>
+          <div class="ai-tags">
+            <span class="ai-tag">历史</span>
+            <span class="ai-tag">文化</span>
+            <span class="ai-tag">书院</span>
+          </div>
+          <div class="modal-actions">
+            <button class="btn-primary">保存</button>
+            <button class="btn-outline">取消</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer class="footer">
+  © 光影手记 · 用光影记录生活
+</footer>
+
+</body>
+</html>

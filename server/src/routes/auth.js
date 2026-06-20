@@ -1,13 +1,30 @@
 import { Router } from 'express';
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
+import rateLimit from 'express-rate-limit';
 import { query } from '../config/database.js';
 import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
 
+const loginLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 10,
+  message: { error: '登录尝试过于频繁，请5分钟后再试' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
+const registerLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: '注册请求过于频繁，请1分钟后再试' },
+  standardHeaders: true,
+  legacyHeaders: false
+});
+
 // 管理员登录
-router.post('/login', async (req, res, next) => {
+router.post('/login', loginLimiter, async (req, res, next) => {
   try {
     const { username, password } = req.body;
 
@@ -52,7 +69,7 @@ router.post('/login', async (req, res, next) => {
 });
 
 // 用户注册
-router.post('/register', async (req, res, next) => {
+router.post('/register', registerLimiter, async (req, res, next) => {
   try {
     const { username, password, nickname } = req.body;
 
@@ -84,15 +101,20 @@ router.post('/register', async (req, res, next) => {
     // 加密密码
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // 创建用户（默认 role 为 'user'）
+    // 检查是否是第一个用户（自动成为管理员）
+    const countResult = await query('SELECT COUNT(*) as cnt FROM users');
+    const isFirstUser = countResult[0].cnt === 0;
+    const role = isFirstUser ? 'admin' : 'user';
+
+    // 创建用户
     const result = await query(
-      'INSERT INTO users (username, password_hash, nickname) VALUES (?, ?, ?)',
-      [username, passwordHash, nickname || username]
+      'INSERT INTO users (username, password_hash, nickname, role) VALUES (?, ?, ?, ?)',
+      [username, passwordHash, nickname || username, role]
     );
 
     // 生成 token
     const token = jwt.sign(
-      { userId: result.insertId, username: username, role: 'user' },
+      { userId: result.insertId, username: username, role },
       process.env.JWT_SECRET,
       { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
     );
@@ -105,7 +127,7 @@ router.post('/register', async (req, res, next) => {
         username: username,
         nickname: nickname || username,
         avatar: null,
-        role: 'user',
+        role,
         bio: null
       }
     });

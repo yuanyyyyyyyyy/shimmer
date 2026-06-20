@@ -19,6 +19,10 @@ import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 dotenv.config();
 
+if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'your_jwt_secret_change_this') {
+  console.warn('⚠️  警告: JWT_SECRET 未配置或使用了默认值，存在安全风险！请在 .env 中设置一个复杂的随机字符串。');
+}
+
 const app = express();
 const PORT = process.env.PORT || 3000;
 const uploadDir = process.env.UPLOAD_DIR || 'uploads';

@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { favorites } from '../api'
 import { useAuthStore, getFingerprint } from '../stores'
 import Lightbox from '../components/Lightbox.vue'
@@ -85,6 +85,10 @@ const exifString = (item) => {
 }
 
 onMounted(loadFavorites)
+
+watch(() => authStore.token, () => {
+  loadFavorites()
+})
 </script>
 
 <template>

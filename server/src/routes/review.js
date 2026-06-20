@@ -1,40 +1,46 @@
 import { Router } from 'express';
 import { query } from '../config/database.js';
+import { optionalAuth } from '../middleware/auth.js';
 import { summarizeReview, getAIConfig } from '../services/ai.js';
 
 const router = Router();
 
+// 构建可见性过滤条件
+function buildVisibilityFilter(userId) {
+  if (userId) {
+    return {
+      where: `(p.visibility = 'public' OR (p.visibility = 'private' AND p.user_id = ?))`,
+      params: [userId]
+    };
+  }
+  return {
+    where: `p.visibility = 'public'`,
+    params: []
+  };
+}
+
 // 辅助函数：构建返回数据
-async function buildReviewData(yearInt, aiSummary, aiError) {
+async function buildReviewData(yearInt, aiSummary, aiError, userId = null) {
+  const vis = buildVisibilityFilter(userId);
+
   const yearStats = await query(
-    `SELECT 
-      COUNT(*) as total_photos,
-      SUM(file_size) as total_size
-     FROM photos 
-     WHERE visibility != 'hidden' AND YEAR(shot_date) = ?`,
-    [yearInt]
+    `SELECT COUNT(*) as total_photos, SUM(file_size) as total_size
+     FROM photos p WHERE ${vis.where} AND YEAR(p.shot_date) = ?`,
+    [...vis.params, yearInt]
   );
 
   const monthlyStats = await query(
-    `SELECT 
-      MONTH(shot_date) as month,
-      COUNT(*) as count
-     FROM photos 
-     WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND shot_date IS NOT NULL
-     GROUP BY MONTH(shot_date)
-     ORDER BY month`,
-    [yearInt]
+    `SELECT MONTH(shot_date) as month, COUNT(*) as count
+     FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND shot_date IS NOT NULL
+     GROUP BY MONTH(shot_date) ORDER BY month`,
+    [...vis.params, yearInt]
   );
 
   const dailyStats = await query(
-    `SELECT 
-      DATE(shot_date) as date,
-      COUNT(*) as count
-     FROM photos 
-     WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND shot_date IS NOT NULL
-     GROUP BY DATE(shot_date)
-     ORDER BY date`,
-    [yearInt]
+    `SELECT DATE(shot_date) as date, COUNT(*) as count
+     FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND shot_date IS NOT NULL
+     GROUP BY DATE(shot_date) ORDER BY date`,
+    [...vis.params, yearInt]
   );
 
   const topTags = await query(
@@ -42,65 +48,49 @@ async function buildReviewData(yearInt, aiSummary, aiError) {
      FROM tags t
      JOIN photo_tags pt ON t.id = pt.tag_id
      JOIN photos p ON pt.photo_id = p.id
-     WHERE p.visibility != 'hidden' AND YEAR(p.shot_date) = ?
-     GROUP BY t.id
-     ORDER BY count DESC
-     LIMIT 10`,
-    [yearInt]
+     WHERE ${vis.where} AND YEAR(p.shot_date) = ?
+     GROUP BY t.id ORDER BY count DESC LIMIT 10`,
+    [...vis.params, yearInt]
   );
 
   const topLocations = await query(
     `SELECT location, COUNT(*) as count
-     FROM photos 
-     WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND location IS NOT NULL AND location != ''
-     GROUP BY location
-     ORDER BY count DESC
-     LIMIT 10`,
-    [yearInt]
+     FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND location IS NOT NULL AND location != ''
+     GROUP BY location ORDER BY count DESC LIMIT 10`,
+    [...vis.params, yearInt]
   );
 
   const dateRange = await query(
-    `SELECT 
-      MIN(shot_date) as first_photo,
-      MAX(shot_date) as last_photo
-     FROM photos 
-     WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND shot_date IS NOT NULL`,
-    [yearInt]
+    `SELECT MIN(shot_date) as first_photo, MAX(shot_date) as last_photo
+     FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND shot_date IS NOT NULL`,
+    [...vis.params, yearInt]
   );
 
   const sizeStats = await query(
-    `SELECT 
-      AVG(width) as avg_width,
-      AVG(height) as avg_height,
-      MIN(width) as min_width,
-      MAX(width) as max_width
-     FROM photos 
-     WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND width IS NOT NULL`,
-    [yearInt]
+    `SELECT AVG(width) as avg_width, AVG(height) as avg_height,
+            MIN(width) as min_width, MAX(width) as max_width
+     FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND width IS NOT NULL`,
+    [...vis.params, yearInt]
   );
 
   const heroPhoto = await query(
-    `SELECT id, url, thumbnail_url
-     FROM photos
-     WHERE visibility != 'hidden' AND YEAR(shot_date) = ?
+    `SELECT id, url, thumbnail_url FROM photos p
+     WHERE ${vis.where} AND YEAR(shot_date) = ?
      ORDER BY shot_date ASC LIMIT 1`,
-    [yearInt]
+    [...vis.params, yearInt]
   );
 
   const statPhotos = await query(
-    `SELECT id, url, thumbnail_url
-     FROM photos
-     WHERE visibility != 'hidden' AND YEAR(shot_date) = ?
-     ORDER BY shot_date ASC
-     LIMIT 4`,
-    [yearInt]
+    `SELECT id, url, thumbnail_url FROM photos p
+     WHERE ${vis.where} AND YEAR(shot_date) = ?
+     ORDER BY shot_date ASC LIMIT 4`,
+    [...vis.params, yearInt]
   );
 
   const gpsStats = await query(
-    `SELECT COUNT(*) as count
-     FROM photos 
-     WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND latitude IS NOT NULL AND longitude IS NOT NULL`,
-    [yearInt]
+    `SELECT COUNT(*) as count FROM photos p
+     WHERE ${vis.where} AND YEAR(shot_date) = ? AND latitude IS NOT NULL AND longitude IS NOT NULL`,
+    [...vis.params, yearInt]
   );
 
   return {
@@ -124,13 +114,16 @@ async function buildReviewData(yearInt, aiSummary, aiError) {
 }
 
 // 获取可回顾的年份列表（需要放在 /:year 前面）
-router.get('/years', async (req, res, next) => {
+router.get('/years', optionalAuth, async (req, res, next) => {
   try {
+    const userId = req.user?.id || null;
+    const vis = buildVisibilityFilter(userId);
     const years = await query(
-      `SELECT DISTINCT YEAR(shot_date) as year
-       FROM photos 
-       WHERE visibility != 'hidden' AND shot_date IS NOT NULL
-       ORDER BY year DESC`
+      `SELECT DISTINCT YEAR(p.shot_date) as year
+       FROM photos p
+       WHERE ${vis.where} AND p.shot_date IS NOT NULL
+       ORDER BY year DESC`,
+      vis.params
     );
 
     res.json({ years: years.map(y => y.year) });
@@ -140,60 +133,53 @@ router.get('/years', async (req, res, next) => {
 });
 
 // 获取年度回顾数据
-router.get('/:year', async (req, res, next) => {
+router.get('/:year', optionalAuth, async (req, res, next) => {
   try {
     const { year } = req.params;
     const yearInt = parseInt(year);
     const shouldRegenerate = req.query.regenerate === 'true';
+    const userId = req.user?.id || null;
     
     if (isNaN(yearInt)) {
       return res.status(400).json({ error: 'Invalid year' });
     }
 
+    const vis = buildVisibilityFilter(userId);
+
     // 检查缓存（非重新生成时）
+    const cacheUserId = userId || 0;
     if (!shouldRegenerate) {
       const cached = await query(
-        'SELECT ai_summary, generated_at FROM review_cache WHERE year = ?',
-        [yearInt]
+        'SELECT ai_summary, generated_at FROM review_cache WHERE year = ? AND user_id = ?',
+        [yearInt, cacheUserId]
       );
       
       if (cached.length > 0 && cached[0].ai_summary) {
         console.log(`[Review] 使用缓存的回顾 (year=${yearInt}, generated_at=${cached[0].generated_at})`);
-        const reviewData = await buildReviewData(yearInt, cached[0].ai_summary, null);
+        const reviewData = await buildReviewData(yearInt, cached[0].ai_summary, null, userId);
         return res.json(reviewData);
       }
     }
 
     // 缓存不存在或需要重新生成，查询统计数据
     const yearStats = await query(
-      `SELECT 
-        COUNT(*) as total_photos,
-        SUM(file_size) as total_size
-       FROM photos 
-       WHERE visibility != 'hidden' AND YEAR(shot_date) = ?`,
-      [yearInt]
+      `SELECT COUNT(*) as total_photos, SUM(file_size) as total_size
+       FROM photos p WHERE ${vis.where} AND YEAR(p.shot_date) = ?`,
+      [...vis.params, yearInt]
     );
 
     const monthlyStats = await query(
-      `SELECT 
-        MONTH(shot_date) as month,
-        COUNT(*) as count
-       FROM photos 
-       WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND shot_date IS NOT NULL
-       GROUP BY MONTH(shot_date)
-       ORDER BY month`,
-      [yearInt]
+      `SELECT MONTH(shot_date) as month, COUNT(*) as count
+       FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND shot_date IS NOT NULL
+       GROUP BY MONTH(shot_date) ORDER BY month`,
+      [...vis.params, yearInt]
     );
 
     const dailyStats = await query(
-      `SELECT 
-        DATE(shot_date) as date,
-        COUNT(*) as count
-       FROM photos 
-       WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND shot_date IS NOT NULL
-       GROUP BY DATE(shot_date)
-       ORDER BY date`,
-      [yearInt]
+      `SELECT DATE(shot_date) as date, COUNT(*) as count
+       FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND shot_date IS NOT NULL
+       GROUP BY DATE(shot_date) ORDER BY date`,
+      [...vis.params, yearInt]
     );
 
     const topTags = await query(
@@ -201,68 +187,52 @@ router.get('/:year', async (req, res, next) => {
        FROM tags t
        JOIN photo_tags pt ON t.id = pt.tag_id
        JOIN photos p ON pt.photo_id = p.id
-       WHERE p.visibility != 'hidden' AND YEAR(p.shot_date) = ?
-       GROUP BY t.id
-       ORDER BY count DESC
-       LIMIT 10`,
-      [yearInt]
+       WHERE ${vis.where} AND YEAR(p.shot_date) = ?
+       GROUP BY t.id ORDER BY count DESC LIMIT 10`,
+      [...vis.params, yearInt]
     );
 
     const topLocations = await query(
       `SELECT location, COUNT(*) as count
-       FROM photos 
-       WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND location IS NOT NULL AND location != ''
-       GROUP BY location
-       ORDER BY count DESC
-       LIMIT 10`,
-      [yearInt]
+       FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND location IS NOT NULL AND location != ''
+       GROUP BY location ORDER BY count DESC LIMIT 10`,
+      [...vis.params, yearInt]
     );
 
     const dateRange = await query(
-      `SELECT 
-        MIN(shot_date) as first_photo,
-        MAX(shot_date) as last_photo
-       FROM photos 
-       WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND shot_date IS NOT NULL`,
-      [yearInt]
+      `SELECT MIN(shot_date) as first_photo, MAX(shot_date) as last_photo
+       FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND shot_date IS NOT NULL`,
+      [...vis.params, yearInt]
     );
 
     const sizeStats = await query(
-      `SELECT 
-        AVG(width) as avg_width,
-        AVG(height) as avg_height,
-        MIN(width) as min_width,
-        MAX(width) as max_width
-       FROM photos 
-       WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND width IS NOT NULL`,
-      [yearInt]
+      `SELECT AVG(width) as avg_width, AVG(height) as avg_height,
+              MIN(width) as min_width, MAX(width) as max_width
+       FROM photos p WHERE ${vis.where} AND YEAR(shot_date) = ? AND width IS NOT NULL`,
+      [...vis.params, yearInt]
     );
 
-    // 7a. Hero 照片（年度第一张）
+    // Hero 照片（年度第一张）
     const heroPhoto = await query(
-      `SELECT id, url, thumbnail_url
-       FROM photos
-       WHERE visibility != 'hidden' AND YEAR(shot_date) = ?
+      `SELECT id, url, thumbnail_url FROM photos p
+       WHERE ${vis.where} AND YEAR(shot_date) = ?
        ORDER BY shot_date ASC LIMIT 1`,
-      [yearInt]
+      [...vis.params, yearInt]
     );
 
-    // 7b. 4 张代表性照片（均匀分布）
+    // 4 张代表性照片
     const statPhotos = await query(
-      `SELECT id, url, thumbnail_url
-       FROM photos
-       WHERE visibility != 'hidden' AND YEAR(shot_date) = ?
-       ORDER BY shot_date ASC
-       LIMIT 4`,
-      [yearInt]
+      `SELECT id, url, thumbnail_url FROM photos p
+       WHERE ${vis.where} AND YEAR(shot_date) = ?
+       ORDER BY shot_date ASC LIMIT 4`,
+      [...vis.params, yearInt]
     );
 
-    // 8. 有 GPS 坐标的照片数
+    // 有 GPS 坐标的照片数
     const gpsStats = await query(
-      `SELECT COUNT(*) as count
-       FROM photos 
-       WHERE visibility != 'hidden' AND YEAR(shot_date) = ? AND latitude IS NOT NULL AND longitude IS NOT NULL`,
-      [yearInt]
+      `SELECT COUNT(*) as count FROM photos p
+       WHERE ${vis.where} AND YEAR(shot_date) = ? AND latitude IS NOT NULL AND longitude IS NOT NULL`,
+      [...vis.params, yearInt]
     );
 
     console.log(`[Review] ${shouldRegenerate ? '重新生成' : '首次生成'} AI 回顾 (year=${yearInt})`);
@@ -302,19 +272,18 @@ router.get('/:year', async (req, res, next) => {
       try {
         const aiConfig = await getAIConfig();
         await query(
-          `INSERT INTO review_cache (year, ai_summary, model, provider) 
-           VALUES (?, ?, ?, ?)
+          `INSERT INTO review_cache (year, user_id, ai_summary, model, provider) 
+           VALUES (?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE 
            ai_summary = VALUES(ai_summary), 
            model = VALUES(model), 
            provider = VALUES(provider),
            updated_at = CURRENT_TIMESTAMP`,
-          [yearInt, aiSummary, aiConfig.model, aiConfig.provider]
+          [yearInt, cacheUserId, aiSummary, aiConfig.model, aiConfig.provider]
         );
-        console.log(`[Review] 已缓存回顾 (year=${yearInt})`);
+        console.log(`[Review] 已缓存回顾 (year=${yearInt}, user_id=${cacheUserId})`);
       } catch (cacheErr) {
         console.error('[Review] 缓存保存失败:', cacheErr.message);
-        // 缓存失败不影响正常返回
       }
     }
 

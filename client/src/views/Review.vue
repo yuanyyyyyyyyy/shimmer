@@ -1,6 +1,9 @@
 <script setup>
-import { ref, onMounted, computed, nextTick } from 'vue'
+import { ref, onMounted, computed, nextTick, watch } from 'vue'
 import { photos } from '../api'
+import { useAuthStore } from '../stores'
+
+const authStore = useAuthStore()
 
 const years = ref([])
 const selectedYear = ref(null)
@@ -152,6 +155,13 @@ onMounted(() => {
     if (selectedYear.value) loadReview()
     else loading.value = false
   })
+})
+
+watch(() => authStore.token, async () => {
+  selectedYear.value = null
+  reviewData.value = null
+  await loadYears()
+  if (selectedYear.value) loadReview()
 })
 </script>
 
