@@ -13,6 +13,8 @@ const currentPresetId = ref(null)
 const aiForm = ref({ enabled: false, provider: '', model: '', base_url: '', api_key: '' })
 const cleanForm = ref(null)
 const aiSaveLoading = ref(false)
+const aiTestLoading = ref(false)
+const aiTestResult = ref(null)
 
 const showNewPresetDialog = ref(false)
 const newPresetName = ref('')
@@ -171,6 +173,25 @@ async function saveCurrentPreset() {
     error(e.response?.data?.error || '保存预设失败')
   } finally {
     aiSaveLoading.value = false
+  }
+}
+
+async function testAiConnection() {
+  aiTestLoading.value = true
+  aiTestResult.value = null
+  try {
+    const res = await ai.testConnection()
+    aiTestResult.value = res
+    if (res.ok) {
+      success(`连接成功 (${res.provider}/${res.model})`)
+    } else {
+      error(res.error || '连接失败')
+    }
+  } catch (e) {
+    aiTestResult.value = { ok: false, error: e.response?.data?.error || '请求失败' }
+    error(e.response?.data?.error || '测试连接失败')
+  } finally {
+    aiTestLoading.value = false
   }
 }
 
@@ -361,6 +382,9 @@ function handleProviderChange(newProvider) {
           </button>
           <button type="button" class="btn-outline" @click="openNewPresetDialog" :disabled="aiSaveLoading">
             另存为新预设
+          </button>
+          <button type="button" class="btn-outline btn-test" @click="testAiConnection" :disabled="aiTestLoading">
+            {{ aiTestLoading ? '测试中...' : '测试连接' }}
           </button>
         </div>
 

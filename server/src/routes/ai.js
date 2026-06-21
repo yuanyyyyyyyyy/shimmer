@@ -1,7 +1,7 @@
 import express from 'express';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 import { query } from '../config/database.js';
-import { getAIConfig, generatePhotoMetadata, rewriteSearchQuery, getOllamaModels, makeChatCompletion, makeChatCompletionStream } from '../services/ai.js';
+import { getAIConfig, generatePhotoMetadata, rewriteSearchQuery, getOllamaModels, makeOllamaChat, makeChatCompletion, makeChatCompletionStream } from '../services/ai.js';
 
 const router = express.Router();
 
@@ -180,6 +180,48 @@ router.get('/ollama/models', async (req, res, next) => {
   try {
     const models = await getOllamaModels();
     res.json({ models });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/test', authenticateToken, requireAdmin, async (req, res, next) => {
+  try {
+    const aiConfig = await getAIConfig();
+    if (!aiConfig.provider) {
+      return res.json({ ok: false, error: '未配置 AI 提供商' });
+    }
+
+    const provider = aiConfig.provider.toLowerCase();
+    const model = aiConfig.model || 'default';
+
+    if (provider === 'ollama') {
+      const ollamaUrl = `${aiConfig.baseUrl.replace(/\/$/, '')}/api/chat`;
+      try {
+        const raw = await makeOllamaChat(ollamaUrl, {
+          model,
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant.' },
+            { role: 'user', content: '你好，请回复"连接成功"' }
+          ],
+          stream: false,
+          think: false
+        });
+        res.json({ ok: true, provider, model, reply: raw.slice(0, 200) });
+      } catch (err) {
+        res.json({ ok: false, error: `Ollama 连接失败: ${err.message}` });
+      }
+    } else {
+      const messages = [
+        { role: 'user', content: '你好，请回复"连接成功"' }
+      ];
+      try {
+        const raw = await makeChatCompletion(messages, { maxTokens: 100 });
+        res.json({ ok: true, provider, model, reply: raw.slice(0, 200) });
+      } catch (err) {
+        res.json({ ok: false, error: `连接失败: ${err.message}` });
+      }
+    }
   } catch (err) {
     next(err);
   }

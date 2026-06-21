@@ -309,10 +309,10 @@ watch(showUserMenu, (newVal) => {
 
 <style>
 :root {
-  --primary-color: #2c3e50;
-  --secondary-color: #3498db;
-  --color-primary: #2c3e50;
-  --color-secondary: #3498db;
+  --primary-color: #2f3640;
+  --secondary-color: #8b95a0;
+  --color-primary: #2f3640;
+  --color-secondary: #8b95a0;
   --n-200: oklch(94% 0.003 260);
   --n-300: oklch(86% 0.004 260);
   --text-color: #333;
@@ -323,10 +323,10 @@ watch(showUserMenu, (newVal) => {
 }
 
 :root.dark {
-  --primary-color: #e0e0e0;
-  --secondary-color: #64b5f6;
-  --color-primary: #e0e0e0;
-  --color-secondary: #64b5f6;
+  --primary-color: #c8cdd3;
+  --secondary-color: #b0b8c0;
+  --color-primary: #c8cdd3;
+  --color-secondary: #b0b8c0;
   --n-200: oklch(30% 0.005 260);
   --n-300: oklch(40% 0.005 260);
   --text-color: #e0e0e0;
@@ -411,9 +411,10 @@ body {
 }
 
 .brand-cn {
+  font-family: 'Georgia', 'Noto Serif SC', 'Songti SC', serif;
   font-size: 1.6rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  font-weight: 300;
+  letter-spacing: 0.12em;
   color: #000;
   transition: font-size 0.3s;
 }
@@ -505,8 +506,8 @@ body {
   text-decoration: none;
   color: var(--text-tertiary);
   font-size: 0.78rem;
-  font-weight: 500;
-  letter-spacing: 0.04em;
+  font-weight: 300;
+  letter-spacing: 0.06em;
   padding: 2px 10px;
   transition: color 0.2s;
 }
@@ -525,7 +526,7 @@ body {
 
 .nav-link.router-link-active {
   color: #000;
-  font-weight: 600;
+  font-weight: 500;
 }
 
 :root.dark .nav-link.router-link-active {
@@ -681,7 +682,7 @@ body {
 }
 
 .role-badge.admin {
-  background: #000;
+  background: var(--primary-color);
   color: #fff;
 }
 

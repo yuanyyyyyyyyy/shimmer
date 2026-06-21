@@ -108,7 +108,8 @@ export const ai = {
   createPreset: (data) => api.post('/ai/presets', data),
   updatePreset: (id, data) => api.put(`/ai/presets/${id}`, data),
   activatePreset: (id) => api.put(`/ai/presets/${id}/activate`),
-  deletePreset: (id) => api.delete(`/ai/presets/${id}`)
+  deletePreset: (id) => api.delete(`/ai/presets/${id}`),
+  testConnection: () => api.post('/ai/test')
 }
 
 // 故事线

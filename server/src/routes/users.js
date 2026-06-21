@@ -155,7 +155,7 @@ router.get('/', authenticateToken, requireAdmin, async (req, res, next) => {
        FROM users
        ORDER BY created_at DESC
        LIMIT ? OFFSET ?`,
-      [limit, offset]
+      [String(limit), String(offset)]
     );
 
     const totalResult = await query('SELECT COUNT(*) as total FROM users');

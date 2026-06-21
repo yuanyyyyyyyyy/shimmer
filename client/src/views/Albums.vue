@@ -254,7 +254,7 @@ onMounted(() => {
   --color-success: oklch(60% 0.14 155);
   --color-no-cover: oklch(93% 0.015 250);
 
-  max-width: 1120px;
+  max-width: 960px;
   margin: 0 auto;
   padding: clamp(1.5rem, 4vw, 3rem);
 }

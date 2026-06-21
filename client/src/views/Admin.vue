@@ -113,6 +113,7 @@ const generateAiMetadata = async () => {
     })
 
     const metadata = res.metadata || {}
+    const hasContent = metadata.title || metadata.mood || (metadata.tags && metadata.tags.length > 0)
     if (metadata.title) {
       form.value.title = metadata.title
     }
@@ -120,7 +121,11 @@ const generateAiMetadata = async () => {
       form.value.mood = metadata.mood
     }
     aiTags.value = Array.isArray(metadata.tags) ? metadata.tags : []
-    success('AI 建议已生成，可自行调整后保存')
+    if (hasContent) {
+      success('AI 建议已生成，可自行调整后保存')
+    } else {
+      error('AI 未能识别照片内容，请手动填写')
+    }
   } catch (err) {
     error(err.response?.data?.error || 'AI 自动补全失败，请确认已在 AI 设置中配置并启用')
   } finally {
@@ -315,6 +320,12 @@ const getVisibilityLabel = (visibility) => {
   return labels[visibility] || visibility
 }
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return '-'
+  const d = new Date(dateStr)
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
+}
+
 // 编辑
 const handleEdit = async (photo) => {
   editingPhoto.value = photo
@@ -470,14 +481,30 @@ const handleLogout = () => {
 </script>
 
 <template>
-  <div class="admin">
+  <div class="admin-page">
     <div class="container">
-      <div class="admin-header">
-        <h2>{{ authStore.isAdmin ? '管理后台' : '我的照片' }}</h2>
-        <div class="header-actions">
-          <button @click="showForm = true; resetForm()">+ 上传照片</button>
-          <router-link to="/settings" class="settings-link-btn">AI 设置</router-link>
-          <button class="logout" @click="handleLogout">登出</button>
+      <div class="page-header">
+        <div class="page-title-row">
+          <h1 class="page-title">{{ authStore.isAdmin ? '管理后台' : '我的照片' }}</h1>
+          <span class="page-subtitle">{{ photoList.length }} 张照片 · {{ photoList.length > 0 ? new Date(Math.max(...photoList.map(p => p.shot_date ? new Date(p.shot_date).getTime() : 0))).getFullYear() : '-' }} 年记录</span>
+        </div>
+        <div class="page-actions">
+          <button class="action-pill" @click="showForm = true; resetForm()">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            <span>上传照片</span>
+          </button>
+          <router-link to="/settings" class="action-pill" title="AI 设置">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </router-link>
+          <button class="action-pill" @click="handleLogout" title="登出">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -488,28 +515,37 @@ const handleLogout = () => {
 
       <!-- 照片管理 -->
       <div v-if="activeTab === 'photos'">
-
       <!-- 照片列表 -->
       <div v-if="loading" class="loading">加载中...</div>
       <div v-else class="photo-list">
         <div v-for="photo in photoList" :key="photo.id" class="photo-item">
-          <img :src="photo.thumbnail_url || photo.url" />
+          <img :src="photo.thumbnail_url || photo.url" class="photo-thumb" />
           <div class="photo-info">
             <h4>{{ photo.title || '无题' }}</h4>
-            <p v-if="photo.mood">{{ photo.mood }}</p>
-            <span class="meta">{{ photo.shot_date }} · {{ photo.location || '无地点' }}</span>
+            <p v-if="photo.mood" class="photo-mood">{{ photo.mood }}</p>
+            <span class="photo-meta">{{ formatDate(photo.shot_date) }} · {{ photo.location || '无地点' }}</span>
           </div>
           <div class="photo-actions">
-            <button 
-              v-if="authStore.isAdmin"
-              :class="['visibility-btn', photo.visibility]"
-              @click="toggleVisibility(photo)"
-            >
-              {{ getVisibilityLabel(photo.visibility) }}
+            <button class="action-btn visibility-toggle" :class="photo.visibility" @click="toggleVisibility(photo)" :title="getVisibilityLabel(photo.visibility)">
+              <svg v-if="photo.visibility === 'public'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
             </button>
-            <span v-else :class="['visibility-badge', photo.visibility]">{{ getVisibilityLabel(photo.visibility) }}</span>
-            <button @click="handleEdit(photo)">编辑</button>
-            <button class="delete" @click="handleDelete(photo)">删除</button>
+            <button class="action-btn" @click="handleEdit(photo)" title="编辑">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+              </svg>
+            </button>
+            <button class="action-btn action-btn-danger" @click="handleDelete(photo)" title="删除">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <polyline points="3 6 5 6 21 6"></polyline>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+              </svg>
+            </button>
           </div>
         </div>
         <div v-if="photoList.length === 0" class="empty">暂无照片，点击上方按钮上传</div>
@@ -522,17 +558,20 @@ const handleLogout = () => {
         <div v-else-if="userList.length === 0" class="empty">暂无用户</div>
         <div v-else class="user-list">
           <div v-for="u in userList" :key="u.id" class="user-item">
-            <div class="user-info">
-              <span class="user-name">{{ u.nickname || u.username }}</span>
-              <span class="user-username">@{{ u.username }}</span>
-              <span :class="['role-badge', u.role]">{{ u.role === 'admin' ? '管理员' : '用户' }}</span>
+            <div class="user-item-top">
+              <div class="user-avatar">{{ (u.nickname || u.username).charAt(0).toUpperCase() }}</div>
+              <div class="user-info">
+                <div class="user-info-names">
+                  <span class="user-name">{{ u.nickname || u.username }}</span>
+                  <span class="user-username">@{{ u.username }}</span>
+                </div>
+                <span class="user-registered">{{ u.created_at ? formatDate(u.created_at) : '-' }} 注册</span>
+              </div>
             </div>
-            <div class="user-actions">
-              <button
-                v-if="u.id !== authStore.userId"
-                class="role-toggle-btn"
-                @click="toggleUserRole(u)"
-              >
+            <div class="user-item-divider"></div>
+            <div class="user-item-actions">
+              <span class="role-badge" :class="u.role">{{ u.role === 'admin' ? '管理员' : '用户' }}</span>
+              <button v-if="u.id !== authStore.userId" class="role-toggle-btn" @click="toggleUserRole(u)">
                 {{ u.role === 'admin' ? '取消管理员' : '设为管理员' }}
               </button>
               <span v-else class="self-tag">当前用户</span>
@@ -540,7 +579,7 @@ const handleLogout = () => {
           </div>
         </div>
         <div v-if="userList.length < usersTotal" class="load-more">
-          <button @click="loadMoreUsers" :disabled="usersLoading">
+          <button @click="loadMoreUsers" :disabled="usersLoading" class="btn-text">
             {{ usersLoading ? '加载中...' : '加载更多' }}
           </button>
         </div>
@@ -549,149 +588,205 @@ const handleLogout = () => {
       <!-- 上传/编辑表单弹窗 -->
       <div v-if="showForm" class="modal" @click.self="showForm = false">
         <div class="modal-content">
-          <h3>{{ editingPhoto ? '编辑照片' : '上传照片' }}</h3>
-          
-          <!-- 批量上传模式切换 -->
-          <div v-if="!editingPhoto" class="upload-mode-switch">
-            <button 
-              type="button"
-              :class="{ active: uploadMode === 'single' }"
-              @click="uploadMode = 'single'; resetForm()"
-            >
-              单张上传
-            </button>
-            <button 
-              type="button"
-              :class="{ active: uploadMode === 'batch' }"
-              @click="uploadMode = 'batch'; resetForm()"
-            >
-              批量上传
-            </button>
+          <div class="modal-header">
+            <h3>{{ editingPhoto ? '编辑照片' : '上传照片' }}</h3>
           </div>
-          
-          <!-- 图片上传 -->
-          <div v-if="uploadMode === 'batch'" class="upload-area">
-            <DragDropUpload
-              :max-files="20"
-              @uploaded="handleBatchUploaded"
-              @uploading="handleBatchUploading"
-            />
-          </div>
-          <div v-else class="upload-area">
-            <div v-if="form.url" class="preview">
-              <img :src="form.url" />
-              <button class="remove" @click="form.url = ''">×</button>
+          <div class="modal-body">
+            <!-- 图片预览区域 -->
+            <div class="upload-area">
+              <div v-if="form.url" class="preview">
+                <img :src="form.url" />
+                <button class="remove" @click="form.url = ''" title="移除">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                  </svg>
+                </button>
+              </div>
+              <div v-else class="upload-btn">
+                <input type="file" accept="image/*" @change="handleFileSelect" />
+                <span v-if="uploading">上传中...</span>
+                <span v-else>点击或拖拽选择图片</span>
+              </div>
             </div>
-            <div v-else class="upload-btn">
-              <input type="file" accept="image/*" @change="handleFileSelect" />
-              <span v-if="uploading">上传中...</span>
-              <span v-else>点击选择图片</span>
-            </div>
-          </div>
 
-          <!-- 表单 -->
-          <form @submit.prevent="uploadMode === 'batch' ? handleBatchSave() : handleSubmit()">
-            <div class="form-group">
-              <label>标题</label>
-              <input v-model="form.title" type="text" placeholder="可选标题" />
-            </div>
-            <div class="form-group">
-              <label>心情/日记</label>
-              <textarea v-model="form.mood" placeholder="一句话日记..." rows="3"></textarea>
-            </div>
-            <div class="ai-action">
-              <button type="button" class="ai-button" @click="generateAiMetadata" :disabled="aiLoading || !form.url">
-                {{ aiLoading ? 'AI 正在生成...' : 'AI 自动补全' }}
+            <!-- 批量上传模式切换 -->
+            <div v-if="!editingPhoto" class="upload-mode-switch">
+              <button 
+                type="button"
+                :class="{ active: uploadMode === 'single' }"
+                @click="uploadMode = 'single'; resetForm()"
+              >
+                单张上传
               </button>
-              <span class="ai-hint">
-                需要先在 AI 设置页面配置并启用
-              </span>
-            </div>
-            <div class="form-group" v-if="aiTags.length > 0">
-              <label>AI 建议标签 <small class="hint">(点击添加)</small></label>
-              <div class="ai-tags">
-                <span
-                  v-for="tag in aiTags"
-                  :key="tag"
-                  class="ai-tag"
-                  :class="{
-                    'ai-tag--added': isAiTagSelected(tag),
-                    'ai-tag--clickable': !isAiTagSelected(tag)
-                  }"
-                  @click="!isAiTagSelected(tag) && addAiTag(tag)"
-                >
-                  <span class="ai-tag-icon">{{ isAiTagSelected(tag) ? '✓' : '+' }}</span>
-                  {{ tag }}
-                </span>
-              </div>
-            </div>
-            <div class="form-row">
-              <div class="form-group">
-                <label>拍摄日期</label>
-                <input v-model="form.shot_date" type="date" />
-              </div>
-              <div class="form-group">
-                <label>地点</label>
-                <input v-model="form.location" type="text" placeholder="拍摄地点" />
-              </div>
-            </div>
-            <div v-if="form.camera || form.lens || form.aperture || form.shutter_speed || form.iso" class="form-group exif-group">
-              <label>相机信息（自动读取）</label>
-              <div class="exif-display">
-                <span v-if="form.camera" class="exif-item">{{ form.camera }}</span>
-                <span v-if="form.lens" class="exif-item">{{ form.lens }}</span>
-                <span v-if="form.aperture" class="exif-item">{{ form.aperture }}</span>
-                <span v-if="form.shutter_speed" class="exif-item">{{ form.shutter_speed }}</span>
-                <span v-if="form.iso" class="exif-item">ISO {{ form.iso }}</span>
-              </div>
-            </div>
-            <div class="form-group visibility-group">
-              <label>可见性</label>
-              <div class="visibility-options">
-                <label class="radio-option">
-                  <input v-model="form.visibility" type="radio" value="public" />
-                  <span class="radio-label">
-                    <strong>公开</strong>
-                    <small>所有访客可见</small>
-                  </span>
-                </label>
-                <label class="radio-option">
-                  <input v-model="form.visibility" type="radio" value="private" />
-                  <span class="radio-label">
-                    <strong>私密</strong>
-                    <small>仅自己可见</small>
-                  </span>
-                </label>
-              </div>
-            </div>
-            
-            <!-- 标签选择 -->
-            <div class="form-group">
-              <label>标签</label>
-              <div class="tags-selector">
-                <span 
-                  v-for="tag in allTags" 
-                  :key="tag.id"
-                  class="tag-option"
-                  :class="{ selected: selectedTags.includes(tag.id) }"
-                  :style="{ 
-                    backgroundColor: selectedTags.includes(tag.id) ? tag.color : '#f0f0f0',
-                    borderColor: tag.color
-                  }"
-                  @click="toggleTag(tag.id)"
-                >
-                  {{ tag.name }}
-                </span>
-                <button type="button" class="add-tag-btn" @click="createTag">+ 新建标签</button>
-              </div>
-            </div>
-            <div class="form-actions">
-              <button type="button" @click="showForm = false">取消</button>
-              <button type="submit" :disabled="uploading">
-                {{ uploading ? '上传中...' : (editingPhoto ? '保存' : (uploadMode === 'batch' && uploadedPhotos.length > 0 ? `保存 ${uploadedPhotos.length} 张` : '创建')) }}
+              <button 
+                type="button"
+                :class="{ active: uploadMode === 'batch' }"
+                @click="uploadMode = 'batch'; resetForm()"
+              >
+                批量上传
               </button>
             </div>
-          </form>
+
+            <!-- 批量上传区域 -->
+            <div v-if="uploadMode === 'batch'" class="upload-area batch-upload">
+              <DragDropUpload
+                :max-files="20"
+                @uploaded="handleBatchUploaded"
+                @uploading="handleBatchUploading"
+              />
+            </div>
+
+            <!-- 表单 -->
+            <form @submit.prevent="uploadMode === 'batch' ? handleBatchSave() : handleSubmit()">
+              <!-- 基本信息 -->
+              <div class="form-section">
+                <div class="form-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                    <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                  </svg>
+                  基本信息
+                </div>
+                <div class="form-group">
+                  <label>标题</label>
+                  <input v-model="form.title" type="text" placeholder="可选标题" />
+                </div>
+                <div class="form-group">
+                  <label>心情/日记</label>
+                  <textarea v-model="form.mood" placeholder="一句话日记..." rows="2"></textarea>
+                </div>
+              </div>
+
+              <!-- AI 助手 -->
+              <div class="form-section ai-section">
+                <div class="form-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                  </svg>
+                  AI 助手
+                </div>
+                <div class="ai-action">
+                  <button type="button" class="btn-ai" @click="generateAiMetadata" :disabled="aiLoading || !form.url">
+                    {{ aiLoading ? '生成中...' : 'AI 自动补全' }}
+                  </button>
+                  <span class="ai-hint">需先在设置中启用 AI</span>
+                </div>
+                <div class="form-group" v-if="aiTags.length > 0">
+                  <label>AI 建议标签 <small class="hint">(点击添加)</small></label>
+                  <div class="ai-tags">
+                    <span
+                      v-for="tag in aiTags"
+                      :key="tag"
+                      class="ai-tag"
+                      :class="{
+                        'ai-tag--added': isAiTagSelected(tag),
+                        'ai-tag--clickable': !isAiTagSelected(tag)
+                      }"
+                      @click="!isAiTagSelected(tag) && addAiTag(tag)"
+                    >
+                      <span class="ai-tag-icon">{{ isAiTagSelected(tag) ? '✓' : '+' }}</span>
+                      {{ tag }}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 拍摄信息 -->
+              <div class="form-section">
+                <div class="form-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                    <circle cx="12" cy="13" r="4"/>
+                  </svg>
+                  拍摄信息
+                </div>
+                <div class="form-row">
+                  <div class="form-group">
+                    <label>拍摄日期</label>
+                    <input v-model="form.shot_date" type="date" />
+                  </div>
+                  <div class="form-group">
+                    <label>地点</label>
+                    <input v-model="form.location" type="text" placeholder="拍摄地点" />
+                  </div>
+                </div>
+                <div v-if="form.camera || form.lens || form.aperture || form.shutter_speed || form.iso" class="form-group exif-group">
+                  <label>相机信息（自动读取）</label>
+                  <div class="exif-display">
+                    <span v-if="form.camera" class="exif-item">{{ form.camera }}</span>
+                    <span v-if="form.lens" class="exif-item">{{ form.lens }}</span>
+                    <span v-if="form.aperture" class="exif-item">{{ form.aperture }}</span>
+                    <span v-if="form.shutter_speed" class="exif-item">{{ form.shutter_speed }}</span>
+                    <span v-if="form.iso" class="exif-item">ISO {{ form.iso }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 可见性 -->
+              <div class="form-section">
+                <div class="form-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                  可见性
+                </div>
+                <div class="visibility-options">
+                  <label class="radio-option">
+                    <input v-model="form.visibility" type="radio" value="public" />
+                    <span class="radio-label">
+                      <strong>公开</strong>
+                      <small>所有访客可见</small>
+                    </span>
+                  </label>
+                  <label class="radio-option">
+                    <input v-model="form.visibility" type="radio" value="private" />
+                    <span class="radio-label">
+                      <strong>私密</strong>
+                      <small>仅自己可见</small>
+                    </span>
+                  </label>
+                </div>
+              </div>
+              
+              <!-- 标签选择 -->
+              <div class="form-section">
+                <div class="form-section-title">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+                    <line x1="7" y1="7" x2="7.01" y2="7"/>
+                  </svg>
+                  标签
+                </div>
+                <div class="tags-selector">
+                  <span 
+                    v-for="tag in allTags" 
+                    :key="tag.id"
+                    class="tag-option"
+                    :class="{ selected: selectedTags.includes(tag.id) }"
+                    :style="{ 
+                      backgroundColor: selectedTags.includes(tag.id) ? tag.color : 'var(--hover-bg)',
+                      borderColor: tag.color,
+                      color: selectedTags.includes(tag.id) ? '#fff' : 'var(--text-color)'
+                    }"
+                    @click="toggleTag(tag.id)"
+                  >
+                    {{ tag.name }}
+                  </span>
+                  <button type="button" class="add-tag-btn" @click="createTag">+ 新建标签</button>
+                </div>
+              </div>
+
+              <!-- 底部操作栏 -->
+              <div class="modal-footer">
+                <button type="button" class="btn-cancel" @click="showForm = false">取消</button>
+                <button type="submit" class="btn-submit" :disabled="uploading">
+                  {{ uploading ? '上传中...' : (editingPhoto ? '保存' : (uploadMode === 'batch' && uploadedPhotos.length > 0 ? `保存 ${uploadedPhotos.length} 张` : '创建')) }}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       </div>
     </div>
@@ -699,19 +794,87 @@ const handleLogout = () => {
 </template>
 
 <style scoped>
-.admin { min-height: calc(100vh - 140px); }
+.admin-page {
+  min-height: calc(100vh - 140px);
+  background: var(--bg-color);
+  font-family: 'PingFang SC', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  letter-spacing: 0.01em;
+}
 
-.admin .container {
+.admin-page .container {
   max-width: 960px;
   margin: 0 auto;
   padding: 0 24px;
 }
 
-.admin-header {
+/* ===== 页面标题栏（对齐 Albums.vue 风格） ===== */
+.page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: clamp(1.5rem, 2.5vw, 2rem);
+  gap: 1rem;
+}
+
+.page-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  min-width: 0;
+}
+
+.page-title {
+  font-family: 'Georgia', 'Noto Serif SC', 'Songti SC', serif;
+  font-size: clamp(1.5rem, 3vw, 1.875rem);
+  font-weight: 300;
+  letter-spacing: 0.12em;
+  color: var(--text-color);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.page-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.page-actions .action-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 12px;
+  border-radius: 17px;
+  border: 1px solid var(--n-300);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.2s;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.page-actions .action-pill svg {
+  flex-shrink: 0;
+}
+
+.page-actions .action-pill:hover {
+  border-color: var(--text-color);
+  color: var(--text-color);
+  background: var(--hover-bg);
 }
 
 .upload-mode-switch {
@@ -723,53 +886,69 @@ const handleLogout = () => {
 .upload-mode-switch button {
   flex: 1;
   padding: 8px 16px;
-  border: 2px solid var(--input-border);
-  background: var(--card-bg);
+  border: 1px solid var(--n-300);
+  background: transparent;
   border-radius: 6px;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
   transition: all 0.2s;
+}
+
+.upload-mode-switch button:hover {
+  border-color: var(--text-color);
+  color: var(--text-color);
 }
 
 .upload-mode-switch button.active {
   border-color: var(--secondary-color);
   background: var(--secondary-color);
-  color: var(--card-bg);
+  color: #fff;
 }
 
-.header-actions {
+.batch-upload {
+  margin-bottom: 16px;
+}
+
+/* AI Section */
+.ai-section {
+  background: var(--n-200);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.ai-action {
   display: flex;
-  gap: 12px;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
 }
 
-.header-actions button {
-  background: var(--secondary-color);
-  color: var(--card-bg);
+.btn-ai {
+  padding: 8px 16px;
   border: none;
-  padding: 10px 20px;
-  border-radius: 8px;
-  cursor: pointer;
-}
-
-.header-actions button.logout {
-  background: #95a5a6;
-}
-
-.settings-link-btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  text-decoration: none;
-  font-size: 14px;
-  border: 1px solid var(--input-border);
-  background: var(--card-bg);
-  color: var(--text-color);
+  border-radius: 6px;
+  background: var(--secondary-color);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 500;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.settings-link-btn:hover {
-  border-color: var(--secondary-color);
-  color: var(--secondary-color);
+.btn-ai:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.btn-ai:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.ai-hint {
+  color: var(--text-tertiary);
+  font-size: 0.8rem;
 }
 
 .photo-list {
@@ -785,6 +964,7 @@ const handleLogout = () => {
   padding: 12px;
   background: var(--card-bg);
   border-radius: 8px;
+  border: 1px solid var(--n-200);
 }
 
 .photo-item img {
@@ -799,49 +979,52 @@ const handleLogout = () => {
 }
 
 .photo-info h4 { margin-bottom: 4px; }
-.photo-info p { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 4px; }
-.photo-info .meta { color: var(--text-tertiary); font-size: 0.8rem; }
+.photo-info .photo-mood { color: var(--text-secondary); font-size: 0.9rem; margin-bottom: 4px; }
+.photo-info .photo-meta { color: var(--text-tertiary); font-size: 0.8rem; }
 
 .photo-actions {
   display: flex;
-  gap: 8px;
+  gap: 6px;
   align-items: center;
+  flex-shrink: 0;
 }
 
-.photo-actions button {
-  padding: 6px 12px;
-  border: 1px solid var(--input-border);
+.photo-actions .action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid var(--n-300);
   background: var(--card-bg);
-  border-radius: 4px;
+  border-radius: 6px;
   cursor: pointer;
-}
-
-.photo-actions button.delete {
-  color: #e74c3c;
-  border-color: #e74c3c;
-}
-
-.visibility-btn {
-  padding: 4px 10px;
-  border: none;
-  border-radius: 4px;
-  font-size: 0.8rem;
-  cursor: pointer;
+  color: var(--text-secondary);
   transition: all 0.2s;
 }
 
-.visibility-btn.public { 
-  background: #cce5ff; 
-  color: #004085; 
+.photo-actions .action-btn:hover {
+  border-color: var(--text-color);
+  color: var(--text-color);
+  background: var(--hover-bg);
 }
 
-.visibility-btn.private { 
-  background: #fff3cd; 
-  color: #856404; 
+.photo-actions .action-btn-danger:hover {
+  border-color: var(--danger-color);
+  color: var(--danger-color);
+  background: rgba(192, 57, 43, 0.08);
 }
 
-.visibility-btn:hover {
-  opacity: 0.85;
+.photo-actions .visibility-toggle.public {
+  color: #8B7355;
+  border-color: #8B7355;
+  background: rgba(139, 115, 85, 0.08);
+}
+
+.photo-actions .visibility-toggle.private {
+  color: var(--text-tertiary);
+  border-color: var(--n-300);
 }
 
 .visibility-group {
@@ -894,19 +1077,44 @@ const handleLogout = () => {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  padding: 20px;
 }
 
 .modal-content {
   background: var(--card-bg);
-  padding: 24px;
   border-radius: 12px;
-  width: 90%;
+  width: 100%;
   max-width: 500px;
   max-height: 90vh;
   overflow-y: auto;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
+  border: 1px solid var(--n-200);
 }
 
-.modal-content h3 { margin-bottom: 20px; }
+.modal-header {
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--n-200);
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.modal-body {
+  padding: 20px 24px;
+}
+
+.modal-footer {
+  padding: 14px 24px;
+  border-top: 1px solid var(--n-200);
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 10px;
+}
 
 .upload-area {
   margin-bottom: 20px;
@@ -964,30 +1172,7 @@ const handleLogout = () => {
   border: 1px solid var(--input-border);
   border-radius: 6px;
 }
-.ai-action {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 16px;
-  flex-wrap: wrap;
-}
-.ai-button {
-  padding: 10px 18px;
-  border: none;
-  border-radius: 8px;
-  background: var(--secondary-color);
-  color: #fff;
-  cursor: pointer;
-  transition: transform 0.2s, opacity 0.2s;
-}
-.ai-button:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
-}
-.ai-hint {
-  color: var(--text-secondary);
-  font-size: 0.9rem;
-}
+
 /* AI 建议标签容器 */
 .ai-tags {
   display: flex;
@@ -1009,25 +1194,25 @@ const handleLogout = () => {
 
 /* 可点击状态（未添加） */
 .ai-tag--clickable {
-  background: rgba(52, 152, 219, 0.1);
-  color: var(--primary-color);
-  border: 1.5px dashed var(--primary-color);
+  background: rgba(139, 115, 85, 0.1);
+  color: var(--secondary-color);
+  border: 1.5px dashed var(--secondary-color);
   cursor: pointer;
 }
 
 .ai-tag--clickable:hover {
-  background: rgba(52, 152, 219, 0.2);
+  background: rgba(139, 115, 85, 0.18);
   transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(52, 152, 219, 0.25);
+  box-shadow: 0 2px 8px rgba(139, 115, 85, 0.2);
 }
 
 /* 已添加/选中状态 */
 .ai-tag--added {
-  background: rgba(46, 204, 113, 0.15);
-  color: #27ae60;
-  border: 1.5px solid rgba(46, 204, 113, 0.4);
+  background: rgba(139, 115, 85, 0.12);
+  color: var(--secondary-color);
+  border: 1.5px solid rgba(139, 115, 85, 0.35);
   cursor: default;
-  opacity: 0.75;
+  opacity: 0.8;
 }
 
 /* AI 标签内的图标 */
@@ -1080,12 +1265,14 @@ const handleLogout = () => {
   border-radius: 12px;
   font-size: 12px;
   background: var(--input-bg);
-  border: 2px dashed #ccc;
+  border: 2px dashed var(--n-300);
   cursor: pointer;
+  color: var(--text-secondary);
 }
 
 .add-tag-btn:hover {
-  border-color: var(--text-tertiary);
+  border-color: var(--secondary-color);
+  color: var(--secondary-color);
 }
 
 .exif-group { margin-bottom: 12px; }
@@ -1094,16 +1281,15 @@ const handleLogout = () => {
   flex-wrap: wrap;
   gap: 6px;
   padding: 8px 12px;
-  background: #f5f5f5;
+  background: var(--n-200);
   border-radius: 6px;
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-secondary);
 }
 .exif-item + .exif-item::before {
   content: '·';
   margin-right: 6px;
-  color: #ccc;
+  color: var(--n-300);
 }
 
 .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
@@ -1111,32 +1297,72 @@ const handleLogout = () => {
 .form-actions {
   display: flex;
   gap: 12px;
-  justify-content: flex-end;
-  margin-top: 20px;
+  justify-content: space-between;
+  align-items: center;
 }
 
-.form-actions button {
-  padding: 10px 20px;
-  border-radius: 6px;
+.form-actions .btn-cancel {
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
   cursor: pointer;
+  transition: color 0.2s;
 }
 
-.form-actions button[type="button"] {
-  background: #fff;
-  border: 1px solid #ddd;
+.form-actions .btn-cancel:hover {
+  color: var(--text-color);
 }
 
-.form-actions button[type="submit"] {
+.form-actions .btn-submit {
+  padding: 8px 18px;
+  border-radius: 8px;
+  border: none;
   background: var(--secondary-color);
   color: #fff;
-  border: none;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.form-actions .btn-submit:hover {
+  opacity: 0.88;
+}
+
+.form-actions .btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Form sections */
+.form-section {
+  margin-bottom: 20px;
+}
+
+.form-section-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--secondary-color);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 12px;
+}
+
+.form-section-title svg {
+  opacity: 0.6;
 }
 
 /* Tabs */
 .admin-tabs {
   display: flex;
   gap: 0;
-  border-bottom: 2px solid #eee;
+  border-bottom: 2px solid var(--n-200);
   margin-bottom: 20px;
 }
 
@@ -1144,7 +1370,7 @@ const handleLogout = () => {
   padding: 10px 20px;
   border: none;
   background: transparent;
-  color: #999;
+  color: var(--text-tertiary);
   font-size: 0.95rem;
   cursor: pointer;
   border-bottom: 2px solid transparent;
@@ -1153,7 +1379,7 @@ const handleLogout = () => {
 }
 
 .tab-btn:hover {
-  color: #333;
+  color: var(--text-color);
 }
 
 .tab-btn.active {
@@ -1166,95 +1392,116 @@ const handleLogout = () => {
 .user-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
 }
 
 .user-item {
+  display: block;
+  background: var(--card-bg);
+  border: 1px solid var(--n-200);
+  border-radius: 10px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.user-item-top {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: var(--card-bg);
-  border: 1px solid #eee;
-  border-radius: 8px;
+  gap: 14px;
+  padding: 16px 18px 12px;
+}
+
+.user-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: var(--secondary-color);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  flex-shrink: 0;
 }
 
 .user-info {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  flex: 1;
+  min-width: 0;
+}
+
+.user-info-names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .user-name {
   font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--text-color);
 }
 
 .user-username {
-  color: #999;
-  font-size: 0.85rem;
+  color: var(--text-tertiary);
+  font-size: 0.82rem;
+}
+
+.user-registered {
+  color: var(--text-tertiary);
+  font-size: 0.78rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.user-item-divider {
+  height: 1px;
+  background: var(--n-200);
+  margin: 0 18px;
+}
+
+.user-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px 14px;
 }
 
 .role-badge {
-  font-size: 0.7rem;
-  padding: 2px 8px;
+  font-size: 0.72rem;
+  padding: 3px 10px;
   border-radius: 4px;
   font-weight: 500;
-}
-
-.role-badge.admin {
-  background: #e74c3c;
-  color: #fff;
 }
 
 .role-badge.user {
-  background: #ecf0f1;
-  color: #666;
-}
-
-.user-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  background: var(--n-200);
+  color: var(--text-secondary);
 }
 
 .role-toggle-btn {
-  padding: 6px 12px;
-  border: 1px solid #ddd;
-  background: #fff;
+  padding: 5px 12px;
+  border: 1px solid var(--n-300);
+  background: var(--card-bg);
   border-radius: 6px;
   cursor: pointer;
-  font-size: 0.82rem;
-  transition: background 0.15s;
+  font-size: 0.8rem;
+  transition: all 0.2s;
+  color: var(--text-secondary);
 }
 
 .role-toggle-btn:hover {
-  background: #f5f5f5;
+  border-color: var(--text-color);
+  color: var(--text-color);
+  background: var(--hover-bg);
 }
 
 .self-tag {
-  font-size: 0.8rem;
-  color: #999;
-}
-
-.visibility-badge {
-  font-size: 0.75rem;
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-weight: 500;
-}
-
-.visibility-badge.public {
-  background: #d4edda;
-  color: #155724;
-}
-
-.visibility-badge.private {
-  background: #fff3cd;
-  color: #856404;
-}
-
-.visibility-badge.hidden {
-  background: #f8d7da;
-  color: #721c24;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
 }
 </style>

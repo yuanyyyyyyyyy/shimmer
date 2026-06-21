@@ -58,15 +58,16 @@ async function getAIConfig() {
 
 function safeParseJSON(text) {
   if (!text || typeof text !== 'string') return null;
-  const first = text.indexOf('{');
-  const last = text.lastIndexOf('}');
+  let cleaned = text.replace(/```(?:json)?\s*\n?/g, '').replace(/```\s*$/g, '').trim();
+  const first = cleaned.indexOf('{');
+  const last = cleaned.lastIndexOf('}');
   if (first === -1 || last === -1) return null;
-  const maybeJson = text.slice(first, last + 1);
+  const maybeJson = cleaned.slice(first, last + 1);
   try {
     return JSON.parse(maybeJson);
   } catch (err) {
     try {
-      return JSON.parse(text);
+      return JSON.parse(cleaned);
     } catch (error) {
       return null;
     }
@@ -440,7 +441,7 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
     return { title: '', mood: '', tags: [] };
   }
 
-  const prompt = `你是一个中文照片日记助手。根据下面的照片信息，生成一个精炼的中文标题、一句心情文字和 3 到 5 个标签。
+  const prompt = `你是一个中文照片日记助手。你将收到一张图片，请仔细观察图片内容，生成一个精炼的中文标题、一句心情文字和 3 到 5 个标签。
 
 请仅返回一个合法 JSON 对象，格式如下：
 {
@@ -473,7 +474,7 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
       return { title: '', mood: '', tags: [] };
     }
 
-    let userText = '请分析这张照片，生成标题、心情和标签 /no_think';
+    let userText = '请分析这张照片，生成标题、心情和标签';
     if (textParts.length > 0) {
       userText += '\n\n附加信息:\n' + textParts.join('\n');
     }
@@ -488,8 +489,10 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
           { role: 'system', content: prompt },
           { role: 'user', content: userText, images: [base64] }
         ],
-        stream: false
+        stream: false,
+        think: false
       });
+      console.log(`[AI] generatePhotoMetadata raw (${provider}):`, raw.slice(0, 200));
       const parsed = safeParseJSON(raw);
       if (!parsed) {
         return { title: '', mood: '', tags: [] };
@@ -524,6 +527,7 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
 
   try {
     const raw = await makeChatCompletion(messages, { maxTokens: 2048 });
+    console.log(`[AI] generatePhotoMetadata raw (${provider}):`, raw.slice(0, 200));
     const parsed = safeParseJSON(raw);
     if (!parsed) {
       return { title: '', mood: '', tags: [] };
@@ -760,6 +764,7 @@ async function generateShareCaption(photos = [], options = {}) {
 export {
   getAIConfig,
   getOllamaModels,
+  makeOllamaChat,
   makeChatCompletion,
   makeChatCompletionStream,
   generatePhotoMetadata,
