@@ -14,13 +14,23 @@ api.interceptors.request.use(config => {
   return config
 })
 
-// 响应拦截器
+// 响应拦截器：ECONNREFUSED 自动重试一次（后端启动慢/重启中）
 api.interceptors.response.use(
   response => response.data,
-  error => {
+  async error => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
     }
+
+    // 后端未就绪时自动重试一次
+    const isConnRefused = error.code === 'ERR_NETWORK' || error.message?.includes('ECONNREFUSED')
+    const config = error.config
+    if (isConnRefused && config && !config.__retried) {
+      config.__retried = true
+      await new Promise(r => setTimeout(r, 1500))
+      return api.request(config)
+    }
+
     return Promise.reject(error)
   }
 )
@@ -31,7 +41,8 @@ export const auth = {
   register: (username, password, nickname) => api.post('/auth/register', { username, password, nickname }),
   getMe: () => api.get('/auth/me'),
   changePassword: (oldPassword, newPassword) =>
-    api.post('/auth/change-password', { oldPassword, newPassword })
+    api.post('/auth/change-password', { oldPassword, newPassword }),
+  verifyHiddenPassword: (password) => api.post('/auth/verify-hidden-password', { password })
 }
 
 // 用户
@@ -40,7 +51,10 @@ export const users = {
   getUserPhotos: (id, params) => api.get(`/users/${id}/photos`, { params }),
   updateProfile: (data) => api.put('/users/profile', data),
   list: (params) => api.get('/users', { params }),
-  updateRole: (id, role) => api.put(`/users/${id}/role`, { role })
+  updateRole: (id, role) => api.put(`/users/${id}/role`, { role }),
+  getHiddenPasswordStatus: () => api.get('/users/hidden-password/status'),
+  setHiddenPassword: (password, currentPassword) => api.put('/users/hidden-password', { password, currentPassword }),
+  removeHiddenPassword: (password) => api.delete('/users/hidden-password', { data: { password } })
 }
 
 // 照片
@@ -53,6 +67,9 @@ export const photos = {
   getReviewYears: () => api.get('/review/years'),
   getMyPhotos: (params) => api.get('/photos/my/list', { params }),
   getAdminPhotos: (params) => api.get('/photos/admin/all', { params }),
+  getHiddenPhotos: (params, hiddenToken) => api.get('/photos/hidden', {
+    params: { ...params, hidden_token: hiddenToken }
+  }),
   create: (data) => api.post('/photos', data),
   update: (id, data) => api.put(`/photos/${id}`, data),
   delete: (id) => api.delete(`/photos/${id}`)

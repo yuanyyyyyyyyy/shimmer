@@ -19,7 +19,7 @@ router.post('/', async (req, res, next) => {
     // 验证照片存在
     const photos = await query(
       `SELECT id, title, url, thumbnail_url, shot_date, location, mood, width, height
-       FROM photos WHERE id IN (${photoIds.map(() => '?').join(',')}) AND visibility != 'hidden'`,
+       FROM photos WHERE id IN (${photoIds.map(() => '?').join(',')})`,
       photoIds
     );
 

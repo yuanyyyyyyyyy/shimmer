@@ -174,4 +174,49 @@ router.post('/change-password', authenticateToken, async (req, res, next) => {
   }
 });
 
+// 验证隐藏相册密码
+router.post('/verify-hidden-password', authenticateToken, async (req, res, next) => {
+  try {
+    const { password } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: '密码不能为空' });
+    }
+
+    const users = await query('SELECT hidden_album_password_hash FROM users WHERE id = ?', [req.user.id]);
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const user = users[0];
+
+    // 未设置密码，无需验证
+    if (!user.hidden_album_password_hash) {
+      const token = jwt.sign(
+        { userId: req.user.id, type: 'hidden_album' },
+        process.env.JWT_SECRET,
+        { expiresIn: '30m' }
+      );
+      return res.json({ verified: true, token, hasPassword: false });
+    }
+
+    const isValid = await bcrypt.compare(password, user.hidden_album_password_hash);
+
+    if (!isValid) {
+      return res.status(401).json({ error: '密码错误' });
+    }
+
+    const token = jwt.sign(
+      { userId: req.user.id, type: 'hidden_album' },
+      process.env.JWT_SECRET,
+      { expiresIn: '30m' }
+    );
+
+    res.json({ verified: true, token, hasPassword: true });
+  } catch (err) {
+    next(err);
+  }
+});
+
 export default router;

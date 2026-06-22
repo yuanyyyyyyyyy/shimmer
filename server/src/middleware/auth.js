@@ -54,3 +54,31 @@ export const requireAdmin = (req, res, next) => {
   }
   next();
 };
+
+// 隐藏相册访问验证中间件
+export const verifyHiddenAlbum = async (req, res, next) => {
+  // 必须先通过 authenticateToken
+  if (!req.user) {
+    return res.status(401).json({ error: '请先登录' });
+  }
+
+  // 支持 header 或 query parameter 传递 hidden token
+  const hiddenToken = req.headers['hidden-album-token'] || req.query.hidden_token;
+
+  if (!hiddenToken) {
+    return res.status(403).json({ error: '请先验证隐藏相册密码', requiresPassword: true });
+  }
+
+  try {
+    const decoded = jwt.verify(hiddenToken, process.env.JWT_SECRET);
+
+    // 验证 token 类型和用户匹配
+    if (decoded.type !== 'hidden_album' || decoded.userId !== req.user.id) {
+      return res.status(403).json({ error: '验证令牌无效', requiresPassword: true });
+    }
+
+    next();
+  } catch (err) {
+    return res.status(403).json({ error: '验证令牌已过期，请重新验证', requiresPassword: true });
+  }
+};

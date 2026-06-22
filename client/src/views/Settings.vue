@@ -2,7 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores'
-import { ai } from '../api'
+import { ai, users } from '../api'
 import { success, error } from '../composables/useToast'
 
 const router = useRouter()
@@ -20,6 +20,18 @@ const showNewPresetDialog = ref(false)
 const newPresetName = ref('')
 
 const confirmDialog = ref(null)
+
+// 隐藏相册密码管理
+const hasHiddenPassword = ref(false)
+const hiddenPasswordForm = ref({
+  newPassword: '',
+  confirmPassword: '',
+  currentPassword: ''
+})
+const hiddenPasswordLoading = ref(false)
+const showSetPassword = ref(false)
+const showChangePassword = ref(false)
+const showRemovePassword = ref(false)
 
 const isDirty = computed(() => {
   if (!cleanForm.value) return false
@@ -83,7 +95,7 @@ onMounted(async () => {
     return
   }
   await authStore.fetchUser()
-  await loadPresets()
+  await Promise.all([loadPresets(), checkHiddenPasswordStatus()])
 })
 
 async function loadPresets() {
@@ -195,6 +207,96 @@ async function testAiConnection() {
   }
 }
 
+// ========== 隐藏相册密码管理 ==========
+
+async function checkHiddenPasswordStatus() {
+  try {
+    const res = await users.getHiddenPasswordStatus()
+    hasHiddenPassword.value = res.hasPassword
+  } catch (e) {
+    console.error(e)
+  }
+}
+
+async function setHiddenPassword() {
+  const { newPassword, confirmPassword } = hiddenPasswordForm.value
+  if (!newPassword) {
+    error('请输入密码')
+    return
+  }
+  if (newPassword.length < 6) {
+    error('密码长度至少为6位')
+    return
+  }
+  if (newPassword !== confirmPassword) {
+    error('两次输入的密码不一致')
+    return
+  }
+  hiddenPasswordLoading.value = true
+  try {
+    await users.setHiddenPassword(newPassword)
+    success('密码设置成功')
+    hasHiddenPassword.value = true
+    showSetPassword.value = false
+    hiddenPasswordForm.value = { newPassword: '', confirmPassword: '', currentPassword: '' }
+  } catch (e) {
+    error(e.response?.data?.error || '设置失败')
+  } finally {
+    hiddenPasswordLoading.value = false
+  }
+}
+
+async function changeHiddenPassword() {
+  const { newPassword, confirmPassword, currentPassword } = hiddenPasswordForm.value
+  if (!currentPassword) {
+    error('请输入当前密码')
+    return
+  }
+  if (!newPassword) {
+    error('请输入新密码')
+    return
+  }
+  if (newPassword.length < 6) {
+    error('密码长度至少为6位')
+    return
+  }
+  if (newPassword !== confirmPassword) {
+    error('两次输入的密码不一致')
+    return
+  }
+  hiddenPasswordLoading.value = true
+  try {
+    await users.setHiddenPassword(newPassword, currentPassword)
+    success('密码修改成功')
+    showChangePassword.value = false
+    hiddenPasswordForm.value = { newPassword: '', confirmPassword: '', currentPassword: '' }
+  } catch (e) {
+    error(e.response?.data?.error || '修改失败')
+  } finally {
+    hiddenPasswordLoading.value = false
+  }
+}
+
+async function removeHiddenPassword() {
+  const { currentPassword } = hiddenPasswordForm.value
+  if (!currentPassword) {
+    error('请输入隐藏相册密码以确认删除')
+    return
+  }
+  hiddenPasswordLoading.value = true
+  try {
+    await users.removeHiddenPassword(currentPassword)
+    success('密码已移除')
+    hasHiddenPassword.value = false
+    showRemovePassword.value = false
+    hiddenPasswordForm.value = { newPassword: '', confirmPassword: '', currentPassword: '' }
+  } catch (e) {
+    error(e.response?.data?.error || '删除失败')
+  } finally {
+    hiddenPasswordLoading.value = false
+  }
+}
+
 function openNewPresetDialog() {
   newPresetName.value = currentPresetName.value === '未选择预设' ? '' : currentPresetName.value
   showNewPresetDialog.value = true
@@ -271,7 +373,7 @@ function handleProviderChange(newProvider) {
   <div class="settings-page">
     <div class="container">
       <div class="settings-header">
-        <h2>AI 全局设置</h2>
+        <h2>设置</h2>
         <button class="back-btn" @click="router.push('/admin')">返回管理后台</button>
       </div>
 
@@ -400,6 +502,79 @@ function handleProviderChange(newProvider) {
           当前状态：未启用
         </div>
       </div>
+
+      <!-- 隐藏相册密码管理 -->
+      <div class="ai-settings-card">
+        <h3>隐藏相册密码</h3>
+        <p class="settings-description">管理隐藏相册的访问密码。设置密码后，进入隐藏相册需要输入密码验证。</p>
+
+        <div v-if="!hasHiddenPassword && !showSetPassword">
+          <p class="password-status">当前状态：未设置密码</p>
+          <button type="button" class="btn-outline" @click="showSetPassword = true">设置密码</button>
+        </div>
+
+        <div v-if="hasHiddenPassword && !showChangePassword && !showRemovePassword">
+          <p class="password-status">当前状态：已设置密码</p>
+          <div class="password-actions">
+            <button type="button" class="btn-outline" @click="showChangePassword = true">修改密码</button>
+            <button type="button" class="btn-outline danger" @click="showRemovePassword = true">移除密码</button>
+          </div>
+        </div>
+
+        <!-- 设置密码表单 -->
+        <div v-if="showSetPassword" class="password-form">
+          <label>
+            <span>新密码</span>
+            <input type="password" v-model="hiddenPasswordForm.newPassword" placeholder="至少6位" />
+          </label>
+          <label>
+            <span>确认密码</span>
+            <input type="password" v-model="hiddenPasswordForm.confirmPassword" placeholder="再次输入密码" />
+          </label>
+          <div class="form-actions">
+            <button type="button" @click="setHiddenPassword" :disabled="hiddenPasswordLoading">
+              {{ hiddenPasswordLoading ? '保存中...' : '保存' }}
+            </button>
+            <button type="button" class="btn-outline" @click="showSetPassword = false; hiddenPasswordForm = { newPassword: '', confirmPassword: '', currentPassword: '' }">取消</button>
+          </div>
+        </div>
+
+        <!-- 修改密码表单 -->
+        <div v-if="showChangePassword" class="password-form">
+          <label>
+            <span>当前密码</span>
+            <input type="password" v-model="hiddenPasswordForm.currentPassword" placeholder="输入当前密码" />
+          </label>
+          <label>
+            <span>新密码</span>
+            <input type="password" v-model="hiddenPasswordForm.newPassword" placeholder="至少6位" />
+          </label>
+          <label>
+            <span>确认密码</span>
+            <input type="password" v-model="hiddenPasswordForm.confirmPassword" placeholder="再次输入密码" />
+          </label>
+          <div class="form-actions">
+            <button type="button" @click="changeHiddenPassword" :disabled="hiddenPasswordLoading">
+              {{ hiddenPasswordLoading ? '保存中...' : '保存' }}
+            </button>
+            <button type="button" class="btn-outline" @click="showChangePassword = false; hiddenPasswordForm = { newPassword: '', confirmPassword: '', currentPassword: '' }">取消</button>
+          </div>
+        </div>
+
+        <!-- 移除密码表单 -->
+        <div v-if="showRemovePassword" class="password-form">
+          <label>
+            <span>输入隐藏相册密码以确认删除</span>
+            <input type="password" v-model="hiddenPasswordForm.currentPassword" placeholder="输入密码" />
+          </label>
+          <div class="form-actions">
+            <button type="button" class="danger" @click="removeHiddenPassword" :disabled="hiddenPasswordLoading">
+              {{ hiddenPasswordLoading ? '删除中...' : '确认移除' }}
+            </button>
+            <button type="button" class="btn-outline" @click="showRemovePassword = false; hiddenPasswordForm = { newPassword: '', confirmPassword: '', currentPassword: '' }">取消</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <Teleport to="body">
@@ -492,6 +667,75 @@ function handleProviderChange(newProvider) {
   color: var(--text-secondary);
   font-size: 0.9rem;
   margin-bottom: 16px;
+}
+
+/* 隐藏相册密码管理 */
+.password-status {
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.password-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.password-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.password-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.password-form label span {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.password-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  font-size: 14px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.password-form input:focus {
+  outline: none;
+  border-color: var(--secondary-color);
+}
+
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.form-actions button.danger {
+  background: #dc3545;
+  color: white;
+  border: none;
+}
+
+.form-actions button.danger:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.btn-outline.danger {
+  color: #dc3545;
+  border-color: #dc3545;
+}
+
+.btn-outline.danger:hover {
+  background: #dc3545;
+  color: white;
 }
 
 .dirty-tag {

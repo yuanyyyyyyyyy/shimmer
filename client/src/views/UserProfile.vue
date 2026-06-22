@@ -167,7 +167,7 @@ onMounted(async () => {
           <div class="stats">
             <div class="stat-item">
               <strong>{{ user.photoCount || 0 }}</strong>
-              <span>公开照片</span>
+              <span>展示照片</span>
             </div>
             <div v-if="isOwnProfile" class="stat-item">
               <strong>{{ user.totalPhotoCount || 0 }}</strong>
@@ -198,7 +198,7 @@ onMounted(async () => {
       </div>
 
       <div v-else-if="photos.length === 0" class="empty">
-        <p>还没有公开照片</p>
+        <p>还没有展示照片</p>
       </div>
 
       <div v-else class="gallery">

@@ -230,8 +230,9 @@ watch(showUserMenu, (newVal) => {
                   </div>
                   <router-link :to="`/user/${authStore.user?.id}`" class="dropdown-item" @click="closeUserMenu">我的主页</router-link>
                   <router-link to="/favorites" class="dropdown-item" @click="closeUserMenu">我的收藏</router-link>
+                  <router-link to="/hidden-album" class="dropdown-item" @click="closeUserMenu">隐藏相册</router-link>
                   <router-link to="/admin" class="dropdown-item" @click="closeUserMenu">{{ authStore.isAdmin ? '管理后台' : '我的照片' }}</router-link>
-                  <router-link to="/settings" class="dropdown-item" @click="closeUserMenu">AI 设置</router-link>
+                  <router-link to="/settings" class="dropdown-item" @click="closeUserMenu">设置</router-link>
                   <div class="dropdown-divider"></div>
                   <button class="dropdown-item logout" @click="handleLogout">退出登录</button>
                 </div>
@@ -320,6 +321,7 @@ watch(showUserMenu, (newVal) => {
   --text-tertiary: #999;
   --bg-color: #fafafa;
   --card-bg: #fff;
+  accent-color: var(--secondary-color);
 }
 
 :root.dark {

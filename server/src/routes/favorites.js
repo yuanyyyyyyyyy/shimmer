@@ -18,7 +18,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
                 p.camera, p.lens, p.aperture, p.shutter_speed, p.iso
          FROM favorites f
          JOIN photos p ON f.photo_id = p.id
-         WHERE f.user_id = ? AND p.visibility != 'hidden'
+         WHERE f.user_id = ?
          ORDER BY f.created_at DESC`,
         [req.user.id]
       );
@@ -37,7 +37,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
               p.camera, p.lens, p.aperture, p.shutter_speed, p.iso
        FROM favorites f
        JOIN photos p ON f.photo_id = p.id
-       WHERE f.fingerprint = ? AND f.user_id IS NULL AND p.visibility != 'hidden'
+       WHERE f.fingerprint = ? AND f.user_id IS NULL
        ORDER BY f.created_at DESC`,
       [fingerprint]
     );
@@ -92,13 +92,13 @@ router.post('/', authenticateToken, async (req, res, next) => {
       throw new ValidationError('缺少照片ID');
     }
 
-    // 检查照片是否存在且可见
+    // 检查照片是否存在
     const photos = await query(
-      'SELECT id FROM photos WHERE id = ? AND visibility != ?',
-      [photo_id, 'hidden']
+      'SELECT id FROM photos WHERE id = ?',
+      [photo_id]
     );
     if (photos.length === 0) {
-      throw new ValidationError('照片不存在或已隐藏');
+      throw new ValidationError('照片不存在');
     }
 
     // 检查是否已收藏（同一用户不能重复收藏）

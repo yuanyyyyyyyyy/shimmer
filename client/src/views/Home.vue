@@ -196,145 +196,225 @@ const getCardStyle = (photo) => {
 
 <template>
   <div class="home">
-    <!-- Hero -->
-    <section class="hero-section">
-      <ParticlesBg />
-      <div class="hero-bg"></div>
-      <div class="hero-layout">
-        <div class="hero-text-block">
-          <h1 class="hero-title">光影手记</h1>
-          <div class="hero-rule"></div>
-          <p class="hero-subtitle">用光影记录生活</p>
-          <p v-if="featuredPhoto" class="hero-meta">
-            {{ featuredPhoto.location || '每一次按下快门' }}
-            <span v-if="featuredPhoto.shot_date"> · {{ featuredPhoto.shot_date.slice(0, 10) }}</span>
-          </p>
+    <!-- 未登录：空白引导页 -->
+    <div v-if="!authStore.isLoggedIn" class="login-guide">
+      <div class="guide-content">
+        <h1 class="guide-title">光影手记</h1>
+        <p class="guide-subtitle">用光影记录生活</p>
+        <div class="guide-actions">
+          <router-link to="/login" class="btn-login">登录</router-link>
+          <router-link to="/register" class="btn-register">注册</router-link>
         </div>
-        <div class="hero-wall" v-if="decoPhotos.length">
-          <div
-            v-for="(photo, i) in decoPhotos"
-            :key="photo.id"
-            class="wall-photo"
-            :style="getWallStyle(photo, i)"
-          >
-            <img :src="photo.url || photo.thumbnail_url" />
+      </div>
+    </div>
+
+    <!-- 已登录：正常首页 -->
+    <template v-else>
+      <!-- Hero -->
+      <section class="hero-section">
+        <ParticlesBg />
+        <div class="hero-bg"></div>
+        <div class="hero-layout">
+          <div class="hero-text-block">
+            <h1 class="hero-title">光影手记</h1>
+            <div class="hero-rule"></div>
+            <p class="hero-subtitle">用光影记录生活</p>
+            <p v-if="featuredPhoto" class="hero-meta">
+              {{ featuredPhoto.location || '每一次按下快门' }}
+              <span v-if="featuredPhoto.shot_date"> · {{ featuredPhoto.shot_date.slice(0, 10) }}</span>
+            </p>
           </div>
-        </div>
-      </div>
-      <div class="scroll-hint">
-        <span class="scroll-dot"></span>
-      </div>
-    </section>
-
-    <!-- Stats -->
-    <section v-if="stats" class="stats-section" ref="statsRef">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <span class="stat-number">{{ stats.photos }}</span>
-          <span class="stat-label">张照片</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-number">{{ stats.stories }}</span>
-          <span class="stat-label">个故事</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-number">{{ stats.albums }}</span>
-          <span class="stat-label">本相册</span>
-        </div>
-        <div class="stat-card">
-          <span class="stat-number">{{ stats.days }}</span>
-          <span class="stat-label">天记录</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- Film Strip -->
-    <section v-if="photoList.length > 0" class="film-section">
-      <div class="section-label">光影长廊</div>
-      <FilmStrip :photos="photoList" @select="viewDetail(photoList.indexOf($event))" />
-    </section>
-
-    <!-- Category Filter -->
-    <section v-if="popularTags.length > 0" class="filter-section">
-      <div class="section-label">探索分类</div>
-      <div class="filter-pills">
-        <button
-          :class="{ active: !activeTagId }"
-          @click="clearFilters"
-        >全部</button>
-        <button
-          v-for="tag in popularTags"
-          :key="tag.id"
-          :class="{ active: activeTagId === String(tag.id) }"
-          @click="filterByTag(tag.id)"
-        >{{ tag.name }}</button>
-      </div>
-    </section>
-
-    <!-- Waterfall Gallery -->
-    <section class="gallery-section">
-      <div v-if="route.query.search || route.query.tag" class="filter-status">
-        <span v-if="route.query.search">搜索: "{{ route.query.search }}"</span>
-        <span v-if="route.query.tag">标签筛选</span>
-        <button @click="clearFilters">清除</button>
-      </div>
-
-      <div v-if="loading && photoList.length === 0" class="loading">加载中...</div>
-
-      <div v-else-if="photoList.length === 0" class="empty">
-        <p>暂无照片</p>
-        <router-link to="/" class="link-btn">去看看</router-link>
-      </div>
-
-      <template v-else>
-        <div class="gallery-floating">
-          <div
-            v-for="(photo, index) in photoList"
-            :key="photo.id"
-            class="f-card"
-            :style="getCardStyle(photo)"
-            @click="viewDetail(index)"
-          >
-            <div class="f-card-img">
-              <img
-                :src="photo.url || photo.thumbnail_url"
-                :alt="photo.title"
-                loading="lazy"
-              />
-            </div>
-            <div class="f-card-label">
-              <span v-if="photo.location" class="f-location">{{ photo.location }}</span>
-              <span v-if="photo.title" class="f-title">{{ photo.title }}</span>
-              <span v-if="photo.mood && !photo.title" class="f-mood">{{ photo.mood }}</span>
+          <div class="hero-wall" v-if="decoPhotos.length">
+            <div
+              v-for="(photo, i) in decoPhotos"
+              :key="photo.id"
+              class="wall-photo"
+              :style="getWallStyle(photo, i)"
+            >
+              <img :src="photo.url || photo.thumbnail_url" />
             </div>
           </div>
         </div>
-
-        <div v-if="loading" class="loading">加载中...</div>
-        <div v-else-if="hasMore" class="load-more">
-          <button @click="loadMore">加载更多</button>
+        <div class="scroll-hint">
+          <span class="scroll-dot"></span>
         </div>
-        <div v-else-if="photoList.length > 0" class="all-loaded">已经到底了</div>
-      </template>
-    </section>
+      </section>
 
-    <Lightbox
-      :photos="photoList"
-      :start-index="lightboxIndex"
-      :visible="lightboxVisible"
-      @close="handleLightboxClose"
-      @detail="handleDarkroomDetail"
-    />
+      <!-- Stats -->
+      <section v-if="stats" class="stats-section" ref="statsRef">
+        <div class="stats-grid">
+          <div class="stat-card">
+            <span class="stat-number">{{ stats.photos }}</span>
+            <span class="stat-label">张照片</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number">{{ stats.stories }}</span>
+            <span class="stat-label">个故事</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number">{{ stats.albums }}</span>
+            <span class="stat-label">本相册</span>
+          </div>
+          <div class="stat-card">
+            <span class="stat-number">{{ stats.days }}</span>
+            <span class="stat-label">天记录</span>
+          </div>
+        </div>
+      </section>
 
-    <DarkroomPrint
-      :photo="darkroomPhoto"
-      :visible="showDarkroom"
-      @close="handleDarkroomClose"
-    />
+      <!-- Film Strip -->
+      <section v-if="photoList.length > 0" class="film-section">
+        <div class="section-label">光影长廊</div>
+        <FilmStrip :photos="photoList" @select="viewDetail(photoList.indexOf($event))" />
+      </section>
+
+      <!-- Category Filter -->
+      <section v-if="popularTags.length > 0" class="filter-section">
+        <div class="section-label">探索分类</div>
+        <div class="filter-pills">
+          <button
+            :class="{ active: !activeTagId }"
+            @click="clearFilters"
+          >全部</button>
+          <button
+            v-for="tag in popularTags"
+            :key="tag.id"
+            :class="{ active: activeTagId === String(tag.id) }"
+            @click="filterByTag(tag.id)"
+          >{{ tag.name }}</button>
+        </div>
+      </section>
+
+      <!-- Waterfall Gallery -->
+      <section class="gallery-section">
+        <div v-if="route.query.search || route.query.tag" class="filter-status">
+          <span v-if="route.query.search">搜索: "{{ route.query.search }}"</span>
+          <span v-if="route.query.tag">标签筛选</span>
+          <button @click="clearFilters">清除</button>
+        </div>
+
+        <div v-if="loading && photoList.length === 0" class="loading">加载中...</div>
+
+        <div v-else-if="photoList.length === 0" class="empty">
+          <p>暂无照片</p>
+        </div>
+
+        <template v-else>
+          <div class="gallery-floating">
+            <div
+              v-for="(photo, index) in photoList"
+              :key="photo.id"
+              class="f-card"
+              :style="getCardStyle(photo)"
+              @click="viewDetail(index)"
+            >
+              <div class="f-card-img">
+                <img
+                  :src="photo.url || photo.thumbnail_url"
+                  :alt="photo.title"
+                  loading="lazy"
+                />
+              </div>
+              <div class="f-card-label">
+                <span v-if="photo.location" class="f-location">{{ photo.location }}</span>
+                <span v-if="photo.title" class="f-title">{{ photo.title }}</span>
+                <span v-if="photo.mood && !photo.title" class="f-mood">{{ photo.mood }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="loading" class="loading">加载中...</div>
+          <div v-else-if="hasMore" class="load-more">
+            <button @click="loadMore">加载更多</button>
+          </div>
+          <div v-else-if="photoList.length > 0" class="all-loaded">已经到底了</div>
+        </template>
+      </section>
+
+      <Lightbox
+        :photos="photoList"
+        :start-index="lightboxIndex"
+        :visible="lightboxVisible"
+        @close="handleLightboxClose"
+        @detail="handleDarkroomDetail"
+      />
+
+      <DarkroomPrint
+        :photo="darkroomPhoto"
+        :visible="showDarkroom"
+        @close="handleDarkroomClose"
+      />
+    </template>
   </div>
 </template>
 
 <style scoped>
+/* ===== Login Guide ===== */
+.login-guide {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-primary);
+}
+
+.guide-content {
+  text-align: center;
+  padding: 48px;
+}
+
+.guide-title {
+  font-size: 48px;
+  font-weight: 300;
+  letter-spacing: 0.15em;
+  margin: 0 0 16px;
+  color: var(--text-primary);
+}
+
+.guide-subtitle {
+  font-size: 18px;
+  color: var(--text-secondary);
+  margin: 0 0 48px;
+  letter-spacing: 0.1em;
+}
+
+.guide-actions {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+}
+
+.btn-login {
+  padding: 12px 32px;
+  background: var(--secondary-color);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.btn-login:hover {
+  opacity: 0.9;
+}
+
+.btn-register {
+  padding: 12px 32px;
+  background: none;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-size: 16px;
+  text-decoration: none;
+  color: var(--text-secondary);
+  transition: all 0.2s;
+}
+
+.btn-register:hover {
+  border-color: var(--secondary-color);
+  color: var(--secondary-color);
+}
+
 /* ===== Hero ===== */
 .hero-section {
   position: relative;

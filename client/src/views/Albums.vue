@@ -400,7 +400,7 @@ onMounted(() => {
 /* ========== Album Grid ========== */
 .albums-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: clamp(1rem, 2vw, 1.5rem);
 }
 
@@ -426,7 +426,7 @@ onMounted(() => {
 .album-cover {
   position: relative;
   width: 100%;
-  aspect-ratio: 4 / 3;
+  aspect-ratio: 16 / 10;
   overflow: hidden;
   background: var(--color-no-cover);
 }
@@ -755,7 +755,7 @@ onMounted(() => {
 /* ========== Responsive ========== */
 @media (max-width: 640px) {
   .albums-grid {
-    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
   }
 
   .page-header {

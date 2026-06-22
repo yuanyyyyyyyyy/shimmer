@@ -55,7 +55,7 @@ const form = ref({
   width: 0,
   height: 0,
   file_size: 0,
-  visibility: 'public',
+  visibility: 'private',
   latitude: null,
   longitude: null
 })
@@ -170,6 +170,18 @@ const toggleTag = (tagId) => {
     selectedTags.value.splice(index, 1)
   } else {
     selectedTags.value.push(tagId)
+  }
+}
+
+const deleteTag = async (tag) => {
+  if (!confirm(`确定删除标签「${tag.name}」？`)) return
+  try {
+    await tags.delete(tag.id)
+    allTags.value = allTags.value.filter(t => t.id !== tag.id)
+    selectedTags.value = selectedTags.value.filter(id => id !== tag.id)
+    success(`已删除标签「${tag.name}」`)
+  } catch (e) {
+    error('删除标签失败')
   }
 }
 
@@ -316,7 +328,7 @@ const toggleVisibility = async (photo) => {
 }
 
 const getVisibilityLabel = (visibility) => {
-  const labels = { public: '公开', private: '私密' }
+  const labels = { public: '普通照片', private: '隐藏相册' }
   return labels[visibility] || visibility
 }
 
@@ -373,7 +385,7 @@ const resetForm = () => {
     width: 0,
     height: 0,
     file_size: 0,
-    visibility: 'public',
+    visibility: 'private',
     latitude: null,
     longitude: null
   }
@@ -732,22 +744,22 @@ const handleLogout = () => {
                   </svg>
                   可见性
                 </div>
-                <div class="visibility-options">
-                  <label class="radio-option">
-                    <input v-model="form.visibility" type="radio" value="public" />
-                    <span class="radio-label">
-                      <strong>公开</strong>
-                      <small>所有访客可见</small>
-                    </span>
-                  </label>
-                  <label class="radio-option">
-                    <input v-model="form.visibility" type="radio" value="private" />
-                    <span class="radio-label">
-                      <strong>私密</strong>
-                      <small>仅自己可见</small>
-                    </span>
-                  </label>
-                </div>
+                  <div class="visibility-options">
+                    <label class="radio-option">
+                      <input v-model="form.visibility" type="radio" value="private" />
+                      <span class="radio-label">
+                        <strong>隐藏相册</strong>
+                        <small>需密码验证才能查看</small>
+                      </span>
+                    </label>
+                    <label class="radio-option">
+                      <input v-model="form.visibility" type="radio" value="public" />
+                      <span class="radio-label">
+                        <strong>普通照片</strong>
+                        <small>登录后在个人主页可见</small>
+                      </span>
+                    </label>
+                  </div>
               </div>
               
               <!-- 标签选择 -->
@@ -766,13 +778,14 @@ const handleLogout = () => {
                     class="tag-option"
                     :class="{ selected: selectedTags.includes(tag.id) }"
                     :style="{ 
-                      backgroundColor: selectedTags.includes(tag.id) ? tag.color : 'var(--hover-bg)',
-                      borderColor: tag.color,
+                      backgroundColor: selectedTags.includes(tag.id) ? 'var(--secondary-color)' : 'var(--hover-bg)',
+                      borderColor: 'var(--secondary-color)',
                       color: selectedTags.includes(tag.id) ? '#fff' : 'var(--text-color)'
                     }"
                     @click="toggleTag(tag.id)"
                   >
                     {{ tag.name }}
+                    <span class="tag-delete" @click.stop="deleteTag(tag)" title="删除标签">×</span>
                   </span>
                   <button type="button" class="add-tag-btn" @click="createTag">+ 新建标签</button>
                 </div>
@@ -1116,6 +1129,44 @@ const handleLogout = () => {
   gap: 10px;
 }
 
+.modal-footer .btn-cancel {
+  padding: 8px 20px;
+  border-radius: 8px;
+  border: 1px solid var(--n-300);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-footer .btn-cancel:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-color);
+  background: var(--hover-bg);
+}
+
+.modal-footer .btn-submit {
+  padding: 8px 24px;
+  border-radius: 8px;
+  border: none;
+  background: var(--secondary-color);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.modal-footer .btn-submit:hover {
+  opacity: 0.88;
+}
+
+.modal-footer .btn-submit:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .upload-area {
   margin-bottom: 20px;
 }
@@ -1273,6 +1324,19 @@ const handleLogout = () => {
 .add-tag-btn:hover {
   border-color: var(--secondary-color);
   color: var(--secondary-color);
+}
+
+.tag-delete {
+  margin-left: 4px;
+  font-size: 10px;
+  opacity: 0.4;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.tag-delete:hover {
+  opacity: 1;
+  color: #e57373;
 }
 
 .exif-group { margin-bottom: 12px; }

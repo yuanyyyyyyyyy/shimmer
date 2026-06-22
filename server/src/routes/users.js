@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import bcrypt from 'bcrypt';
 import { query } from '../config/database.js';
 import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
@@ -76,6 +77,7 @@ router.get('/:id/photos', async (req, res, next) => {
     }
 
     // 获取照片列表
+    // 所有用户只显示 public 照片（private 需通过隐藏相册接口访问）
     const photos = await query(
       `SELECT id, url, thumbnail_url, title, shot_date, location, mood,
               width, height, visibility, user_id, created_at
@@ -88,7 +90,7 @@ router.get('/:id/photos', async (req, res, next) => {
 
     // 获取总数
     const totalResult = await query(
-      'SELECT COUNT(*) as total FROM photos WHERE user_id = ? AND visibility = "public"',
+      `SELECT COUNT(*) as total FROM photos WHERE user_id = ? AND visibility = 'public'`,
       [userId]
     );
 
@@ -200,6 +202,93 @@ router.put('/:id/role', authenticateToken, requireAdmin, async (req, res, next) 
     }
 
     res.json({ message: '角色修改成功' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// ========== 隐藏相册密码管理 ==========
+
+// 查询是否已设置隐藏相册密码
+router.get('/hidden-password/status', authenticateToken, async (req, res, next) => {
+  try {
+    const users = await query('SELECT hidden_album_password_hash FROM users WHERE id = ?', [req.user.id]);
+    const hasPassword = users.length > 0 && !!users[0].hidden_album_password_hash;
+    res.json({ hasPassword });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 设置/修改隐藏相册密码
+router.put('/hidden-password', authenticateToken, async (req, res, next) => {
+  try {
+    const { password, currentPassword } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ error: '密码不能为空' });
+    }
+
+    if (password.length < 6) {
+      return res.status(400).json({ error: '密码长度至少为6位' });
+    }
+
+    const users = await query('SELECT password_hash, hidden_album_password_hash FROM users WHERE id = ?', [req.user.id]);
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const user = users[0];
+
+    // 如果已设置过密码，需要验证当前密码
+    if (user.hidden_album_password_hash) {
+      if (!currentPassword) {
+        return res.status(400).json({ error: '请输入当前隐藏相册密码' });
+      }
+      const isValid = await bcrypt.compare(currentPassword, user.hidden_album_password_hash);
+      if (!isValid) {
+        return res.status(401).json({ error: '当前密码错误' });
+      }
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    await query('UPDATE users SET hidden_album_password_hash = ? WHERE id = ?', [hash, req.user.id]);
+
+    res.json({ message: user.hidden_album_password_hash ? '密码修改成功' : '密码设置成功' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 移除隐藏相册密码
+router.delete('/hidden-password', authenticateToken, async (req, res, next) => {
+  try {
+    const { password } = req.body;
+
+    const users = await query('SELECT hidden_album_password_hash FROM users WHERE id = ?', [req.user.id]);
+
+    if (users.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    if (!users[0].hidden_album_password_hash) {
+      return res.status(400).json({ error: '未设置隐藏相册密码' });
+    }
+
+    // 验证密码
+    if (!password) {
+      return res.status(400).json({ error: '请输入隐藏相册密码以确认删除' });
+    }
+
+    const isValid = await bcrypt.compare(password, users[0].hidden_album_password_hash);
+    if (!isValid) {
+      return res.status(401).json({ error: '密码错误' });
+    }
+
+    await query('UPDATE users SET hidden_album_password_hash = NULL WHERE id = ?', [req.user.id]);
+
+    res.json({ message: '密码已移除' });
   } catch (err) {
     next(err);
   }

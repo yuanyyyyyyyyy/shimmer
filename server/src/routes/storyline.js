@@ -31,10 +31,10 @@ async function findStoryPhotos(date, decodedLocation, options = {}) {
   const nextYear = month === 12 ? year + 1 : year;
   const monthEnd = `${nextYear}-${String(nextMonth).padStart(2, '0')}-01`;
 
-  // 隐私过滤：匿名只看 public，登录用户可看自己的 private
+  // 隐私过滤：登录用户只看自己的 public 照片，匿名看不到任何照片
   const visibilityFilter = userId
-    ? `(visibility = 'public' OR (visibility = 'private' AND user_id = ?))`
-    : `visibility = 'public'`;
+    ? `user_id = ? AND visibility = 'public'`
+    : `1 = 0`;
   const params = userId ? [monthStart, monthEnd, userId] : [monthStart, monthEnd];
 
   const photos = await query(
@@ -58,10 +58,10 @@ router.get('/', optionalAuth, async (req, res, next) => {
     const { year, page = 1, limit = 20 } = req.query;
     const userId = req.user?.id || null;
 
-    // 构建基础查询条件：匿名只看 public，登录用户可看自己的 private
+    // 构建基础查询条件：登录用户只看自己的 public 照片，匿名看不到任何照片
     const visibilityFilter = userId
-      ? `(p.visibility = 'public' OR (p.visibility = 'private' AND p.user_id = ?))`
-      : `p.visibility = 'public'`;
+      ? `p.user_id = ? AND p.visibility = 'public'`
+      : `1 = 0`;
     let whereClause = `WHERE ${visibilityFilter} AND p.shot_date IS NOT NULL`;
     const params = userId ? [userId] : [];
 

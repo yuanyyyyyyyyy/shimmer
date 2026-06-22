@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query, getConnection } from '../config/database.js';
-import { authenticateToken, requireAdmin, optionalAuth } from '../middleware/auth.js';
+import { authenticateToken, requireAdmin, optionalAuth, verifyHiddenAlbum } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error.js';
 import { generatePhotoMetadata, rewriteSearchQuery } from '../services/ai.js';
 
@@ -17,7 +17,7 @@ const formatDate = (v) => {
   return null;
 };
 
-// 获取照片列表（公开接口，登录后可看自己的私密照片）
+// 获取照片列表（仅登录用户可见自己的 public 照片）
 router.get('/', optionalAuth, async (req, res, next) => {
   try {
     const { page = 1, limit = 12, sort = 'random', year, month, search, tag } = req.query;
@@ -45,10 +45,12 @@ router.get('/', optionalAuth, async (req, res, next) => {
     const params = [];
 
     if (userId) {
-      whereClause = 'WHERE (p.visibility = "public" OR (p.visibility = "private" AND p.user_id = ?))';
+      // 登录用户：只查看自己的 public 照片（private 需通过隐藏相册接口访问）
+      whereClause = 'WHERE p.user_id = ? AND p.visibility = "public"';
       params.push(userId);
     } else {
-      whereClause = 'WHERE p.visibility = "public"';
+      // 未登录：看不到任何照片
+      whereClause = 'WHERE 1 = 0';
     }
 
     // 搜索支持（标题、心情、地点的模糊搜索）
@@ -213,7 +215,59 @@ router.get('/admin/all', authenticateToken, async (req, res, next) => {
   }
 });
 
-// 获取单张照片详情（登录后可看自己的私密照片）
+// 获取隐藏相册照片（需要登录 + hidden_album_token）
+router.get('/hidden', authenticateToken, verifyHiddenAlbum, async (req, res, next) => {
+  try {
+    const { page = 1, limit = 20, sort = 'date' } = req.query;
+    const safeLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
+    const safeOffset = Math.max(0, (parseInt(page) - 1) * safeLimit);
+
+    let orderBy;
+    switch (sort) {
+      case 'date':
+        orderBy = 'shot_date DESC, created_at DESC';
+        break;
+      case 'created':
+        orderBy = 'created_at DESC';
+        break;
+      case 'manual':
+        orderBy = 'sort_order DESC, created_at DESC';
+        break;
+      default:
+        orderBy = 'shot_date DESC, created_at DESC';
+    }
+
+    const photos = await query(
+      `SELECT id, title, url, thumbnail_url, original_url, mood, shot_date, location,
+              camera, lens, aperture, shutter_speed, iso,
+              width, height, file_size, sort_order, visibility, created_at
+       FROM photos
+       WHERE user_id = ? AND visibility = 'private'
+       ORDER BY ${orderBy}
+       LIMIT ${safeLimit} OFFSET ${safeOffset}`,
+      [req.user.id]
+    );
+
+    const countResult = await query(
+      'SELECT COUNT(*) as total FROM photos WHERE user_id = ? AND visibility = "private"',
+      [req.user.id]
+    );
+
+    res.json({
+      photos,
+      pagination: {
+        page: parseInt(page),
+        limit: safeLimit,
+        total: countResult[0].total,
+        totalPages: Math.ceil(countResult[0].total / safeLimit)
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 获取单张照片详情（登录用户可查看自己的所有照片）
 router.get('/:id', optionalAuth, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -223,10 +277,12 @@ router.get('/:id', optionalAuth, async (req, res, next) => {
     const params = [id];
 
     if (userId) {
-      visibilityFilter = `AND (p.visibility = 'public' OR (p.visibility = 'private' AND p.user_id = ?))`;
+      // 登录用户：可查看自己的所有照片
+      visibilityFilter = `AND p.user_id = ?`;
       params.push(userId);
     } else {
-      visibilityFilter = `AND p.visibility = 'public'`;
+      // 未登录：看不到任何照片
+      visibilityFilter = `AND 1 = 0`;
     }
 
     const photos = await query(
@@ -299,7 +355,7 @@ router.get('/my/list', authenticateToken, async (req, res, next) => {
   }
 });
 
-// 获取随机照片（用于暗房手电筒效果，登录后可看自己的私密照片）
+// 获取随机照片（用于暗房手电筒效果，仅 public 照片）
 router.get('/random/diary', optionalAuth, async (req, res, next) => {
   try {
     const userId = req.user ? req.user.id : null;
@@ -307,10 +363,12 @@ router.get('/random/diary', optionalAuth, async (req, res, next) => {
     const params = [];
 
     if (userId) {
-      whereClause = `(visibility = 'public' OR (visibility = 'private' AND user_id = ?))`;
+      // 登录用户：随机选自己的 public 照片
+      whereClause = `user_id = ? AND visibility = 'public'`;
       params.push(userId);
     } else {
-      whereClause = `visibility = 'public'`;
+      // 未登录：看不到任何照片
+      whereClause = `1 = 0`;
     }
 
     // 只要上传成功就显示，不要求必须填写mood等信息
@@ -332,7 +390,7 @@ router.get('/random/diary', optionalAuth, async (req, res, next) => {
   }
 });
 
-// 获取照片统计数据（时间轴，登录后可看自己的私密照片统计）
+// 获取照片统计数据（时间轴，仅统计 public 照片）
 router.get('/stats/timeline', optionalAuth, async (req, res, next) => {
   try {
     const userId = req.user ? req.user.id : null;
@@ -340,10 +398,12 @@ router.get('/stats/timeline', optionalAuth, async (req, res, next) => {
     const params = [];
 
     if (userId) {
-      whereClause = `(visibility = 'public' OR (visibility = 'private' AND user_id = ?))`;
+      // 登录用户：统计自己的 public 照片
+      whereClause = `(user_id = ? AND visibility = 'public')`;
       params.push(userId);
     } else {
-      whereClause = `visibility = 'public'`;
+      // 未登录：看不到任何照片
+      whereClause = `1 = 0`;
     }
 
     const stats = await query(
@@ -370,7 +430,7 @@ router.post('/', authenticateToken, async (req, res, next) => {
       mood: rawMood, shot_date, location,
       camera, lens, aperture, shutter_speed, iso,
       width, height,
-      file_size, sort_order, visibility = 'public',
+      file_size, sort_order, visibility = 'private',
       latitude, longitude,
       ai_tags: requestedAiTags = []
     } = req.body;
@@ -475,8 +535,8 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
     // 将 undefined 和空字符串转换为 null
     const toNull = (v) => (v === undefined || v === '' ? null : v);
 
-    // 普通用户不能设置 visibility，除非是管理员
-    const visibilityValue = isAdmin ? toNull(visibility) : null;
+    // 所有用户可自由切换 visibility (public/private)
+    const visibilityValue = toNull(visibility);
 
 
     await query(

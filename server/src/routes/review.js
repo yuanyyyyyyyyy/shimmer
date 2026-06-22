@@ -8,13 +8,15 @@ const router = Router();
 // 构建可见性过滤条件
 function buildVisibilityFilter(userId) {
   if (userId) {
+    // 登录用户：查看自己的 public 照片
     return {
-      where: `(p.visibility = 'public' OR (p.visibility = 'private' AND p.user_id = ?))`,
+      where: `p.user_id = ? AND p.visibility = 'public'`,
       params: [userId]
     };
   }
+  // 未登录：看不到任何照片
   return {
-    where: `p.visibility = 'public'`,
+    where: `1 = 0`,
     params: []
   };
 }
