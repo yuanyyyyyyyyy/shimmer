@@ -153,8 +153,24 @@ watch(() => authStore.token, async () => {
       </div>
 
       <div v-else-if="!loading && stories.length === 0" class="empty-state">
-        <p>{{ selectedYear ? `${selectedYear} 年还没有故事` : '还没有任何故事' }}</p>
-        <router-link to="/" class="link-btn">去上传一些照片吧</router-link>
+        <div class="empty-visual">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="16" y1="13" x2="8" y2="13"/>
+            <line x1="16" y1="17" x2="8" y2="17"/>
+            <polyline points="10 9 9 9 8 9"/>
+          </svg>
+        </div>
+        <p class="empty-title">{{ selectedYear ? `${selectedYear} 年还没有故事` : '还没有任何故事' }}</p>
+        <p class="empty-desc">用照片记录的每一个地点，都会成为你的故事</p>
+        <router-link to="/admin" class="empty-action">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <line x1="12" y1="5" x2="12" y2="19"/>
+            <line x1="5" y1="12" x2="19" y2="12"/>
+          </svg>
+          上传照片
+        </router-link>
       </div>
 
       <template v-else>
@@ -458,6 +474,52 @@ watch(() => authStore.token, async () => {
   font-size: 0.92rem;
 }
 .link-btn:hover { text-decoration: underline; }
+
+/* Empty state */
+.empty-visual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: var(--n-100, #f5f5f5);
+  color: var(--text-tertiary);
+  margin-bottom: 0.5rem;
+}
+
+.empty-title {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--text-primary, #1a1a1a);
+  margin: 0 0 0.375rem;
+}
+
+.empty-desc {
+  font-size: 0.875rem;
+  color: var(--text-tertiary);
+  margin: 0 0 1.5rem;
+}
+
+.empty-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: #000;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.empty-action:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
 
 .empty-state button {
   margin-top: 14px;

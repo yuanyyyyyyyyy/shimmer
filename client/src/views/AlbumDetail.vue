@@ -513,10 +513,9 @@ onMounted(() => {
 
               <!-- 搜索结果 -->
               <div v-if="searchResults.length > 0" class="picker-grid">
-                <button
+                <div
                   v-for="photo in searchResults"
                   :key="photo.id"
-                  type="button"
                   class="pick-card"
                   :class="{ picked: selectedPhotos.has(photo.id) }"
                   @click="toggleSelectPhoto(photo.id)"
@@ -539,7 +538,7 @@ onMounted(() => {
                       <line x1="21" y1="21" x2="16.65" y2="16.65"/>
                     </svg>
                   </button>
-                </button>
+                </div>
               </div>
 
               <!-- 搜索中 -->
