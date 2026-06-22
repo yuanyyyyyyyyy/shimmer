@@ -23,10 +23,20 @@ const editForm = ref({
   is_public: true
 })
 
+// 封面选择器
+const coverPickerVisible = ref(false)
+const selectedCoverId = ref(null)
+
 // 添加照片相关
 const searchQuery = ref('')
 const searchResults = ref([])
 const selectedPhotos = ref(new Set())
+const searchLoading = ref(false)
+let debounceTimer = null
+
+// 照片预览
+const showPreviewModal = ref(false)
+const previewPhoto = ref(null)
 
 // Lightbox
 const lightboxVisible = ref(false)
@@ -81,21 +91,79 @@ const deleteAlbum = async () => {
   }
 }
 
-// 搜索照片
+// 搜索照片（带防抖）
 const searchPhotos = async () => {
+  if (debounceTimer) clearTimeout(debounceTimer)
+
   if (!searchQuery.value.trim()) {
     searchResults.value = []
+    searchLoading.value = false
     return
   }
 
+  searchLoading.value = true
+  debounceTimer = setTimeout(async () => {
+    try {
+      const res = await photos.list({
+        search: searchQuery.value,
+        limit: 50
+      })
+      searchResults.value = res.data || []
+    } catch (err) {
+      error('搜索失败')
+    } finally {
+      searchLoading.value = false
+    }
+  }, 300)
+}
+
+// 切换封面选择器
+const toggleCoverPicker = () => {
+  coverPickerVisible.value = !coverPickerVisible.value
+  if (coverPickerVisible.value) {
+    selectedCoverId.value = album.value?.cover_id || null
+  }
+}
+
+// 选择封面照片
+const selectCover = async (photoId) => {
   try {
-    const res = await photos.list({
-      search: searchQuery.value,
-      limit: 50
-    })
-    searchResults.value = res.data || []
+    await albums.setCover(album.value.id, photoId)
+    album.value.cover_id = photoId
+    const photo = photoList.value.find(p => p.id === photoId)
+    if (photo) {
+      album.value.cover_url = photo.url
+    }
+    selectedCoverId.value = photoId
+    success('封面已更新')
+    coverPickerVisible.value = false
   } catch (err) {
-    error('搜索失败')
+    error(err.message || '设置封面失败')
+  }
+}
+
+// 打开照片预览
+const openPreview = (photo, event) => {
+  if (event) event.stopPropagation()
+  previewPhoto.value = photo
+  showPreviewModal.value = true
+}
+
+// 关闭预览
+const closePreview = () => {
+  showPreviewModal.value = false
+  previewPhoto.value = null
+}
+
+// 从预览添加到相册
+const addPhotoFromPreview = async (photoId) => {
+  try {
+    await albums.addPhoto(album.value.id, photoId)
+    success('照片已添加到相册')
+    closePreview()
+    loadAlbum()
+  } catch (err) {
+    error(err.message || '添加失败')
   }
 }
 
@@ -341,14 +409,62 @@ onMounted(() => {
                 </svg>
               </button>
             </header>
+
+            <!-- 封面预览/更换 -->
+            <div class="cover-section">
+              <div class="cover-preview" :class="{ 'no-cover': !album?.cover_url }">
+                <img v-if="album?.cover_url" :src="album.cover_url" alt="封面预览">
+                <div v-else class="cover-placeholder">
+                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  <span>暂无封面</span>
+                </div>
+              </div>
+              <button type="button" class="btn-cover-change" @click="toggleCoverPicker">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+                {{ coverPickerVisible ? '收起' : '更换封面' }}
+              </button>
+
+              <!-- 封面选择器 -->
+              <div v-if="coverPickerVisible" class="cover-picker">
+                <div v-if="photoList.length === 0" class="cover-picker-empty">
+                  相册内暂无照片
+                </div>
+                <div v-else class="cover-picker-grid">
+                  <button
+                    v-for="photo in photoList"
+                    :key="photo.id"
+                    type="button"
+                    class="cover-pick-card"
+                    :class="{ active: selectedCoverId === photo.id }"
+                    @click="selectCover(photo.id)"
+                  >
+                    <img :src="photo.thumbnail_url || photo.url" :alt="photo.title" loading="lazy">
+                    <span v-if="selectedCoverId === photo.id" class="cover-pick-check">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
             <form @submit.prevent="updateAlbum">
               <div class="field">
                 <label for="edit-title">名称</label>
-                <input id="edit-title" v-model="editForm.title" type="text" required maxlength="100">
+                <input id="edit-title" v-model="editForm.title" type="text" required maxlength="100" placeholder="相册名称">
               </div>
               <div class="field">
                 <label for="edit-desc">描述</label>
-                <textarea id="edit-desc" v-model="editForm.description" rows="3"></textarea>
+                <textarea id="edit-desc" v-model="editForm.description" rows="3" placeholder="为相册添加描述（可选）"></textarea>
               </div>
               <div class="field field-checkbox">
                 <label class="toggle-label">
@@ -392,6 +508,7 @@ onMounted(() => {
                   @input="searchPhotos"
                   autocomplete="off"
                 >
+                <div v-if="searchLoading" class="search-spinner"></div>
               </div>
 
               <!-- 搜索结果 -->
@@ -411,14 +528,41 @@ onMounted(() => {
                     </svg>
                   </span>
                   <span class="pick-name">{{ photo.title }}</span>
+                  <button
+                    type="button"
+                    class="pick-preview-btn"
+                    title="预览"
+                    @click.stop="openPreview(photo, $event)"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <circle cx="11" cy="11" r="8"/>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                  </button>
                 </button>
+              </div>
+
+              <!-- 搜索中 -->
+              <div v-else-if="searchLoading" class="picker-loading">
+                <div class="picker-spinner"></div>
+                <span>搜索中...</span>
               </div>
 
               <!-- 空结果 / 提示 -->
               <div v-else-if="searchQuery" class="picker-empty">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  <line x1="8" y1="8" x2="14" y2="14"/>
+                  <line x1="14" y1="8" x2="8" y2="14"/>
+                </svg>
                 没有找到匹配的照片
               </div>
               <div v-else class="picker-hint">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <circle cx="11" cy="11" r="8"/>
+                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                </svg>
                 输入关键词搜索要添加的照片
               </div>
             </div>
@@ -433,6 +577,40 @@ onMounted(() => {
                 添加{{ selectedPhotos.size > 0 ? ` (${selectedPhotos.size})` : '' }}
               </button>
             </footer>
+          </div>
+        </div>
+      </Teleport>
+
+      <!-- 照片预览弹窗 -->
+      <Teleport to="body">
+        <div v-if="showPreviewModal && previewPhoto" class="modal-backdrop preview-backdrop" @click.self="closePreview">
+          <div class="preview-panel">
+            <button class="preview-close" @click="closePreview" aria-label="关闭预览">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18"/>
+                <line x1="6" y1="6" x2="18" y2="18"/>
+              </svg>
+            </button>
+            <div class="preview-image-wrap">
+              <img :src="previewPhoto.url" :alt="previewPhoto.title">
+            </div>
+            <div class="preview-info">
+              <h3 class="preview-title">{{ previewPhoto.title }}</h3>
+              <p v-if="previewPhoto.taken_at" class="preview-date">
+                {{ new Date(previewPhoto.taken_at).toLocaleDateString() }}
+              </p>
+              <button
+                v-if="canEdit()"
+                class="btn-primary preview-add-btn"
+                @click="addPhotoFromPreview(previewPhoto.id)"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19"/>
+                  <line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+                添加到相册
+              </button>
+            </div>
           </div>
         </div>
       </Teleport>
@@ -570,6 +748,35 @@ onMounted(() => {
 ::global(.dark) .modal-header .btn-icon:hover {
   color: #e4e4e7;
   background: oklch(24% 0.008 250);
+}
+
+/* Dark mode - cover section overrides */
+:global(.dark) .btn-cover-change {
+  border-color: oklch(30% 0.01 250);
+  color: #a1a1aa;
+}
+
+:global(.dark) .btn-cover-change:hover {
+  border-color: var(--color-accent);
+  color: #d4d4d8;
+  background: oklch(24% 0.04 230);
+}
+
+:global(.dark) .cover-picker {
+  border-color: oklch(25% 0.01 250);
+}
+
+:global(.dark) .cover-pick-card.active {
+  box-shadow: 0 0 0 2px oklch(25% 0.06 var(--color-accent));
+}
+
+/* Dark mode - preview button overrides */
+::global(.dark) .pick-preview-btn {
+  background: oklch(80% 0.01 250 / 0.7);
+}
+
+::global(.dark) .pick-preview-btn:hover {
+  background: oklch(80% 0.01 250 / 0.9);
 }
 
 /* ========== Loading ========== */
@@ -1022,6 +1229,142 @@ onMounted(() => {
   margin: 0;
 }
 
+/* ========== Cover Section (Edit Modal) ========== */
+.cover-section {
+  padding: 1rem 1.5rem 0;
+}
+
+.cover-preview {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--color-no-cover);
+  margin-bottom: 0.75rem;
+}
+
+.cover-preview img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-preview.no-cover {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cover-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--color-faint);
+  font-size: 0.8125rem;
+}
+
+.cover-placeholder svg {
+  opacity: 0.5;
+}
+
+.btn-cover-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: transparent;
+  border: 1px solid var(--color-border);
+  padding: 0.5rem 0.875rem;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  color: var(--color-muted);
+  transition: all 0.2s cubic-bezier(0.33, 1, 0.68, 1);
+  margin-bottom: 0.75rem;
+}
+
+.btn-cover-change:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: oklch(96% 0.04 230);
+}
+
+/* Cover picker */
+.cover-picker {
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 10px;
+  overflow: hidden;
+  animation: slideUp 0.2s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.cover-picker-empty {
+  padding: 2rem;
+  text-align: center;
+  font-size: 0.8125rem;
+  color: var(--color-faint);
+}
+
+.cover-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 0.5rem;
+  padding: 0.75rem;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.cover-pick-card {
+  position: relative;
+  display: block;
+  border: 2px solid transparent;
+  border-radius: 8px;
+  overflow: hidden;
+  cursor: pointer;
+  padding: 0;
+  background: transparent;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+  aspect-ratio: 1;
+}
+
+.cover-pick-card:hover {
+  transform: scale(1.05);
+}
+
+.cover-pick-card.active {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px oklch(90% 0.06 var(--color-accent));
+}
+
+.cover-pick-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.cover-pick-check {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent);
+  color: #fff;
+  border-radius: 50%;
+  animation: scaleIn 0.15s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+@keyframes scaleIn {
+  from { transform: scale(0.5); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+
 .modal-panel form {
   padding: 1.25rem 1.5rem 1.5rem;
   flex-shrink: 0;
@@ -1252,6 +1595,74 @@ onMounted(() => {
   background: var(--color-surface);
 }
 
+/* Pick preview button */
+.pick-preview-btn {
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%) scale(0.8);
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: oklch(15% 0 0 / 0.7);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.2s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.pick-card:hover .pick-preview-btn {
+  opacity: 1;
+  transform: translateX(-50%) scale(1);
+}
+
+.pick-preview-btn:hover {
+  background: oklch(15% 0 0 / 0.9);
+  transform: translateX(-50%) scale(1.1);
+}
+
+/* Search loading spinner */
+.search-spinner {
+  position: absolute;
+  right: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+/* Picker loading state */
+.picker-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1rem;
+  gap: 0.75rem;
+  color: var(--color-faint);
+  font-size: 0.875rem;
+  flex: 1;
+}
+
+.picker-spinner {
+  width: 28px;
+  height: 28px;
+  border: 2.5px solid var(--color-border);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
 .picker-empty,
 .picker-hint {
   text-align: center;
@@ -1260,8 +1671,117 @@ onMounted(() => {
   color: var(--color-faint);
   flex: 1;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
+  gap: 0.75rem;
+}
+
+.picker-empty svg,
+.picker-hint svg {
+  opacity: 0.4;
+}
+
+/* ========== Photo Preview Modal ========== */
+.preview-backdrop {
+  z-index: 10000;
+}
+
+.preview-panel {
+  position: relative;
+  width: 90vw;
+  max-width: 800px;
+  max-height: 90vh;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 24px 80px oklch(0% 0 0 / 0.25);
+  overflow: hidden;
+  animation: slideUp 0.25s cubic-bezier(0.33, 1, 0.68, 1);
+  display: flex;
+  flex-direction: column;
+}
+
+.preview-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: oklch(15% 0 0 / 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  z-index: 10;
+  transition: all 0.15s ease;
+}
+
+.preview-close:hover {
+  background: oklch(15% 0 0 / 0.85);
+  transform: scale(1.08);
+}
+
+.preview-image-wrap {
+  width: 100%;
+  max-height: 65vh;
+  overflow: hidden;
+  background: oklch(96% 0.005 250);
+}
+
+.preview-image-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+.preview-info {
+  padding: 1.25rem 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+
+.preview-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.preview-date {
+  font-size: 0.8125rem;
+  color: var(--color-faint);
+  margin: 0;
+  white-space: nowrap;
+}
+
+.preview-add-btn {
+  flex-shrink: 0;
+}
+
+/* Dark mode - preview overrides */
+:global(.dark) .preview-panel {
+  background: oklch(16% 0.008 250);
+}
+
+:global(.dark) .preview-image-wrap {
+  background: oklch(12% 0.008 250);
+}
+
+:global(.dark) .preview-title {
+  color: #e4e4e7;
 }
 
 /* ========== Responsive ========== */
@@ -1285,6 +1805,27 @@ onMounted(() => {
   .picker-grid {
     grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
     max-height: 300px;
+  }
+
+  .cover-picker-grid {
+    grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
+    max-height: 150px;
+  }
+
+  .preview-panel {
+    width: 95vw;
+    max-height: 85vh;
+  }
+
+  .preview-info {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .preview-add-btn {
+    width: 100%;
+    justify-content: center;
   }
 }
 </style>
