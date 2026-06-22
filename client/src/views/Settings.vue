@@ -698,8 +698,23 @@ function handleProviderChange(newProvider) {
           <p class="settings-description">管理隐藏相册的访问密码。设置密码后，进入隐藏相册需要输入密码验证。</p>
 
           <div v-if="!hasHiddenPassword && !showSetPassword">
-            <p class="password-status">当前状态：未设置密码</p>
-            <button type="button" class="btn-outline" @click="showSetPassword = true">设置密码</button>
+            <div class="password-empty-state">
+              <div class="password-empty-icon">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <p class="password-empty-title">未设置密码</p>
+              <p class="password-empty-desc">设置密码后，进入隐藏相册需要输入密码验证</p>
+              <button type="button" class="btn-set-password" @click="showSetPassword = true">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+                设置密码
+              </button>
+            </div>
           </div>
 
           <div v-if="hasHiddenPassword && !showChangePassword && !showRemovePassword">
@@ -1098,6 +1113,62 @@ function handleProviderChange(newProvider) {
 .password-status {
   color: var(--text-secondary);
   margin-bottom: 12px;
+}
+
+.password-empty-state {
+  text-align: center;
+  padding: 2rem 1rem;
+}
+
+.password-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  background: var(--bg-color);
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+}
+
+.password-empty-title {
+  font-size: 1rem;
+  font-weight: 500;
+  color: var(--text-color);
+  margin: 0 0 0.375rem;
+}
+
+.password-empty-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0 0 1.25rem;
+}
+
+.btn-set-password {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: var(--secondary-color);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.btn-set-password:hover {
+  opacity: 0.88;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 149, 160, 0.3);
+}
+
+.btn-set-password:active {
+  transform: translateY(0);
 }
 
 .password-action-list {

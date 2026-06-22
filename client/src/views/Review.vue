@@ -191,8 +191,22 @@ watch(() => authStore.token, async () => {
 
     <!-- 空状态 -->
     <div v-else-if="!reviewData || reviewData.totalPhotos === 0" class="empty-block">
-      <p>📷 {{ selectedYear }} 年还没有照片</p>
-      <router-link to="/">去上传一些照片吧</router-link>
+      <div class="empty-visual">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <circle cx="8.5" cy="8.5" r="1.5"/>
+          <polyline points="21 15 16 10 5 21"/>
+        </svg>
+      </div>
+      <p class="empty-title">{{ selectedYear }} 年还没有记录</p>
+      <p class="empty-desc">这一年似乎很安静，用镜头留住下一个瞬间吧</p>
+      <router-link to="/" class="empty-action">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
+        </svg>
+        上传照片
+      </router-link>
     </div>
 
     <!-- 报告内容 -->
@@ -391,13 +405,55 @@ watch(() => authStore.token, async () => {
   animation: spin 0.75s linear infinite; margin: 0 auto 18px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
-.empty-block a, .error-block button {
-  display: inline-block; margin-top: 14px; color: #000;
-  text-decoration: none; font-weight: 500;
-}
 .error-block button {
   background: #000; color: #fff; padding: 8px 24px;
   border-radius: 20px; border: none; cursor: pointer;
+}
+
+/* Empty state */
+.empty-visual {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 80px;
+  height: 80px;
+  border-radius: 20px;
+  background: var(--bg-color, #f5f5f5);
+  color: var(--text-t);
+  margin-bottom: 0.5rem;
+}
+
+.empty-title {
+  font-size: 1.05rem;
+  font-weight: 500;
+  color: var(--text-p);
+  margin: 0 0 0.375rem;
+}
+
+.empty-desc {
+  font-size: 0.875rem;
+  color: var(--text-t);
+  margin: 0 0 1.5rem;
+}
+
+.empty-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  background: #000;
+  color: #fff;
+  text-decoration: none;
+  border-radius: 20px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s cubic-bezier(0.33, 1, 0.68, 1);
+}
+
+.empty-action:hover {
+  opacity: 0.85;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
 }
 
 /* ====== Block 1: Hero 照片背景 ====== */
