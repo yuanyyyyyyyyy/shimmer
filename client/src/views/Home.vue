@@ -62,7 +62,9 @@ const loadStats = async () => {
   try {
     const res = await statsApi.get()
     stats.value = res
-  } catch (e) {}
+  } catch (e) {
+    stats.value = { photos: 0, stories: 0, albums: 0, days: 0 }
+  }
 }
 
 const loadPopularTags = async () => {
