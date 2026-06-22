@@ -2,12 +2,33 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores'
-import { ai, users } from '../api'
+import { ai, users, auth } from '../api'
 import { success, error } from '../composables/useToast'
 
 const router = useRouter()
 const authStore = useAuthStore()
 
+// ========== Tab ==========
+const activeTab = ref('profile')
+
+const tabs = [
+  { key: 'profile', label: '个人资料', icon: 'user' },
+  { key: 'security', label: '账户安全', icon: 'shield' },
+  { key: 'ai', label: 'AI 设置', icon: 'cpu' },
+  { key: 'hidden', label: '隐藏相册', icon: 'lock' }
+]
+
+// ========== 个人资料 ==========
+const profileForm = ref({ nickname: '', bio: '' })
+const profileLoading = ref(false)
+
+// ========== 账户安全 ==========
+const accountPasswordForm = ref({ oldPassword: '', newPassword: '', confirmPassword: '' })
+const accountPasswordLoading = ref(false)
+const accountPasswordError = ref('')
+const accountPasswordSuccess = ref('')
+
+// ========== AI 预设管理 ==========
 const presets = ref([])
 const currentPresetId = ref(null)
 const aiForm = ref({ enabled: false, provider: '', model: '', base_url: '', api_key: '' })
@@ -21,7 +42,7 @@ const newPresetName = ref('')
 
 const confirmDialog = ref(null)
 
-// 隐藏相册密码管理
+// ========== 隐藏相册密码管理 ==========
 const hasHiddenPassword = ref(false)
 const hiddenPasswordForm = ref({
   newPassword: '',
@@ -33,6 +54,7 @@ const showSetPassword = ref(false)
 const showChangePassword = ref(false)
 const showRemovePassword = ref(false)
 
+// ========== AI Computed ==========
 const isDirty = computed(() => {
   if (!cleanForm.value) return false
   const c = cleanForm.value
@@ -89,15 +111,71 @@ const currentPresetName = computed(() => {
   return preset ? preset.name : '未选择预设'
 })
 
+// ========== Init ==========
 onMounted(async () => {
   if (!authStore.isLoggedIn) {
     router.push('/login')
     return
   }
   await authStore.fetchUser()
+  loadProfile()
   await Promise.all([loadPresets(), checkHiddenPasswordStatus()])
 })
 
+// ========== 个人资料方法 ==========
+function loadProfile() {
+  if (authStore.user) {
+    profileForm.value = {
+      nickname: authStore.user.nickname || '',
+      bio: authStore.user.bio || ''
+    }
+  }
+}
+
+async function saveProfile() {
+  profileLoading.value = true
+  try {
+    const res = await users.updateProfile(profileForm.value)
+    authStore.user = { ...authStore.user, ...res.user }
+    success('个人资料已更新')
+  } catch (e) {
+    error(e.response?.data?.error || '保存失败')
+  } finally {
+    profileLoading.value = false
+  }
+}
+
+// ========== 账户安全方法 ==========
+async function changeAccountPassword() {
+  accountPasswordError.value = ''
+  accountPasswordSuccess.value = ''
+
+  if (!accountPasswordForm.value.oldPassword || !accountPasswordForm.value.newPassword) {
+    accountPasswordError.value = '请填写旧密码和新密码'
+    return
+  }
+  if (accountPasswordForm.value.newPassword.length < 6) {
+    accountPasswordError.value = '新密码长度至少为6位'
+    return
+  }
+  if (accountPasswordForm.value.newPassword !== accountPasswordForm.value.confirmPassword) {
+    accountPasswordError.value = '两次输入的新密码不一致'
+    return
+  }
+
+  accountPasswordLoading.value = true
+  try {
+    await auth.changePassword(accountPasswordForm.value.oldPassword, accountPasswordForm.value.newPassword)
+    accountPasswordSuccess.value = '密码修改成功'
+    accountPasswordForm.value = { oldPassword: '', newPassword: '', confirmPassword: '' }
+  } catch (e) {
+    accountPasswordError.value = e.response?.data?.error || '密码修改失败'
+  } finally {
+    accountPasswordLoading.value = false
+  }
+}
+
+// ========== AI 方法 ==========
 async function loadPresets() {
   try {
     const res = await ai.getPresets()
@@ -207,8 +285,7 @@ async function testAiConnection() {
   }
 }
 
-// ========== 隐藏相册密码管理 ==========
-
+// ========== 隐藏相册密码方法 ==========
 async function checkHiddenPasswordStatus() {
   try {
     const res = await users.getHiddenPasswordStatus()
@@ -377,201 +454,344 @@ function handleProviderChange(newProvider) {
         <button class="back-btn" @click="router.push('/admin')">返回管理后台</button>
       </div>
 
-      <div class="ai-settings-card">
-        <h3>预设管理</h3>
-        <p class="settings-description">管理多组 AI 配置，可随时切换不同的提供商、模型和密钥。</p>
+      <!-- Tab 栏 -->
+      <nav class="settings-tabs">
+        <button
+          v-for="tab in tabs"
+          :key="tab.key"
+          class="tab-item"
+          :class="{ active: activeTab === tab.key }"
+          @click="activeTab = tab.key"
+        >
+          <!-- 个人资料 -->
+          <svg v-if="tab.icon === 'user'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+          </svg>
+          <!-- 账户安全 -->
+          <svg v-if="tab.icon === 'shield'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+          </svg>
+          <!-- AI 设置 -->
+          <svg v-if="tab.icon === 'cpu'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="4" y="4" width="16" height="16" rx="2" ry="2"/>
+            <rect x="9" y="9" width="6" height="6"/>
+            <line x1="9" y1="1" x2="9" y2="4"/>
+            <line x1="15" y1="1" x2="15" y2="4"/>
+            <line x1="9" y1="20" x2="9" y2="23"/>
+            <line x1="15" y1="20" x2="15" y2="23"/>
+            <line x1="20" y1="9" x2="23" y2="9"/>
+            <line x1="20" y1="14" x2="23" y2="14"/>
+            <line x1="1" y1="9" x2="4" y2="9"/>
+            <line x1="1" y1="14" x2="4" y2="14"/>
+          </svg>
+          <!-- 隐藏相册 -->
+          <svg v-if="tab.icon === 'lock'" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+          </svg>
+          {{ tab.label }}
+        </button>
+      </nav>
 
-        <div class="preset-list">
-          <div
-            v-for="preset in presets"
-            :key="preset.id"
-            class="preset-item"
-            :class="{
-              active: preset.is_active,
-              selected: preset.id === currentPresetId && !preset.is_active
-            }"
-            @click="selectPreset(preset)"
-          >
-            <span class="preset-indicator">{{ preset.is_active ? '◉' : '○' }}</span>
-            <div class="preset-info">
-              <span class="preset-name">{{ preset.name }}</span>
-              <span class="preset-summary">{{ preset.provider || '未配置' }} · {{ preset.model || '默认模型' }}</span>
-              <span v-if="preset.is_active" class="preset-badge">当前</span>
+      <!-- ========== 个人资料 Tab ========== -->
+      <div v-if="activeTab === 'profile'" class="tab-content">
+        <div class="settings-card">
+          <h3>个人资料</h3>
+          <p class="settings-description">管理你的个人信息。</p>
+
+          <div class="profile-avatar-section">
+            <div class="profile-avatar">
+              <img v-if="authStore.user?.avatar" :src="authStore.user.avatar" :alt="authStore.user.nickname">
+              <span v-else class="avatar-placeholder">
+                {{ (authStore.user?.nickname || authStore.user?.username || '?').charAt(0).toUpperCase() }}
+              </span>
             </div>
-            <div class="preset-actions">
-              <button
-                v-if="!preset.is_active"
-                class="action-btn switch-btn"
-                title="设为当前配置"
-                @click.stop="activatePreset(preset)"
-              >切换</button>
-              <button
-                class="action-btn delete-btn"
-                title="删除预设"
-                @click.stop="deletePreset(preset)"
-              >删除</button>
+            <div class="profile-meta">
+              <span class="profile-username">@{{ authStore.user?.username }}</span>
             </div>
           </div>
-          <div class="preset-item add-new" @click="openNewPresetDialog">
-            <span class="add-icon">+</span>
-            <span>另存当前配置为新预设</span>
+
+          <div class="profile-form">
+            <label class="field">
+              <span>昵称</span>
+              <input v-model="profileForm.nickname" type="text" placeholder="显示名称" maxlength="50">
+            </label>
+            <label class="field">
+              <span>个人简介</span>
+              <textarea v-model="profileForm.bio" placeholder="介绍一下自己吧..." maxlength="200" rows="3"></textarea>
+            </label>
+            <div class="form-actions">
+              <button type="button" @click="saveProfile" :disabled="profileLoading">
+                {{ profileLoading ? '保存中...' : '保存' }}
+              </button>
+            </div>
           </div>
-        </div>
-
-        <h3>配置参数</h3>
-        <p class="settings-description">
-          当前编辑：<strong>{{ currentPresetName }}</strong>
-          <span v-if="isDirty" class="dirty-tag">有未保存的更改</span>
-        </p>
-
-        <div class="ai-settings-grid">
-          <label>
-            <span>是否启用 AI</span>
-            <input type="checkbox" v-model="aiForm.enabled" />
-          </label>
-          <label>
-            <span>AI 提供商</span>
-            <select v-model="aiForm.provider" @change="handleProviderChange(aiForm.provider)">
-              <option value="">请选择提供商</option>
-              <optgroup label="本地部署">
-                <option value="ollama">Ollama (本地)</option>
-              </optgroup>
-              <optgroup label="国外主流厂商">
-                <option value="openai">OpenAI (GPT-4o/4-Turbo)</option>
-                <option value="anthropic">Anthropic (Claude 3.5 Sonnet/Opus)</option>
-                <option value="google">Google (Gemini 2.0/2.5 Pro)</option>
-                <option value="azure">Azure OpenAI</option>
-                <option value="mistral">Mistral AI (Mistral Large)</option>
-                <option value="groq">Groq (超高速推理)</option>
-                <option value="openrouter">OpenRouter (多模型网关)</option>
-              </optgroup>
-              <optgroup label="国内主流厂商">
-                <option value="deepseek">DeepSeek (V3/R1 推理)</option>
-                <option value="zhipu">智谱 AI (GLM-4)</option>
-                <option value="moonshot">月之暗面 (Kimi/Moonshot)</option>
-                <option value="qwen">通义千问 (Qwen)</option>
-                <option value="ernie">百度文心一言 (ERNIE 4.0)</option>
-              </optgroup>
-              <optgroup label="自定义">
-                <option value="custom">自定义 / OpenAI 兼容 API</option>
-              </optgroup>
-            </select>
-          </label>
-          <div class="provider-hint" v-if="currentProvider && currentProvider.desc">
-            <span class="hint-icon">💡</span>
-            {{ currentProvider.desc }}{{ currentProvider.needKey ? ' · 需要 API Key' : ' · 无需 API Key' }}
-          </div>
-          <label>
-            <span>模型名称</span>
-            <input type="text" v-model="aiForm.model" :placeholder="modelPlaceholder" />
-          </label>
-          <div class="provider-models" v-if="currentProvider && currentProvider.models">
-            推荐模型：{{ currentProvider.models }}
-          </div>
-          <label>
-            <span>Base URL</span>
-            <input type="text" v-model="aiForm.base_url" :placeholder="baseUrlPlaceholder" />
-          </label>
-          <label>
-            <span>API Key</span>
-            <input type="password" v-model="aiForm.api_key" :placeholder="apiKeyPlaceholder" />
-          </label>
-        </div>
-
-        <div class="ai-settings-actions">
-          <button type="button" @click="saveCurrentPreset" :disabled="aiSaveLoading || !currentPresetId">
-            {{ aiSaveLoading ? '保存中...' : '保存更改' }}
-          </button>
-          <button type="button" class="btn-outline" @click="openNewPresetDialog" :disabled="aiSaveLoading">
-            另存为新预设
-          </button>
-          <button type="button" class="btn-outline btn-test" @click="testAiConnection" :disabled="aiTestLoading">
-            {{ aiTestLoading ? '测试中...' : '测试连接' }}
-          </button>
-        </div>
-
-        <div class="ai-status" v-if="formActivePresetId">
-          <span class="status-dot active"></span>
-          <span v-if="presets.find(p => p.is_active)">
-            当前使用：<strong>{{ presets.find(p => p.is_active).name }}</strong>
-            ({{ presets.find(p => p.is_active).provider || '未知' }} / {{ presets.find(p => p.is_active).model || '默认模型' }})
-          </span>
-        </div>
-        <div class="ai-status" v-else>
-          <span class="status-dot inactive"></span>
-          当前状态：未启用
         </div>
       </div>
 
-      <!-- 隐藏相册密码管理 -->
-      <div class="ai-settings-card">
-        <h3>隐藏相册密码</h3>
-        <p class="settings-description">管理隐藏相册的访问密码。设置密码后，进入隐藏相册需要输入密码验证。</p>
+      <!-- ========== 账户安全 Tab ========== -->
+      <div v-if="activeTab === 'security'" class="tab-content">
+        <div class="settings-card">
+          <h3>修改密码</h3>
+          <p class="settings-description">定期修改密码以保护账户安全。</p>
 
-        <div v-if="!hasHiddenPassword && !showSetPassword">
-          <p class="password-status">当前状态：未设置密码</p>
-          <button type="button" class="btn-outline" @click="showSetPassword = true">设置密码</button>
-        </div>
+          <div class="security-form">
+            <label class="field">
+              <span>当前密码</span>
+              <input v-model="accountPasswordForm.oldPassword" type="password" placeholder="请输入当前密码">
+            </label>
+            <label class="field">
+              <span>新密码</span>
+              <input v-model="accountPasswordForm.newPassword" type="password" placeholder="至少6位">
+            </label>
+            <label class="field">
+              <span>确认新密码</span>
+              <input v-model="accountPasswordForm.confirmPassword" type="password" placeholder="再次输入新密码">
+            </label>
 
-        <div v-if="hasHiddenPassword && !showChangePassword && !showRemovePassword">
-          <p class="password-status">当前状态：已设置密码</p>
-          <div class="password-actions">
-            <button type="button" class="btn-outline" @click="showChangePassword = true">修改密码</button>
-            <button type="button" class="btn-outline danger" @click="showRemovePassword = true">移除密码</button>
+            <div v-if="accountPasswordError" class="form-message error">{{ accountPasswordError }}</div>
+            <div v-if="accountPasswordSuccess" class="form-message success">{{ accountPasswordSuccess }}</div>
+
+            <div class="form-actions">
+              <button type="button" @click="changeAccountPassword" :disabled="accountPasswordLoading">
+                {{ accountPasswordLoading ? '保存中...' : '保存' }}
+              </button>
+            </div>
           </div>
         </div>
+      </div>
 
-        <!-- 设置密码表单 -->
-        <div v-if="showSetPassword" class="password-form">
-          <label>
-            <span>新密码</span>
-            <input type="password" v-model="hiddenPasswordForm.newPassword" placeholder="至少6位" />
-          </label>
-          <label>
-            <span>确认密码</span>
-            <input type="password" v-model="hiddenPasswordForm.confirmPassword" placeholder="再次输入密码" />
-          </label>
-          <div class="form-actions">
-            <button type="button" @click="setHiddenPassword" :disabled="hiddenPasswordLoading">
-              {{ hiddenPasswordLoading ? '保存中...' : '保存' }}
+      <!-- ========== AI 设置 Tab ========== -->
+      <div v-if="activeTab === 'ai'" class="tab-content">
+        <div class="settings-card">
+          <h3>预设管理</h3>
+          <p class="settings-description">管理多组 AI 配置，可随时切换不同的提供商、模型和密钥。</p>
+
+          <div class="preset-list">
+            <div
+              v-for="preset in presets"
+              :key="preset.id"
+              class="preset-item"
+              :class="{
+                active: preset.is_active,
+                selected: preset.id === currentPresetId && !preset.is_active
+              }"
+              @click="selectPreset(preset)"
+            >
+              <span class="preset-indicator">{{ preset.is_active ? '◉' : '○' }}</span>
+              <div class="preset-info">
+                <span class="preset-name">{{ preset.name }}</span>
+                <span class="preset-summary">{{ preset.provider || '未配置' }} · {{ preset.model || '默认模型' }}</span>
+                <span v-if="preset.is_active" class="preset-badge">当前</span>
+              </div>
+              <div class="preset-actions">
+                <button
+                  v-if="!preset.is_active"
+                  class="action-btn switch-btn"
+                  title="设为当前配置"
+                  @click.stop="activatePreset(preset)"
+                >切换</button>
+                <button
+                  class="action-btn delete-btn"
+                  title="删除预设"
+                  @click.stop="deletePreset(preset)"
+                >删除</button>
+              </div>
+            </div>
+            <div class="preset-item add-new" @click="openNewPresetDialog">
+              <span class="add-icon">+</span>
+              <span>另存当前配置为新预设</span>
+            </div>
+          </div>
+
+          <h3>配置参数</h3>
+          <p class="settings-description">
+            当前编辑：<strong>{{ currentPresetName }}</strong>
+            <span v-if="isDirty" class="dirty-tag">有未保存的更改</span>
+          </p>
+
+          <div class="ai-settings-grid">
+            <label>
+              <span>是否启用 AI</span>
+              <input type="checkbox" v-model="aiForm.enabled" />
+            </label>
+            <label>
+              <span>AI 提供商</span>
+              <select v-model="aiForm.provider" @change="handleProviderChange(aiForm.provider)">
+                <option value="">请选择提供商</option>
+                <optgroup label="本地部署">
+                  <option value="ollama">Ollama (本地)</option>
+                </optgroup>
+                <optgroup label="国外主流厂商">
+                  <option value="openai">OpenAI (GPT-4o/4-Turbo)</option>
+                  <option value="anthropic">Anthropic (Claude 3.5 Sonnet/Opus)</option>
+                  <option value="google">Google (Gemini 2.0/2.5 Pro)</option>
+                  <option value="azure">Azure OpenAI</option>
+                  <option value="mistral">Mistral AI (Mistral Large)</option>
+                  <option value="groq">Groq (超高速推理)</option>
+                  <option value="openrouter">OpenRouter (多模型网关)</option>
+                </optgroup>
+                <optgroup label="国内主流厂商">
+                  <option value="deepseek">DeepSeek (V3/R1 推理)</option>
+                  <option value="zhipu">智谱 AI (GLM-4)</option>
+                  <option value="moonshot">月之暗面 (Kimi/Moonshot)</option>
+                  <option value="qwen">通义千问 (Qwen)</option>
+                  <option value="ernie">百度文心一言 (ERNIE 4.0)</option>
+                </optgroup>
+                <optgroup label="自定义">
+                  <option value="custom">自定义 / OpenAI 兼容 API</option>
+                </optgroup>
+              </select>
+            </label>
+            <div class="provider-hint" v-if="currentProvider && currentProvider.desc">
+              <span class="hint-icon">💡</span>
+              {{ currentProvider.desc }}{{ currentProvider.needKey ? ' · 需要 API Key' : ' · 无需 API Key' }}
+            </div>
+            <label>
+              <span>模型名称</span>
+              <input type="text" v-model="aiForm.model" :placeholder="modelPlaceholder" />
+            </label>
+            <div class="provider-models" v-if="currentProvider && currentProvider.models">
+              推荐模型：{{ currentProvider.models }}
+            </div>
+            <label>
+              <span>Base URL</span>
+              <input type="text" v-model="aiForm.base_url" :placeholder="baseUrlPlaceholder" />
+            </label>
+            <label>
+              <span>API Key</span>
+              <input type="password" v-model="aiForm.api_key" :placeholder="apiKeyPlaceholder" />
+            </label>
+          </div>
+
+          <div class="ai-settings-actions">
+            <button type="button" @click="saveCurrentPreset" :disabled="aiSaveLoading || !currentPresetId">
+              {{ aiSaveLoading ? '保存中...' : '保存更改' }}
             </button>
-            <button type="button" class="btn-outline" @click="showSetPassword = false; hiddenPasswordForm = { newPassword: '', confirmPassword: '', currentPassword: '' }">取消</button>
+            <button type="button" class="btn-outline" @click="openNewPresetDialog" :disabled="aiSaveLoading">
+              另存为新预设
+            </button>
+            <button type="button" class="btn-outline btn-test" @click="testAiConnection" :disabled="aiTestLoading">
+              {{ aiTestLoading ? '测试中...' : '测试连接' }}
+            </button>
+          </div>
+
+          <div class="ai-status" v-if="formActivePresetId">
+            <span class="status-dot active"></span>
+            <span v-if="presets.find(p => p.is_active)">
+              当前使用：<strong>{{ presets.find(p => p.is_active).name }}</strong>
+              ({{ presets.find(p => p.is_active).provider || '未知' }} / {{ presets.find(p => p.is_active).model || '默认模型' }})
+            </span>
+          </div>
+          <div class="ai-status" v-else>
+            <span class="status-dot inactive"></span>
+            当前状态：未启用
           </div>
         </div>
+      </div>
 
-        <!-- 修改密码表单 -->
-        <div v-if="showChangePassword" class="password-form">
-          <label>
-            <span>当前密码</span>
-            <input type="password" v-model="hiddenPasswordForm.currentPassword" placeholder="输入当前密码" />
-          </label>
-          <label>
-            <span>新密码</span>
-            <input type="password" v-model="hiddenPasswordForm.newPassword" placeholder="至少6位" />
-          </label>
-          <label>
-            <span>确认密码</span>
-            <input type="password" v-model="hiddenPasswordForm.confirmPassword" placeholder="再次输入密码" />
-          </label>
-          <div class="form-actions">
-            <button type="button" @click="changeHiddenPassword" :disabled="hiddenPasswordLoading">
-              {{ hiddenPasswordLoading ? '保存中...' : '保存' }}
-            </button>
-            <button type="button" class="btn-outline" @click="showChangePassword = false; hiddenPasswordForm = { newPassword: '', confirmPassword: '', currentPassword: '' }">取消</button>
+      <!-- ========== 隐藏相册 Tab ========== -->
+      <div v-if="activeTab === 'hidden'" class="tab-content">
+        <div class="settings-card">
+          <h3>隐藏相册密码</h3>
+          <p class="settings-description">管理隐藏相册的访问密码。设置密码后，进入隐藏相册需要输入密码验证。</p>
+
+          <div v-if="!hasHiddenPassword && !showSetPassword">
+            <p class="password-status">当前状态：未设置密码</p>
+            <button type="button" class="btn-outline" @click="showSetPassword = true">设置密码</button>
           </div>
-        </div>
 
-        <!-- 移除密码表单 -->
-        <div v-if="showRemovePassword" class="password-form">
-          <label>
-            <span>输入隐藏相册密码以确认删除</span>
-            <input type="password" v-model="hiddenPasswordForm.currentPassword" placeholder="输入密码" />
-          </label>
-          <div class="form-actions">
-            <button type="button" class="danger" @click="removeHiddenPassword" :disabled="hiddenPasswordLoading">
-              {{ hiddenPasswordLoading ? '删除中...' : '确认移除' }}
-            </button>
-            <button type="button" class="btn-outline" @click="showRemovePassword = false; hiddenPasswordForm = { newPassword: '', confirmPassword: '', currentPassword: '' }">取消</button>
+          <div v-if="hasHiddenPassword && !showChangePassword && !showRemovePassword">
+            <p class="password-status">当前状态：已设置密码</p>
+            <div class="password-action-list">
+              <button type="button" class="password-action-row" @click="showChangePassword = true">
+                <span class="password-action-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                  </svg>
+                </span>
+                <span class="password-action-text">
+                  <span class="password-action-label">修改密码</span>
+                  <span class="password-action-desc">更改隐藏相册的访问密码</span>
+                </span>
+                <svg class="password-action-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+              <button type="button" class="password-action-row danger" @click="showRemovePassword = true">
+                <span class="password-action-icon danger-icon">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="3 6 5 6 21 6"/>
+                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    <line x1="10" y1="11" x2="10" y2="17"/>
+                    <line x1="14" y1="11" x2="14" y2="17"/>
+                  </svg>
+                </span>
+                <span class="password-action-text">
+                  <span class="password-action-label">移除密码</span>
+                  <span class="password-action-desc">取消隐藏相册的密码保护</span>
+                </span>
+                <svg class="password-action-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <polyline points="9 18 15 12 9 6"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- 设置密码表单 -->
+          <div v-if="showSetPassword" class="password-form">
+            <label>
+              <span>新密码</span>
+              <input type="password" v-model="hiddenPasswordForm.newPassword" placeholder="至少6位" />
+            </label>
+            <label>
+              <span>确认密码</span>
+              <input type="password" v-model="hiddenPasswordForm.confirmPassword" placeholder="再次输入密码" />
+            </label>
+            <div class="form-actions">
+              <button type="button" @click="setHiddenPassword" :disabled="hiddenPasswordLoading">
+                {{ hiddenPasswordLoading ? '保存中...' : '保存' }}
+              </button>
+              <button type="button" class="btn-outline" @click="showSetPassword = false; hiddenPasswordForm = { newPassword: '', confirmPassword: '', currentPassword: '' }">取消</button>
+            </div>
+          </div>
+
+          <!-- 修改密码表单 -->
+          <div v-if="showChangePassword" class="password-form">
+            <label>
+              <span>当前密码</span>
+              <input type="password" v-model="hiddenPasswordForm.currentPassword" placeholder="输入当前密码" />
+            </label>
+            <label>
+              <span>新密码</span>
+              <input type="password" v-model="hiddenPasswordForm.newPassword" placeholder="至少6位" />
+            </label>
+            <label>
+              <span>确认密码</span>
+              <input type="password" v-model="hiddenPasswordForm.confirmPassword" placeholder="再次输入密码" />
+            </label>
+            <div class="form-actions">
+              <button type="button" @click="changeHiddenPassword" :disabled="hiddenPasswordLoading">
+                {{ hiddenPasswordLoading ? '保存中...' : '保存' }}
+              </button>
+              <button type="button" class="btn-outline" @click="showChangePassword = false; hiddenPasswordForm = { newPassword: '', confirmPassword: '', currentPassword: '' }">取消</button>
+            </div>
+          </div>
+
+          <!-- 移除密码表单 -->
+          <div v-if="showRemovePassword" class="password-form">
+            <label>
+              <span>输入隐藏相册密码以确认删除</span>
+              <input type="password" v-model="hiddenPasswordForm.currentPassword" placeholder="输入密码" />
+            </label>
+            <div class="form-actions">
+              <button type="button" class="danger" @click="removeHiddenPassword" :disabled="hiddenPasswordLoading">
+                {{ hiddenPasswordLoading ? '删除中...' : '确认移除' }}
+              </button>
+              <button type="button" class="btn-outline" @click="showRemovePassword = false; hiddenPasswordForm = { newPassword: '', confirmPassword: '', currentPassword: '' }">取消</button>
+            </div>
           </div>
         </div>
       </div>
@@ -651,14 +871,61 @@ function handleProviderChange(newProvider) {
   background: var(--hover-bg);
 }
 
-.ai-settings-card {
+/* ========== Tab 栏 ========== */
+.settings-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--input-border);
+  margin-bottom: 24px;
+}
+
+.tab-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  margin-bottom: -1px;
+}
+
+.tab-item:hover {
+  color: var(--text-color);
+}
+
+.tab-item.active {
+  color: var(--secondary-color);
+  border-bottom-color: var(--secondary-color);
+}
+
+.tab-item svg {
+  flex-shrink: 0;
+}
+
+/* ========== Tab 内容 ========== */
+.tab-content {
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.settings-card {
   background: var(--card-bg);
   padding: 24px;
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.08);
 }
 
-.ai-settings-card h3 {
+.settings-card h3 {
   margin-top: 0;
   margin-bottom: 8px;
 }
@@ -669,15 +936,260 @@ function handleProviderChange(newProvider) {
   margin-bottom: 16px;
 }
 
-/* 隐藏相册密码管理 */
+/* ========== 个人资料 ========== */
+.profile-avatar-section {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 24px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid var(--input-border);
+}
+
+.profile-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--secondary-color);
+  flex-shrink: 0;
+}
+
+.profile-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.profile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.profile-username {
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.profile-form .field,
+.security-form .field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.profile-form .field:last-of-type,
+.security-form .field:last-of-type {
+  margin-bottom: 0;
+}
+
+.profile-form .field span,
+.security-form .field span {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.profile-form input,
+.profile-form textarea,
+.security-form input {
+  padding: 10px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  font-size: 14px;
+  font-family: inherit;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: border-color 0.2s;
+}
+
+.profile-form input:focus,
+.profile-form textarea:focus,
+.security-form input:focus {
+  outline: none;
+  border-color: var(--secondary-color);
+}
+
+.profile-form textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* ========== 账户安全 ========== */
+.form-message {
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-size: 13px;
+  margin-top: 12px;
+}
+
+.form-message.error {
+  background: rgba(220, 53, 69, 0.08);
+  color: #dc3545;
+  border: 1px solid rgba(220, 53, 69, 0.2);
+}
+
+.form-message.success {
+  background: rgba(40, 167, 69, 0.08);
+  color: #28a745;
+  border: 1px solid rgba(40, 167, 69, 0.2);
+}
+
+/* ========== 表单操作 ========== */
+.form-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.form-actions button {
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  background: var(--secondary-color);
+  color: #fff;
+  transition: opacity 0.2s;
+}
+
+.form-actions button:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.form-actions button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.form-actions button.danger {
+  background: #dc3545;
+}
+
+.form-actions button.danger:hover:not(:disabled) {
+  background: #c82333;
+}
+
+.btn-outline {
+  background: transparent !important;
+  color: var(--text-color) !important;
+  border: 1px solid var(--input-border) !important;
+}
+
+.btn-outline:hover:not(:disabled) {
+  background: var(--hover-bg) !important;
+}
+
+/* ========== 隐藏相册密码管理 ========== */
 .password-status {
   color: var(--text-secondary);
   margin-bottom: 12px;
 }
 
-.password-actions {
+.password-action-list {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.password-action-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 14px;
+  background: var(--bg-primary);
+  border: 1px solid var(--input-border);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+  transition: all 0.2s ease;
+}
+
+.password-action-row:hover {
+  background: var(--hover-bg);
+  border-color: var(--secondary-color);
+}
+
+.password-action-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  background: var(--bg-color);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.password-action-row:hover .password-action-icon {
+  background: var(--secondary-color);
+  color: #fff;
+}
+
+.password-action-icon.danger-icon {
+  background: rgba(220, 53, 69, 0.08);
+  color: #dc3545;
+}
+
+.password-action-row:hover .password-action-icon.danger-icon {
+  background: #dc3545;
+  color: #fff;
+}
+
+.password-action-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.password-action-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-color);
+}
+
+.password-action-desc {
+  font-size: 12px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.password-action-chevron {
+  color: var(--text-secondary);
+  opacity: 0.5;
+  flex-shrink: 0;
+  transition: all 0.2s ease;
+}
+
+.password-action-row:hover .password-action-chevron {
+  opacity: 1;
+  transform: translateX(2px);
+}
+
+.password-action-row.danger .password-action-label {
+  color: #dc3545;
 }
 
 .password-form {
@@ -712,44 +1224,7 @@ function handleProviderChange(newProvider) {
   border-color: var(--secondary-color);
 }
 
-.form-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.form-actions button.danger {
-  background: #dc3545;
-  color: white;
-  border: none;
-}
-
-.form-actions button.danger:hover:not(:disabled) {
-  background: #c82333;
-}
-
-.btn-outline.danger {
-  color: #dc3545;
-  border-color: #dc3545;
-}
-
-.btn-outline.danger:hover {
-  background: #dc3545;
-  color: white;
-}
-
-.dirty-tag {
-  display: inline-block;
-  margin-left: 8px;
-  padding: 2px 8px;
-  background: #fff3cd;
-  color: #856404;
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
-}
-
-/* Preset list */
+/* ========== AI 预设管理 ========== */
 .preset-list {
   display: flex;
   flex-direction: column;
@@ -761,34 +1236,30 @@ function handleProviderChange(newProvider) {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 10px 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--input-border);
   border-radius: 8px;
   cursor: pointer;
   transition: all 0.15s;
-  border: 1px solid transparent;
-  background: var(--bg-color);
 }
 
 .preset-item:hover {
   background: var(--hover-bg);
-  border-color: var(--input-border);
 }
 
 .preset-item.active {
-  background: var(--hover-bg);
   border-color: var(--secondary-color);
+  background: var(--hover-bg);
 }
 
 .preset-item.selected {
-  border-color: var(--input-border);
+  border-color: var(--secondary-color);
+  border-style: dashed;
 }
 
 .preset-indicator {
-  font-size: 14px;
+  font-size: 16px;
   color: var(--text-secondary);
-  flex-shrink: 0;
-  width: 16px;
-  text-align: center;
 }
 
 .preset-item.active .preset-indicator {
@@ -798,48 +1269,45 @@ function handleProviderChange(newProvider) {
 .preset-info {
   flex: 1;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
 }
 
 .preset-name {
   font-weight: 500;
   font-size: 14px;
-  white-space: nowrap;
 }
 
 .preset-summary {
   font-size: 12px;
   color: var(--text-secondary);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .preset-badge {
-  display: inline-block;
-  padding: 1px 6px;
+  position: absolute;
+  top: 0;
+  right: 0;
   font-size: 11px;
   background: var(--secondary-color);
   color: #fff;
-  border-radius: 4px;
-  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
 }
 
 .preset-actions {
   display: flex;
   gap: 6px;
-  flex-shrink: 0;
 }
 
 .action-btn {
-  padding: 4px 10px;
-  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 6px;
   border: 1px solid var(--input-border);
   background: var(--card-bg);
-  border-radius: 4px;
   cursor: pointer;
+  font-size: 12px;
   transition: all 0.15s;
 }
 
@@ -847,51 +1315,27 @@ function handleProviderChange(newProvider) {
   background: var(--hover-bg);
 }
 
-.switch-btn {
-  color: var(--secondary-color);
-  border-color: var(--secondary-color);
-}
-
-.switch-btn:hover {
-  background: var(--secondary-color);
-  color: #fff;
-}
-
 .delete-btn:hover {
-  border-color: #e74c3c;
-  color: #e74c3c;
+  color: #dc3545;
+  border-color: #dc3545;
 }
 
-.add-new {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 14px;
-  border: 1px dashed var(--input-border);
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 13px;
+.preset-item.add-new {
+  border-style: dashed;
+  justify-content: center;
   color: var(--text-secondary);
-  transition: all 0.15s;
-  background: transparent;
-}
-
-.add-new:hover {
-  border-color: var(--secondary-color);
-  color: var(--secondary-color);
-  background: transparent;
+  gap: 8px;
 }
 
 .add-icon {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 300;
 }
 
-/* Form grid */
 .ai-settings-grid {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 16px;
-  margin-bottom: 24px;
 }
 
 .ai-settings-grid > label {
@@ -900,9 +1344,10 @@ function handleProviderChange(newProvider) {
   gap: 6px;
 }
 
-.ai-settings-grid > label span {
+.ai-settings-grid label > span {
+  font-size: 13px;
   font-weight: 500;
-  font-size: 14px;
+  color: var(--text-secondary);
 }
 
 .ai-settings-grid input[type="text"],
@@ -912,8 +1357,14 @@ function handleProviderChange(newProvider) {
   border: 1px solid var(--input-border);
   border-radius: 6px;
   font-size: 14px;
-  background: var(--bg-color);
-  color: var(--text-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
+}
+
+.ai-settings-grid input:focus,
+.ai-settings-grid select:focus {
+  outline: none;
+  border-color: var(--secondary-color);
 }
 
 .ai-settings-grid input[type="checkbox"] {
@@ -922,44 +1373,57 @@ function handleProviderChange(newProvider) {
   accent-color: var(--secondary-color);
 }
 
+.provider-hint {
+  font-size: 13px;
+  color: var(--text-secondary);
+  background: var(--bg-color);
+  padding: 10px 14px;
+  border-radius: 6px;
+}
+
+.hint-icon {
+  margin-right: 4px;
+}
+
+.provider-models {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: -8px;
+}
+
 .ai-settings-actions {
   display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-bottom: 16px;
+  gap: 8px;
+  margin-top: 20px;
 }
 
 .ai-settings-actions button {
-  padding: 10px 24px;
+  padding: 10px 20px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
   border: none;
-  border-radius: 8px;
   background: var(--secondary-color);
   color: #fff;
-  font-size: 14px;
-  cursor: pointer;
   transition: opacity 0.2s;
 }
 
+.ai-settings-actions button:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
 .ai-settings-actions button:disabled {
-  opacity: 0.65;
+  opacity: 0.5;
   cursor: not-allowed;
 }
 
-.ai-settings-actions button:hover:not(:disabled) {
-  opacity: 0.9;
-}
-
-.btn-outline {
-  background: transparent !important;
-  color: var(--text-color) !important;
-  border: 1px solid var(--input-border) !important;
-}
-
-.btn-outline:hover:not(:disabled) {
-  background: var(--hover-bg) !important;
+.ai-settings-actions .btn-test {
+  margin-left: auto;
 }
 
 .ai-status {
+  margin-top: 16px;
   padding: 12px 16px;
   background: var(--bg-color);
   border-radius: 8px;
@@ -977,70 +1441,49 @@ function handleProviderChange(newProvider) {
 }
 
 .status-dot.active {
-  background: #27ae60;
+  background: #28a745;
 }
 
 .status-dot.inactive {
-  background: #95a5a6;
+  background: #adb5bd;
 }
 
-.provider-hint {
-  padding: 10px 14px;
-  background: linear-gradient(135deg, #f0f4ff, #e8f0fe);
-  border-radius: 8px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  border-left: 3px solid var(--secondary-color);
-}
-
-.hint-icon {
-  flex-shrink: 0;
-}
-
-.provider-models {
-  padding: 8px 12px;
-  background: var(--bg-color);
-  border-radius: 6px;
+.dirty-tag {
   font-size: 12px;
-  color: var(--text-secondary);
-  font-family: monospace;
-  word-break: break-all;
+  color: #e67e22;
+  margin-left: 8px;
+  font-weight: 400;
 }
 
-/* Modal */
+/* ========== Modal ========== */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: rgba(0, 0, 0, 0.45);
+  inset: 0;
+  background: rgba(0,0,0,0.5);
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: 9999;
 }
 
 .modal {
   background: var(--card-bg);
   border-radius: 12px;
   padding: 24px;
-  width: 420px;
-  max-width: 90vw;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  width: 90%;
+  max-width: 420px;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.2);
 }
 
 .modal h3 {
-  margin: 0 0 8px;
+  margin-top: 0;
+  margin-bottom: 8px;
 }
 
 .modal-desc {
   color: var(--text-secondary);
   font-size: 14px;
-  margin: 0 0 16px;
+  margin-bottom: 16px;
 }
 
 .modal-input {
@@ -1049,10 +1492,9 @@ function handleProviderChange(newProvider) {
   border: 1px solid var(--input-border);
   border-radius: 6px;
   font-size: 14px;
-  background: var(--bg-color);
-  color: var(--text-color);
+  background: var(--bg-primary);
+  color: var(--text-primary);
   box-sizing: border-box;
-  margin-bottom: 16px;
 }
 
 .modal-input:focus {
@@ -1063,16 +1505,17 @@ function handleProviderChange(newProvider) {
 .modal-actions {
   display: flex;
   justify-content: flex-end;
-  gap: 10px;
+  gap: 8px;
+  margin-top: 20px;
 }
 
 .modal-btn {
-  padding: 8px 20px;
+  padding: 8px 16px;
+  border-radius: 6px;
   border: 1px solid var(--input-border);
   background: var(--card-bg);
-  border-radius: 6px;
-  font-size: 14px;
   cursor: pointer;
+  font-size: 14px;
   transition: all 0.15s;
 }
 
@@ -1087,20 +1530,15 @@ function handleProviderChange(newProvider) {
 }
 
 .modal-btn.primary:hover {
-  opacity: 0.9;
+  opacity: 0.85;
 }
 
-.modal-btn.primary:disabled {
-  opacity: 0.65;
-  cursor: not-allowed;
+.modal-btn.primary.danger {
+  background: #dc3545;
+  border-color: #dc3545;
 }
 
-.modal-btn.danger {
-  background: #e74c3c;
-  border-color: #e74c3c;
-}
-
-.modal-btn.danger:hover {
-  background: #c0392b;
+.modal-btn.primary.danger:hover {
+  background: #c82333;
 }
 </style>

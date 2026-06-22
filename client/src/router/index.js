@@ -9,7 +9,6 @@ import PhotoDetail from '../views/PhotoDetail.vue'
 import Admin from '../views/Admin.vue'
 import Settings from '../views/Settings.vue'
 import Review from '../views/Review.vue'
-import UserProfile from '../views/UserProfile.vue'
 import Albums from '../views/Albums.vue'
 import AlbumDetail from '../views/AlbumDetail.vue'
 import Storyline from '../views/Storyline.vue'
@@ -36,8 +35,7 @@ const routes = [
   { path: '/story/:date/:location', name: 'StoryDetail', component: StoryDetail },
   { path: '/share/create', name: 'ShareCard', component: ShareCard, meta: { requiresAuth: true } },
   { path: '/share/:shareId', name: 'SharePreview', component: SharePreview },
-  { path: '/hidden-album', name: 'HiddenAlbum', component: HiddenAlbum, meta: { requiresAuth: true } },
-  { path: '/user/:id', name: 'UserProfile', component: UserProfile }
+  { path: '/hidden-album', name: 'HiddenAlbum', component: HiddenAlbum, meta: { requiresAuth: true } }
 ]
 
 const router = createRouter({
