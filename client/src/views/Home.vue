@@ -111,7 +111,11 @@ const checkFavorites = async (list) => {
   for (const p of list) {
     try {
       const res = await favorites.check(p.id, fp)
-      if (res.isFavorited) favoriteIds.value.add(p.id)
+      if (res.isFavorited) {
+        const newSet = new Set(favoriteIds.value)
+        newSet.add(p.id)
+        favoriteIds.value = newSet
+      }
     } catch (e) {}
   }
 }

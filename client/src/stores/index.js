@@ -4,7 +4,7 @@ import { auth, users } from '../api'
 export const useAuthStore = defineStore('auth', {
   state: () => ({
     user: null,
-    token: localStorage.getItem('token') || null
+    token: localStorage.getItem('token') || sessionStorage.getItem('token') || null
   }),
   getters: {
     isLoggedIn: state => !!state.token,
@@ -13,11 +13,15 @@ export const useAuthStore = defineStore('auth', {
     userRole: state => state.user?.role || 'guest'
   },
   actions: {
-    async login(username, password) {
+    async login(username, password, rememberMe = true) {
       const res = await auth.login(username, password)
       this.token = res.token
       this.user = res.user
-      localStorage.setItem('token', res.token)
+      if (rememberMe) {
+        localStorage.setItem('token', res.token)
+      } else {
+        sessionStorage.setItem('token', res.token)
+      }
       return res
     },
     async register(username, password, nickname) {
@@ -45,6 +49,7 @@ export const useAuthStore = defineStore('auth', {
       this.token = null
       this.user = null
       localStorage.removeItem('token')
+      sessionStorage.removeItem('token')
     }
   }
 })

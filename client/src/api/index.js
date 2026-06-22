@@ -1,13 +1,15 @@
 import axios from 'axios'
+import { useAuthStore } from '../stores'
 
 const api = axios.create({
   baseURL: '/api',
   timeout: 60000
 })
 
-// 请求拦截器
+// 请求拦截器：从 Pinia store 读取 token（兼容 localStorage 和 sessionStorage）
 api.interceptors.request.use(config => {
-  const token = localStorage.getItem('token')
+  const authStore = useAuthStore()
+  const token = authStore.token
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
   }
@@ -19,7 +21,8 @@ api.interceptors.response.use(
   response => response.data,
   async error => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token')
+      const authStore = useAuthStore()
+      authStore.logout()
     }
 
     // 后端未就绪时自动重试一次
