@@ -146,6 +146,7 @@ export const stats = {
 
 // 分享卡片
 export const share = {
+  list: (params) => api.get('/share', { params }),
   create: (data) => api.post('/share', data),
   get: (shareId) => api.get(`/share/${shareId}`),
   delete: (shareId) => api.delete(`/share/${shareId}`)

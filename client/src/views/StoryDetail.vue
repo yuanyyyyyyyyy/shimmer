@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { storylines, share } from '../api'
+import { storylines } from '../api'
 
 const route = useRoute()
 const router = useRouter()
@@ -140,7 +140,7 @@ onMounted(loadDetail)
 
         <div class="story-actions">
           <router-link
-            :to="{ path: '/share/create', query: { date: detail.date, location: detail.location } }"
+            :to="{ path: '/share/create', query: { date: detail.date, location: detail.location, photoIds: photos.map(p => p.id).join(',') } }"
             class="action-btn primary"
           >
             生成分享卡片

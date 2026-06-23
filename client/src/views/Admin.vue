@@ -520,6 +520,7 @@ const handleLogout = () => {
       <div class="admin-tabs">
         <button :class="['tab-btn', { active: activeTab === 'photos' }]" @click="activeTab = 'photos'">照片管理</button>
         <button v-if="authStore.isAdmin" :class="['tab-btn', { active: activeTab === 'users' }]" @click="activeTab = 'users'; loadUsers(true)">用户管理</button>
+        <router-link to="/shares" class="tab-btn">分享管理</router-link>
       </div>
 
       <!-- 照片管理 -->

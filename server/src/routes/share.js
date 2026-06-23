@@ -5,6 +5,58 @@ import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
 
+// 获取当前用户的分享列表（需要登录）
+router.get('/', authenticateToken, async (req, res, next) => {
+  try {
+    const userId = req.user.id;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const offset = (page - 1) * limit;
+
+    const rows = await query(
+      `SELECT share_id, photo_ids, template, custom_text, story_date, story_location,
+              view_count, created_at
+       FROM share_cards
+       WHERE user_id = ? AND is_deleted = 0
+       ORDER BY created_at DESC
+       LIMIT ? OFFSET ?`,
+      [userId, String(limit), String(offset)]
+    );
+
+    const [{ total }] = await query(
+      'SELECT COUNT(*) as total FROM share_cards WHERE user_id = ? AND is_deleted = 0',
+      [userId]
+    );
+
+    // 获取每个分享的首张照片缩略图
+    const shares = await Promise.all(rows.map(async (row) => {
+      const photoIds = row.photo_ids;
+      const [firstPhoto] = await query(
+        'SELECT id, url, thumbnail_url FROM photos WHERE id = ?',
+        [photoIds[0]]
+      );
+      return {
+        shareId: row.share_id,
+        template: row.template,
+        customText: row.custom_text,
+        storyDate: row.story_date,
+        storyLocation: row.story_location,
+        photoCount: photoIds.length,
+        viewCount: row.view_count || 0,
+        createdAt: row.created_at,
+        coverPhoto: firstPhoto || null
+      };
+    }));
+
+    res.json({
+      shares,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
 // 创建分享卡片（需要登录，只能分享自己的照片）
 router.post('/', authenticateToken, async (req, res, next) => {
   try {

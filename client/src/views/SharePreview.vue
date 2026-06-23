@@ -57,7 +57,7 @@ onMounted(loadShare)
       <!-- 品牌区 -->
       <footer class="stage-footer">
         <p class="from-line">来自 <strong>光影手记 Shimmer</strong></p>
-        <router-link to="/" class="cta-btn">我也想创建一个 →</router-link>
+        <router-link to="/share/create" class="cta-btn">我也想创建一个 →</router-link>
         <p class="view-count" v-if="data.viewCount">已有 {{ data.viewCount }} 人浏览</p>
       </footer>
     </template>
