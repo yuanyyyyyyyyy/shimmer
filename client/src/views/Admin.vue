@@ -1,8 +1,8 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores'
-import { photos, upload, tags, ai, users } from '../api'
+import { photos, upload, tags, ai, users, stats as statsApi, share } from '../api'
 import { success, error, confirm } from '../composables/useToast'
 import DragDropUpload from '../components/DragDropUpload.vue'
 import { extractExif } from '../composables/useExif'
@@ -33,6 +33,17 @@ const userList = ref([])
 const usersLoading = ref(false)
 const usersPage = ref(1)
 const usersTotal = ref(0)
+
+// 统计数据
+const statsOverview = ref(null)
+const statsTimeline = ref([])
+const statsHeatmap = ref([])
+const statsLoading = ref(false)
+
+// 分享管理
+const shareList = ref([])
+const sharesLoading = ref(false)
+const shareDeletingId = ref(null)
 
 // 表单
 const showForm = ref(false)
@@ -174,7 +185,7 @@ const toggleTag = (tagId) => {
 }
 
 const deleteTag = async (tag) => {
-  if (!confirm(`确定删除标签「${tag.name}」？`)) return
+  if (!await confirm(`确定删除标签「${tag.name}」？`)) return
   try {
     await tags.delete(tag.id)
     allTags.value = allTags.value.filter(t => t.id !== tag.id)
@@ -440,6 +451,101 @@ const handleBatchSave = async () => {
   }
 }
 
+// 分享管理
+const loadShares = async () => {
+  sharesLoading.value = true
+  try {
+    const res = await share.list({ limit: 50 })
+    shareList.value = res.shares || []
+  } catch (e) { console.error(e) }
+  finally { sharesLoading.value = false }
+}
+
+const deleteShare = async (item) => {
+  if (!await confirm('确定要删除这个分享卡片吗？')) return
+  shareDeletingId.value = item.shareId
+  try {
+    await share.delete(item.shareId)
+    shareList.value = shareList.value.filter(s => s.shareId !== item.shareId)
+    success('已删除')
+  } catch (e) {
+    error('删除失败: ' + (e.response?.data?.error || e.message))
+  } finally {
+    shareDeletingId.value = null
+  }
+}
+
+// 统计数据加载
+const loadStats = async () => {
+  statsLoading.value = true
+  try {
+    const [overviewRes, timelineRes, heatmapRes] = await Promise.all([
+      statsApi.getOverview(),
+      statsApi.getTimeline(),
+      statsApi.getHeatmap()
+    ])
+    statsOverview.value = overviewRes
+    statsTimeline.value = timelineRes.data || []
+    statsHeatmap.value = heatmapRes.data || []
+  } catch (e) {
+    console.error('加载统计失败:', e)
+  } finally {
+    statsLoading.value = false
+  }
+}
+
+// 折线图：计算 SVG 路径
+const timelinePath = computed(() => {
+  const data = statsTimeline.value
+  if (!data.length) return ''
+  const w = 600, h = 200, pad = 30
+  const max = Math.max(...data.map(d => d.count), 1)
+  const step = (w - pad * 2) / Math.max(data.length - 1, 1)
+  const points = data.map((d, i) => {
+    const x = pad + i * step
+    const y = h - pad - (d.count / max) * (h - pad * 2)
+    return `${x},${y}`
+  })
+  return points.join(' ')
+})
+
+const timelineLabels = computed(() => {
+  const data = statsTimeline.value
+  if (!data.length) return []
+  const w = 600, pad = 30
+  const step = (w - pad * 2) / Math.max(data.length - 1, 1)
+  return data.map((d, i) => ({
+    x: pad + i * step,
+    label: d.month.slice(5) // 只显示月份
+  }))
+})
+
+const timelineMax = computed(() => {
+  return Math.max(...statsTimeline.value.map(d => d.count), 1)
+})
+
+// 热力图颜色
+const heatmapMax = computed(() => {
+  let max = 0
+  for (const row of statsHeatmap.value) {
+    for (const v of row) {
+      if (v > max) max = v
+    }
+  }
+  return max || 1
+})
+
+const heatColor = (value) => {
+  if (!value) return 'transparent'
+  const ratio = value / heatmapMax.value
+  if (ratio < 0.25) return 'rgba(47,54,64,0.15)'
+  if (ratio < 0.5) return 'rgba(47,54,64,0.35)'
+  if (ratio < 0.75) return 'rgba(47,54,64,0.6)'
+  return 'rgba(47,54,64,0.85)'
+}
+
+const dayLabels = ['一', '二', '三', '四', '五', '六', '日']
+
 // 用户管理
 const loadUsers = async (reset = false) => {
   if (usersLoading.value) return
@@ -471,12 +577,80 @@ const loadMoreUsers = () => {
 const toggleUserRole = async (user) => {
   const newRole = user.role === 'admin' ? 'user' : 'admin'
   const action = newRole === 'admin' ? '设为管理员' : '取消管理员'
-  if (!confirm(`确定要将 ${user.username} ${action}吗？`)) return
+  if (!await confirm(`确定要将 ${user.username} ${action}吗？`)) return
 
   try {
     await users.updateRole(user.id, newRole)
     user.role = newRole
     success(`${user.username} 已${action}`)
+  } catch (e) {
+    error(e.response?.data?.error || '操作失败')
+  }
+}
+
+// 编辑用户昵称
+const editingUserId = ref(null)
+const editingNickname = ref('')
+
+const startEditUser = (user) => {
+  editingUserId.value = user.id
+  editingNickname.value = user.nickname || ''
+}
+
+const saveEditUser = async (user) => {
+  if (!editingNickname.value || editingNickname.value.length < 2) {
+    error('昵称至少2个字符')
+    return
+  }
+  try {
+    await users.adminUpdateProfile(user.id, { nickname: editingNickname.value })
+    user.nickname = editingNickname.value
+    editingUserId.value = null
+    success('昵称已更新')
+  } catch (e) {
+    error(e.response?.data?.error || '操作失败')
+  }
+}
+
+const cancelEditUser = () => {
+  editingUserId.value = null
+}
+
+// 重置密码
+const resetPwdUserId = ref(null)
+const resetPwdValue = ref('')
+
+const startResetPwd = (user) => {
+  resetPwdUserId.value = user.id
+  resetPwdValue.value = ''
+}
+
+const saveResetPwd = async (user) => {
+  if (!resetPwdValue.value || resetPwdValue.value.length < 6) {
+    error('密码至少6位')
+    return
+  }
+  try {
+    await users.resetPassword(user.id, resetPwdValue.value)
+    resetPwdUserId.value = null
+    success(`已重置 ${user.username} 的密码`)
+  } catch (e) {
+    error(e.response?.data?.error || '操作失败')
+  }
+}
+
+const cancelResetPwd = () => {
+  resetPwdUserId.value = null
+}
+
+// 删除用户
+const deleteUser = async (user) => {
+  if (!await confirm(`确定要删除用户 ${user.username} 吗？此操作不可恢复。`)) return
+  try {
+    await users.delete(user.id)
+    userList.value = userList.value.filter(u => u.id !== user.id)
+    usersTotal.value--
+    success(`${user.username} 已删除`)
   } catch (e) {
     error(e.response?.data?.error || '操作失败')
   }
@@ -519,8 +693,9 @@ const handleLogout = () => {
 
       <div class="admin-tabs">
         <button :class="['tab-btn', { active: activeTab === 'photos' }]" @click="activeTab = 'photos'">照片管理</button>
-        <button v-if="authStore.isAdmin" :class="['tab-btn', { active: activeTab === 'users' }]" @click="activeTab = 'users'; loadUsers(true)">用户管理</button>
-        <router-link to="/shares" class="tab-btn">分享管理</router-link>
+        <button :class="['tab-btn', { active: activeTab === 'users' }]" @click="activeTab = 'users'; loadUsers(true)">用户管理</button>
+        <button :class="['tab-btn', { active: activeTab === 'shares' }]" @click="activeTab = 'shares'; loadShares()">分享管理</button>
+        <button v-if="authStore.isAdmin" :class="['tab-btn', { active: activeTab === 'stats' }]" @click="activeTab = 'stats'; loadStats()">统计</button>
       </div>
 
       <!-- 照片管理 -->
@@ -572,19 +747,40 @@ const handleLogout = () => {
               <div class="user-avatar">{{ (u.nickname || u.username).charAt(0).toUpperCase() }}</div>
               <div class="user-info">
                 <div class="user-info-names">
-                  <span class="user-name">{{ u.nickname || u.username }}</span>
-                  <span class="user-username">@{{ u.username }}</span>
+                  <template v-if="editingUserId === u.id">
+                    <input class="inline-edit" v-model="editingNickname" @keyup.enter="saveEditUser(u)" @keyup.escape="cancelEditUser" autofocus />
+                    <button class="btn-inline save" @click="saveEditUser(u)">保存</button>
+                    <button class="btn-inline" @click="cancelEditUser">取消</button>
+                  </template>
+                  <template v-else>
+                    <span class="user-name">{{ u.nickname || u.username }}</span>
+                    <span class="user-username">@{{ u.username }}</span>
+                  </template>
                 </div>
                 <span class="user-registered">{{ u.created_at ? formatDate(u.created_at) : '-' }} 注册</span>
+                <div class="user-stats-row">
+                  <span class="user-stat">{{ u.photo_count || 0 }} 张照片</span>
+                  <span class="user-stat-dot"></span>
+                  <span class="user-stat">{{ u.album_count || 0 }} 本相册</span>
+                </div>
               </div>
+              <span class="role-badge" :class="u.role">{{ u.role === 'admin' ? '管理员' : '用户' }}</span>
+            </div>
+            <!-- 重置密码输入框 -->
+            <div v-if="resetPwdUserId === u.id" class="reset-pwd-row">
+              <input class="inline-edit" v-model="resetPwdValue" type="password" placeholder="新密码（至少6位）" @keyup.enter="saveResetPwd(u)" @keyup.escape="cancelResetPwd" autofocus />
+              <button class="btn-inline save" @click="saveResetPwd(u)">确认</button>
+              <button class="btn-inline" @click="cancelResetPwd">取消</button>
             </div>
             <div class="user-item-divider"></div>
             <div class="user-item-actions">
-              <span class="role-badge" :class="u.role">{{ u.role === 'admin' ? '管理员' : '用户' }}</span>
-              <button v-if="u.id !== authStore.userId" class="role-toggle-btn" @click="toggleUserRole(u)">
+              <button v-if="u.id !== authStore.userId" class="action-btn" @click="toggleUserRole(u)">
                 {{ u.role === 'admin' ? '取消管理员' : '设为管理员' }}
               </button>
-              <span v-else class="self-tag">当前用户</span>
+              <button v-if="u.id !== authStore.userId" class="action-btn" @click="startEditUser(u)">编辑昵称</button>
+              <button v-if="u.id !== authStore.userId" class="action-btn" @click="startResetPwd(u)">重置密码</button>
+              <button v-if="u.id !== authStore.userId" class="action-btn danger" @click="deleteUser(u)">删除用户</button>
+              <span v-if="u.id === authStore.userId" class="self-tag">当前用户</span>
             </div>
           </div>
         </div>
@@ -593,6 +789,117 @@ const handleLogout = () => {
             {{ usersLoading ? '加载中...' : '加载更多' }}
           </button>
         </div>
+      </div>
+
+      <!-- 分享管理 -->
+      <div v-if="activeTab === 'shares'">
+        <div v-if="sharesLoading" class="loading">加载中...</div>
+        <div v-else-if="shareList.length === 0" class="empty">暂无分享卡片</div>
+        <div v-else class="share-list">
+          <div v-for="item in shareList" :key="item.shareId" class="share-item">
+            <div class="share-cover">
+              <img v-if="item.coverPhoto" :src="item.coverPhoto.thumbnail_url || item.coverPhoto.url" alt="" />
+              <div v-else class="no-cover">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                  <circle cx="8.5" cy="8.5" r="1.5"/>
+                  <polyline points="21 15 16 10 5 21"/>
+                </svg>
+              </div>
+            </div>
+            <div class="share-info">
+              <div class="share-meta-top">
+                <span class="tpl-badge">{{ item.template }}</span>
+                <span class="share-count">{{ item.photoCount }} 张</span>
+              </div>
+              <div class="share-meta-mid" v-if="item.storyDate || item.storyLocation">
+                <span v-if="item.storyDate">{{ item.storyDate }}</span>
+                <span v-if="item.storyLocation">· {{ item.storyLocation }}</span>
+              </div>
+              <div class="share-meta-bottom">
+                <span class="share-views">{{ item.viewCount }} 次浏览</span>
+              </div>
+            </div>
+            <div class="share-actions">
+              <a :href="`/share/${item.shareId}`" target="_blank" class="btn-sm">查看</a>
+              <button class="btn-sm danger" @click="deleteShare(item)" :disabled="shareDeletingId === item.shareId">删除</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 统计 -->
+      <div v-if="activeTab === 'stats'" class="stats-dashboard">
+        <div v-if="statsLoading" class="loading">加载中...</div>
+        <template v-else>
+          <!-- 概览卡片 -->
+          <div class="stats-overview" v-if="statsOverview">
+            <div class="stat-card">
+              <span class="stat-num">{{ statsOverview.users }}</span>
+              <span class="stat-lbl">用户</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-num">{{ statsOverview.photos }}</span>
+              <span class="stat-lbl">照片</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-num">{{ statsOverview.albums }}</span>
+              <span class="stat-lbl">相册</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-num">{{ statsOverview.publicPhotos }}</span>
+              <span class="stat-lbl">公开照片</span>
+            </div>
+          </div>
+
+          <!-- 折线图 -->
+          <div class="chart-section" v-if="statsTimeline.length">
+            <h3 class="chart-title">月度照片趋势</h3>
+            <div class="chart-wrap">
+              <svg viewBox="0 0 600 200" class="timeline-svg">
+                <!-- 网格线 -->
+                <line v-for="i in 4" :key="'g'+i" x1="30" :y1="30 + (i-1) * 35" x2="570" :y2="30 + (i-1) * 35" stroke="#f0f0f0" stroke-width="1"/>
+                <!-- 折线 -->
+                <polyline :points="timelinePath" fill="none" stroke="#2f3640" stroke-width="2" stroke-linejoin="round"/>
+                <!-- 数据点 -->
+                <circle v-for="(pt, i) in timelinePath.split(' ')" :key="'p'+i" :cx="pt.split(',')[0]" :cy="pt.split(',')[1]" r="3" fill="#2f3640"/>
+                <!-- X 轴标签 -->
+                <text v-for="(l, i) in timelineLabels" :key="'l'+i" :x="l.x" y="195" text-anchor="middle" fill="#999" font-size="10">{{ l.label }}</text>
+                <!-- Y 轴标签 -->
+                <text x="25" y="35" text-anchor="end" fill="#bbb" font-size="9">{{ timelineMax }}</text>
+                <text x="25" y="170" text-anchor="end" fill="#bbb" font-size="9">0</text>
+              </svg>
+            </div>
+          </div>
+
+          <!-- 热力图 -->
+          <div class="chart-section" v-if="statsHeatmap.length">
+            <h3 class="chart-title">拍摄热力图</h3>
+            <div class="heatmap-wrap">
+              <div class="heatmap-grid">
+                <template v-for="(row, di) in statsHeatmap" :key="'d'+di">
+                  <div class="heatmap-day">{{ dayLabels[di] }}</div>
+                  <div v-for="(val, hi) in row" :key="'h'+di+'-'+hi"
+                    class="heatmap-cell"
+                    :style="{ background: heatColor(val) }"
+                    :title="`${dayLabels[di]} ${hi}:00 — ${val} 张`">
+                  </div>
+                </template>
+              </div>
+              <div class="heatmap-hours">
+                <span v-for="h in [0,3,6,9,12,15,18,21]" :key="h">{{ h }}时</span>
+              </div>
+              <div class="heatmap-legend">
+                <span>少</span>
+                <span class="legend-cell" style="background:rgba(47,54,64,0.1)"></span>
+                <span class="legend-cell" style="background:rgba(47,54,64,0.3)"></span>
+                <span class="legend-cell" style="background:rgba(47,54,64,0.55)"></span>
+                <span class="legend-cell" style="background:rgba(47,54,64,0.85)"></span>
+                <span>多</span>
+              </div>
+            </div>
+          </div>
+        </template>
       </div>
 
       <!-- 上传/编辑表单弹窗 -->
@@ -1529,8 +1836,31 @@ const handleLogout = () => {
 .user-item-actions {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 18px 14px;
+  gap: 6px;
+  padding: 10px 18px 12px;
+  flex-wrap: wrap;
+}
+
+.action-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--n-300);
+  background: var(--card-bg);
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 0.75rem;
+  transition: all 0.15s;
+  color: var(--text-secondary);
+}
+
+.action-btn:hover {
+  border-color: var(--text-color);
+  color: var(--text-color);
+  background: var(--hover-bg);
+}
+
+.action-btn.danger:hover {
+  color: #dc3545;
+  border-color: #dc3545;
 }
 
 .role-badge {
@@ -1538,6 +1868,8 @@ const handleLogout = () => {
   padding: 3px 10px;
   border-radius: 4px;
   font-weight: 500;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 
 .role-badge.user {
@@ -1545,25 +1877,311 @@ const handleLogout = () => {
   color: var(--text-secondary);
 }
 
-.role-toggle-btn {
-  padding: 5px 12px;
-  border: 1px solid var(--n-300);
-  background: var(--card-bg);
-  border-radius: 6px;
-  cursor: pointer;
-  font-size: 0.8rem;
-  transition: all 0.2s;
-  color: var(--text-secondary);
-}
-
-.role-toggle-btn:hover {
-  border-color: var(--text-color);
-  color: var(--text-color);
-  background: var(--hover-bg);
-}
-
 .self-tag {
   font-size: 0.78rem;
   color: var(--text-tertiary);
+}
+
+.user-stats-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.user-stat {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+}
+
+.user-stat-dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--n-300);
+}
+
+.inline-edit {
+  padding: 3px 8px;
+  border: 1px solid var(--n-300);
+  border-radius: 4px;
+  font-size: 0.85rem;
+  background: var(--card-bg);
+  color: var(--text-color);
+  outline: none;
+  width: 140px;
+}
+
+.inline-edit:focus {
+  border-color: var(--color-primary);
+}
+
+.btn-inline {
+  padding: 3px 8px;
+  border: 1px solid var(--n-300);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.btn-inline.save {
+  background: var(--color-primary);
+  color: #fff;
+  border-color: var(--color-primary);
+}
+
+.reset-pwd-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px 4px;
+}
+
+/* 分享列表 */
+.share-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.share-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  background: var(--card-bg);
+  border: 1px solid var(--n-300);
+  border-radius: 8px;
+  transition: box-shadow 0.15s;
+}
+
+.share-item:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.share-cover {
+  width: 52px;
+  height: 52px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: var(--n-200);
+}
+
+.share-cover img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.no-cover {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-tertiary);
+}
+
+.share-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.share-meta-top {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.tpl-badge {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--n-200);
+  padding: 1px 6px;
+  border-radius: 3px;
+}
+
+.share-count {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+}
+
+.share-meta-mid {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+.share-meta-bottom {
+  font-size: 0.7rem;
+  color: var(--text-tertiary);
+  margin-top: 2px;
+}
+
+.share-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  border: 1px solid var(--n-300);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  text-decoration: none;
+  transition: all 0.15s;
+}
+
+.btn-sm:hover {
+  background: var(--hover-bg);
+  color: var(--text-color);
+}
+
+.btn-sm.danger:hover {
+  color: #dc3545;
+  border-color: #dc3545;
+}
+
+.btn-sm:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* 统计仪表盘 */
+.stats-dashboard {
+  padding: 20px 0;
+}
+
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--n-300);
+  border-radius: 10px;
+  padding: 18px 14px;
+  text-align: center;
+}
+
+.stat-num {
+  display: block;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--text-color);
+  line-height: 1.2;
+}
+
+.stat-lbl {
+  font-size: 0.82rem;
+  color: var(--text-tertiary);
+  margin-top: 4px;
+}
+
+.chart-section {
+  background: var(--card-bg);
+  border: 1px solid var(--n-300);
+  border-radius: 10px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.chart-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-color);
+  margin: 0 0 16px;
+}
+
+.chart-wrap {
+  overflow-x: auto;
+}
+
+.timeline-svg {
+  width: 100%;
+  max-width: 600px;
+  height: auto;
+}
+
+/* 热力图 */
+.heatmap-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: 24px repeat(24, 1fr);
+  gap: 2px;
+}
+
+.heatmap-day {
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 4px;
+}
+
+.heatmap-cell {
+  aspect-ratio: 1;
+  border-radius: 2px;
+  min-width: 12px;
+  transition: transform 0.1s;
+}
+
+.heatmap-cell:hover {
+  transform: scale(1.3);
+  z-index: 1;
+}
+
+.heatmap-hours {
+  display: grid;
+  grid-template-columns: 24px repeat(24, 1fr);
+  gap: 2px;
+  width: 100%;
+  max-width: 500px;
+}
+
+.heatmap-hours span {
+  font-size: 0.65rem;
+  color: var(--text-tertiary);
+  text-align: center;
+}
+
+.heatmap-legend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--text-tertiary);
+  margin-top: 8px;
+}
+
+.legend-cell {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+}
+
+@media (max-width: 700px) {
+  .stats-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
 }
 </style>

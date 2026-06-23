@@ -11,7 +11,7 @@ function getFingerprint() {
 
 function getHeaders() {
   const headers = { 'Content-Type': 'application/json' }
-  const token = localStorage.getItem('token')
+  const token = localStorage.getItem('token') || sessionStorage.getItem('token')
   if (token) headers.Authorization = `Bearer ${token}`
   else headers['X-Fingerprint'] = getFingerprint()
   return headers

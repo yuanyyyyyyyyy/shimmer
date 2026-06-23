@@ -240,7 +240,7 @@ router.post('/test', authenticateToken, async (req, res, next) => {
         { role: 'user', content: '你好，请回复"连接成功"' }
       ];
       try {
-        const raw = await makeChatCompletion(messages, { maxTokens: 100 });
+        const raw = await makeChatCompletion(messages, { maxTokens: 100 }, req.user.id);
         res.json({ ok: true, provider, model, reply: raw.slice(0, 200) });
       } catch (err) {
         res.json({ ok: false, error: `连接失败: ${err.message}` });
@@ -261,8 +261,8 @@ const CAT_PERSONALITIES = {
   assistant: `你是一位专业的摄影助手小猫，名叫「小影」。你精通摄影技巧、照片管理和光影知识。帮助用户管理照片、回忆生活。回答简洁专业，但会保持可爱的猫咪风格，偶尔带"喵~"。可以给出关于拍照、构图、后期处理的建议。用中文回复，控制在150字以内。`
 };
 
-// AI 聊天（无需登录，使用全局默认配置）
-router.post('/chat', async (req, res, next) => {
+// AI 聊天（使用当前用户的配置）
+router.post('/chat', authenticateToken, async (req, res, next) => {
   try {
     const { messages, personality } = req.body;
 
@@ -275,7 +275,7 @@ router.post('/chat', async (req, res, next) => {
     const systemMessage = { role: 'system', content: catPersonality };
     const chatMessages = [systemMessage, ...messages];
 
-    const raw = await makeChatCompletion(chatMessages, { maxTokens: 1000 });
+    const raw = await makeChatCompletion(chatMessages, { maxTokens: 1000 }, req.user.id);
 
     if (raw === null) {
       return res.json({ reply: '喵……小猫现在有点累了，等我休息一下再陪你聊天吧 🐱', personality });
@@ -287,7 +287,7 @@ router.post('/chat', async (req, res, next) => {
   }
 });
 
-router.post('/chat/stream', async (req, res, next) => {
+router.post('/chat/stream', authenticateToken, async (req, res, next) => {
   try {
     const { messages, personality } = req.body;
 
@@ -305,7 +305,7 @@ router.post('/chat/stream', async (req, res, next) => {
     const result = await makeChatCompletionStream(chatMessages, {
       maxTokens: 1000,
       signal: abortController.signal
-    });
+    }, req.user.id);
 
     if (result === null) {
       res.setHeader('Content-Type', 'text/event-stream');

@@ -127,9 +127,11 @@ router.get('/', authenticateToken, requireAdmin, async (req, res, next) => {
     const offset = (page - 1) * limit;
 
     const users = await query(
-      `SELECT id, username, nickname, avatar, role, bio, created_at
-       FROM users
-       ORDER BY created_at DESC
+      `SELECT u.id, u.username, u.nickname, u.avatar, u.role, u.bio, u.created_at,
+              (SELECT COUNT(*) FROM photos WHERE user_id = u.id) AS photo_count,
+              (SELECT COUNT(*) FROM albums WHERE user_id = u.id) AS album_count
+       FROM users u
+       ORDER BY u.created_at DESC
        LIMIT ? OFFSET ?`,
       [String(limit), String(offset)]
     );
@@ -176,6 +178,83 @@ router.put('/:id/role', authenticateToken, requireAdmin, async (req, res, next) 
     }
 
     res.json({ message: '角色修改成功' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 删除用户（仅管理员）
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id);
+
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: '无效的用户ID' });
+    }
+
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: '不能删除自己' });
+    }
+
+    const users = await query('SELECT id, username FROM users WHERE id = ?', [userId]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    await query('DELETE FROM users WHERE id = ?', [userId]);
+    res.json({ message: `用户 ${users[0].username} 已删除` });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 重置用户密码（仅管理员）
+router.put('/:id/password', authenticateToken, requireAdmin, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { password } = req.body;
+
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: '无效的用户ID' });
+    }
+
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: '密码长度至少为6位' });
+    }
+
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: '不能重置自己的密码' });
+    }
+
+    const users = await query('SELECT id FROM users WHERE id = ?', [userId]);
+    if (users.length === 0) {
+      return res.status(404).json({ error: '用户不存在' });
+    }
+
+    const hash = await bcrypt.hash(password, 10);
+    await query('UPDATE users SET password_hash = ? WHERE id = ?', [hash, userId]);
+    res.json({ message: '密码已重置' });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 编辑用户资料（仅管理员）
+router.put('/:id/profile', authenticateToken, requireAdmin, async (req, res, next) => {
+  try {
+    const userId = parseInt(req.params.id);
+    const { nickname } = req.body;
+
+    if (isNaN(userId)) {
+      return res.status(400).json({ error: '无效的用户ID' });
+    }
+
+    if (nickname && (nickname.length < 2 || nickname.length > 50)) {
+      return res.status(400).json({ error: '昵称长度需在2-50个字符之间' });
+    }
+
+    await query('UPDATE users SET nickname = ? WHERE id = ?', [nickname || null, userId]);
+    res.json({ message: '资料已更新' });
   } catch (err) {
     next(err);
   }

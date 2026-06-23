@@ -275,7 +275,7 @@ router.post('/:date/:location/summary', authenticateToken, async (req, res, next
       date,
       location: decodedLocation,
       photos: photos.map(p => ({ title: p.title, mood: p.mood }))
-    });
+    }, {}, req.user.id);
 
     console.log(`[StorySummary] AI 返回结果类型: ${typeof aiResult}, 值:`, JSON.stringify(aiResult)?.slice(0, 200));
 

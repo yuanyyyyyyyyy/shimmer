@@ -92,8 +92,8 @@ function safeParseJSON(text) {
   }
 }
 
-async function makeChatCompletion(messages, options = {}) {
-  const aiConfig = await loadAiSettings();
+async function makeChatCompletion(messages, options = {}, userId) {
+  const aiConfig = await loadAiSettings(userId);
   if (!aiConfig.enabled || !aiConfig.provider) {
     return null;
   }
@@ -178,8 +178,8 @@ async function makeChatCompletion(messages, options = {}) {
   }
 }
 
-async function makeChatCompletionStream(messages, options = {}) {
-  const aiConfig = await loadAiSettings();
+async function makeChatCompletionStream(messages, options = {}, userId) {
+  const aiConfig = await loadAiSettings(userId);
   if (!aiConfig.enabled || !aiConfig.provider) {
     return null;
   }
@@ -453,8 +453,8 @@ function makeOllamaChat(url, body, options = {}) {
   });
 }
 
-async function generatePhotoMetadata(photoUrl, options = {}) {
-  const aiConfig = await loadAiSettings();
+async function generatePhotoMetadata(photoUrl, options = {}, userId) {
+  const aiConfig = await loadAiSettings(userId);
   if (!aiConfig.enabled || !aiConfig.provider) {
     return { title: '', mood: '', tags: [] };
   }
@@ -544,8 +544,7 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
   ];
 
   try {
-    const raw = await makeChatCompletion(messages, { maxTokens: 2048 });
-    console.log(`[AI] generatePhotoMetadata raw (${provider}):`, raw.slice(0, 200));
+    const raw = await makeChatCompletion(messages, { maxTokens: 2048 }, userId);
     const parsed = safeParseJSON(raw);
     if (!parsed) {
       return { title: '', mood: '', tags: [] };
@@ -562,8 +561,8 @@ async function generatePhotoMetadata(photoUrl, options = {}) {
   }
 }
 
-async function summarizeReview(reviewStats = {}, options = {}) {
-  const aiConfig = await loadAiSettings();
+async function summarizeReview(reviewStats = {}, options = {}, userId) {
+  const aiConfig = await loadAiSettings(userId);
 
   // 检查 AI 是否启用
   if (!aiConfig.enabled || !aiConfig.provider) {
@@ -601,7 +600,7 @@ async function summarizeReview(reviewStats = {}, options = {}) {
 
   try {
     console.log(`[AI] summarizeReview: 开始生成回顾 (provider=${aiConfig.provider}, model=${aiConfig.model})`);
-    const raw = await makeChatCompletion(messages, { maxTokens: 1000 });
+    const raw = await makeChatCompletion(messages, { maxTokens: 1000 }, userId);
     const result = String(raw).trim();
 
     if (!result || result.length === 0) {
@@ -639,8 +638,8 @@ async function summarizeReview(reviewStats = {}, options = {}) {
   }
 }
 
-async function rewriteSearchQuery(query, options = {}) {
-  const aiConfig = await loadAiSettings();
+async function rewriteSearchQuery(query, options = {}, userId) {
+  const aiConfig = await loadAiSettings(userId);
   if (!aiConfig.enabled || !aiConfig.provider) {
     return { keywords: [], tags: [] };
   }
@@ -661,7 +660,7 @@ async function rewriteSearchQuery(query, options = {}) {
   ];
 
   try {
-    const raw = await makeChatCompletion(messages, { maxTokens: 200 });
+    const raw = await makeChatCompletion(messages, { maxTokens: 200 }, userId);
     const parsed = safeParseJSON(raw);
     if (!parsed) {
       return { keywords: [], tags: [] };
@@ -677,8 +676,8 @@ async function rewriteSearchQuery(query, options = {}) {
   }
 }
 
-async function generateStorySummary(storyData = {}, options = {}) {
-  const aiConfig = await loadAiSettings();
+async function generateStorySummary(storyData = {}, options = {}, userId) {
+  const aiConfig = await loadAiSettings(userId);
 
   if (!aiConfig.enabled || !aiConfig.provider) {
     return { success: false, error: 'AI_NOT_ENABLED', message: 'AI 功能未启用' };
@@ -709,7 +708,7 @@ async function generateStorySummary(storyData = {}, options = {}) {
 
   try {
     console.log(`[AI] generateStorySummary: 开始生成 (${date} @ ${location})`);
-    const raw = await makeChatCompletion(messages, { maxTokens: 2048 });
+    const raw = await makeChatCompletion(messages, { maxTokens: 2048 }, userId);
     const result = String(raw).trim();
 
     if (!result || result.length === 0) {
@@ -744,8 +743,8 @@ async function generateStorySummary(storyData = {}, options = {}) {
 }
 
 // AI 生成分享卡片文案
-async function generateShareCaption(photos = [], options = {}) {
-  const aiConfig = await loadAiSettings();
+async function generateShareCaption(photos = [], options = {}, userId) {
+  const aiConfig = await loadAiSettings(userId);
 
   if (!aiConfig.enabled || !aiConfig.provider) {
     return { success: false, error: 'AI_NOT_ENABLED', message: 'AI 未启用' };
@@ -769,7 +768,7 @@ async function generateShareCaption(photos = [], options = {}) {
   ];
 
   try {
-    const raw = await makeChatCompletion(messages, { maxTokens: 100 });
+    const raw = await makeChatCompletion(messages, { maxTokens: 100 }, userId);
     const result = String(raw).trim();
     if (!result) return { success: false, error: 'EMPTY_RESPONSE', message: '返回内容为空' };
     return { success: true, data: result };

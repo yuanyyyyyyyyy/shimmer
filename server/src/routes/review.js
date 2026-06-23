@@ -247,7 +247,7 @@ router.get('/:year', optionalAuth, async (req, res, next) => {
       firstPhoto: dateRange[0].first_photo,
       lastPhoto: dateRange[0].last_photo,
       photosWithGps: gpsStats[0].count || 0
-    });
+    }, {}, req.user?.id);
 
     // 处理 AI 回顾结果（支持新旧两种格式）
     let aiSummary = '';

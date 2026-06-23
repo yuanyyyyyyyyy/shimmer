@@ -55,6 +55,9 @@ export const users = {
   updateProfile: (data) => api.put('/users/profile', data),
   list: (params) => api.get('/users', { params }),
   updateRole: (id, role) => api.put(`/users/${id}/role`, { role }),
+  delete: (id) => api.delete(`/users/${id}`),
+  resetPassword: (id, password) => api.put(`/users/${id}/password`, { password }),
+  adminUpdateProfile: (id, data) => api.put(`/users/${id}/profile`, data),
   getHiddenPasswordStatus: () => api.get('/users/hidden-password/status'),
   setHiddenPassword: (password, currentPassword) => api.put('/users/hidden-password', { password, currentPassword }),
   removeHiddenPassword: (password) => api.delete('/users/hidden-password', { data: { password } })
@@ -141,7 +144,10 @@ export const storylines = {
 // 统计
 export const stats = {
   get: () => api.get('/stats'),
-  getGlobal: () => api.get('/stats/global')
+  getGlobal: () => api.get('/stats/global'),
+  getOverview: () => api.get('/stats/overview'),
+  getTimeline: () => api.get('/stats/timeline'),
+  getHeatmap: () => api.get('/stats/heatmap')
 }
 
 // 分享卡片

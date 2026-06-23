@@ -60,7 +60,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
       params.push(searchPattern, searchPattern, searchPattern);
 
       try {
-        const aiResult = await rewriteSearchQuery(search);
+        const aiResult = await rewriteSearchQuery(search, {}, req.user?.id);
         const aiKeywords = Array.isArray(aiResult.keywords) ? aiResult.keywords.filter(Boolean) : [];
         const aiTagNames = Array.isArray(aiResult.tags) ? aiResult.tags.filter(Boolean) : [];
 
@@ -404,7 +404,7 @@ router.post('/', authenticateToken, async (req, res, next) => {
           shot_date,
           title: rawTitle,
           mood: rawMood
-        });
+        }, req.user.id);
         title = title || aiResult.title || null;
         mood = mood || aiResult.mood || null;
         aiTags = Array.isArray(aiResult.tags) ? aiResult.tags : [];
