@@ -5,12 +5,12 @@ import { ValidationError } from '../middleware/error.js';
 
 const router = Router();
 
-// 获取收藏列表（支持用户ID和指纹）
+// 获取收藏列表（只返回自己照片的收藏）
 router.get('/', optionalAuth, async (req, res, next) => {
   try {
     const { fingerprint } = req.query;
 
-    // 优先使用用户ID（登录用户）
+    // 登录用户：只返回自己照片的收藏
     if (req.user) {
       const favorites = await query(
         `SELECT f.id, f.created_at, f.photo_id,
@@ -18,37 +18,22 @@ router.get('/', optionalAuth, async (req, res, next) => {
                 p.camera, p.lens, p.aperture, p.shutter_speed, p.iso
          FROM favorites f
          JOIN photos p ON f.photo_id = p.id
-         WHERE f.user_id = ?
+         WHERE f.user_id = ? AND p.user_id = ?
          ORDER BY f.created_at DESC`,
-        [req.user.id]
+        [req.user.id, req.user.id]
       );
 
       return res.json({ favorites, isLoggedIn: true });
     }
 
-    // 未登录用户使用指纹
-    if (!fingerprint) {
-      return res.status(400).json({ error: '缺少访客标识' });
-    }
-
-    const favorites = await query(
-      `SELECT f.id, f.created_at, f.photo_id,
-              p.title, p.url, p.thumbnail_url, p.mood, p.shot_date, p.location,
-              p.camera, p.lens, p.aperture, p.shutter_speed, p.iso
-       FROM favorites f
-       JOIN photos p ON f.photo_id = p.id
-       WHERE f.fingerprint = ? AND f.user_id IS NULL
-       ORDER BY f.created_at DESC`,
-      [fingerprint]
-    );
-
-    res.json({ favorites, isLoggedIn: false });
+    // 未登录用户：不返回任何收藏（方案 A 下匿名无法看到照片）
+    res.json({ favorites: [], isLoggedIn: false });
   } catch (err) {
     next(err);
   }
 });
 
-// 检查是否已收藏
+// 检查是否已收藏（只检查自己照片的收藏）
 router.get('/check', optionalAuth, async (req, res, next) => {
   try {
     const { photo_id, fingerprint } = req.query;
@@ -57,7 +42,7 @@ router.get('/check', optionalAuth, async (req, res, next) => {
       return res.status(400).json({ error: '缺少照片ID' });
     }
 
-    // 优先检查用户收藏
+    // 登录用户：只检查自己照片的收藏
     if (req.user) {
       const userFavorites = await query(
         'SELECT id FROM favorites WHERE photo_id = ? AND user_id = ?',
@@ -66,39 +51,30 @@ router.get('/check', optionalAuth, async (req, res, next) => {
       return res.json({ isFavorited: userFavorites.length > 0, isLoggedIn: true });
     }
 
-    // 未登录检查指纹收藏
-    if (!fingerprint) {
-      return res.json({ isFavorited: false, isLoggedIn: false });
-    }
-
-    const favorites = await query(
-      'SELECT id FROM favorites WHERE photo_id = ? AND fingerprint = ? AND user_id IS NULL',
-      [photo_id, fingerprint]
-    );
-
-    res.json({ isFavorited: favorites.length > 0, isLoggedIn: false });
+    // 未登录：不支持收藏
+    res.json({ isFavorited: false, isLoggedIn: false });
   } catch (err) {
     next(err);
   }
 });
 
-// 添加收藏
+// 添加收藏（只能收藏自己的照片）
 router.post('/', authenticateToken, async (req, res, next) => {
   try {
-    const { photo_id, fingerprint } = req.body;
+    const { photo_id } = req.body;
     const userId = req.user.id;
 
     if (!photo_id) {
       throw new ValidationError('缺少照片ID');
     }
 
-    // 检查照片是否存在
+    // 检查照片是否存在且属于当前用户
     const photos = await query(
-      'SELECT id FROM photos WHERE id = ?',
-      [photo_id]
+      'SELECT id FROM photos WHERE id = ? AND user_id = ?',
+      [photo_id, userId]
     );
     if (photos.length === 0) {
-      throw new ValidationError('照片不存在');
+      throw new ValidationError('照片不存在或无权操作');
     }
 
     // 检查是否已收藏（同一用户不能重复收藏）
@@ -112,8 +88,8 @@ router.post('/', authenticateToken, async (req, res, next) => {
     }
 
     const result = await query(
-      'INSERT INTO favorites (photo_id, user_id, fingerprint) VALUES (?, ?, ?)',
-      [photo_id, userId, fingerprint || null]
+      'INSERT INTO favorites (photo_id, user_id) VALUES (?, ?)',
+      [photo_id, userId]
     );
 
     res.status(201).json({

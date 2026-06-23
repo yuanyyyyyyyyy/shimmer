@@ -22,6 +22,7 @@ const total = ref(0)
 const hasMore = computed(() => photoList.value.length < total.value)
 const favoriteIds = ref(new Set())
 const stats = ref(null)
+const globalStats = ref(null)
 const popularTags = ref([])
 const activeTagId = ref(null)
 
@@ -64,6 +65,16 @@ const loadStats = async () => {
     stats.value = res
   } catch (e) {
     stats.value = { photos: 0, stories: 0, albums: 0, days: 0 }
+  }
+}
+
+const loadGlobalStats = async () => {
+  if (!authStore.isAdmin) return
+  try {
+    const res = await statsApi.getGlobal()
+    globalStats.value = res
+  } catch (e) {
+    globalStats.value = null
   }
 }
 
@@ -183,6 +194,7 @@ watch(() => authStore.token, () => {
 
 onMounted(() => {
   loadStats()
+  loadGlobalStats()
   loadPopularTags()
 })
 
@@ -264,6 +276,29 @@ const getCardStyle = (photo) => {
           <div class="stat-card">
             <span class="stat-number">{{ stats.days }}</span>
             <span class="stat-label">天记录</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Global Stats (Admin only) -->
+      <section v-if="authStore.isAdmin && globalStats" class="stats-section">
+        <div class="section-label">全局统计</div>
+        <div class="stats-grid">
+          <div class="stat-card admin-stat">
+            <span class="stat-number">{{ globalStats.users }}</span>
+            <span class="stat-label">位用户</span>
+          </div>
+          <div class="stat-card admin-stat">
+            <span class="stat-number">{{ globalStats.photos }}</span>
+            <span class="stat-label">张照片</span>
+          </div>
+          <div class="stat-card admin-stat">
+            <span class="stat-number">{{ globalStats.albums }}</span>
+            <span class="stat-label">本相册</span>
+          </div>
+          <div class="stat-card admin-stat">
+            <span class="stat-number">{{ globalStats.publicPhotos }}</span>
+            <span class="stat-label">张公开照片</span>
           </div>
         </div>
       </section>

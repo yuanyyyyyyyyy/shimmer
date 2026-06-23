@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query, getConnection } from '../config/database.js';
-import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error.js';
 
 const router = Router();
@@ -13,7 +13,6 @@ router.get('/', async (req, res, next) => {
     const safeOffset = Math.max(0, (parseInt(page) - 1) * safeLimit);
 
     const userId = req.user ? req.user.id : null;
-    const isAdmin = req.user && req.user.role === 'admin';
 
     let whereClause = '';
     const params = [];
@@ -83,7 +82,6 @@ router.get('/:id', async (req, res, next) => {
   try {
     const albumId = parseInt(req.params.id);
     const userId = req.user ? req.user.id : null;
-    const isAdmin = req.user && req.user.role === 'admin';
 
     // 查询相册信息
     const albums = await query(`
@@ -103,8 +101,8 @@ router.get('/:id', async (req, res, next) => {
 
     const album = albums[0];
 
-    // 权限检查：私有相册只能作者或管理员查看
-    if (!album.is_public && album.user_id !== userId && !isAdmin) {
+    // 权限检查：私有相册只能作者查看
+    if (!album.is_public && album.user_id !== userId) {
       return res.status(403).json({ error: '无权访问此相册' });
     }
 
@@ -178,7 +176,6 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
   try {
     const albumId = parseInt(req.params.id);
     const userId = req.user.id;
-    const isAdmin = req.user.role === 'admin';
     const { title, description, is_public, sort_order } = req.body;
 
     // 检查相册是否存在
@@ -187,9 +184,8 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
       return res.status(404).json({ error: '相册不存在' });
     }
 
-    // 权限检查
-    const isOwner = existing.user_id === userId;
-    if (!isOwner && !isAdmin) {
+    // 权限检查：仅作者
+    if (existing.user_id !== userId) {
       return res.status(403).json({ error: '无权修改此相册' });
     }
 
@@ -252,7 +248,6 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
   try {
     const albumId = parseInt(req.params.id);
     const userId = req.user.id;
-    const isAdmin = req.user.role === 'admin';
 
     // 检查相册是否存在
     const [existing] = await query('SELECT * FROM albums WHERE id = ?', [albumId]);
@@ -260,9 +255,8 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
       return res.status(404).json({ error: '相册不存在' });
     }
 
-    // 权限检查
-    const isOwner = existing.user_id === userId;
-    if (!isOwner && !isAdmin) {
+    // 权限检查：仅作者
+    if (existing.user_id !== userId) {
       return res.status(403).json({ error: '无权删除此相册' });
     }
 
@@ -281,7 +275,6 @@ router.post('/:id/photos', authenticateToken, async (req, res, next) => {
   try {
     const albumId = parseInt(req.params.id);
     const userId = req.user.id;
-    const isAdmin = req.user.role === 'admin';
     const { photo_id } = req.body;
 
     // 验证参数
@@ -300,14 +293,14 @@ router.post('/:id/photos', authenticateToken, async (req, res, next) => {
       return res.status(404).json({ error: '相册不存在' });
     }
 
-    if (album.user_id !== userId && !isAdmin) {
+    if (album.user_id !== userId) {
       return res.status(403).json({ error: '无权操作此相册' });
     }
 
-    // 检查照片是否存在
-    const [photo] = await query('SELECT * FROM photos WHERE id = ?', [photoId]);
+    // 检查照片是否存在且属于当前用户
+    const [photo] = await query('SELECT * FROM photos WHERE id = ? AND user_id = ?', [photoId, userId]);
     if (!photo) {
-      return res.status(404).json({ error: '照片不存在' });
+      return res.status(404).json({ error: '照片不存在或无权操作' });
     }
 
     // 检查是否已经添加
@@ -347,7 +340,6 @@ router.delete('/:id/photos/:photoId', authenticateToken, async (req, res, next) 
     const albumId = parseInt(req.params.id);
     const photoId = parseInt(req.params.photoId);
     const userId = req.user.id;
-    const isAdmin = req.user.role === 'admin';
 
     // 检查相册是否存在且有权限
     const [album] = await query('SELECT * FROM albums WHERE id = ?', [albumId]);
@@ -355,7 +347,7 @@ router.delete('/:id/photos/:photoId', authenticateToken, async (req, res, next) 
       return res.status(404).json({ error: '相册不存在' });
     }
 
-    if (album.user_id !== userId && !isAdmin) {
+    if (album.user_id !== userId) {
       return res.status(403).json({ error: '无权操作此相册' });
     }
 
@@ -395,7 +387,6 @@ router.put('/:id/cover', authenticateToken, async (req, res, next) => {
   try {
     const albumId = parseInt(req.params.id);
     const userId = req.user.id;
-    const isAdmin = req.user.role === 'admin';
     const { photo_id } = req.body;
 
     // 检查相册是否存在且有权限
@@ -404,7 +395,7 @@ router.put('/:id/cover', authenticateToken, async (req, res, next) => {
       return res.status(404).json({ error: '相册不存在' });
     }
 
-    if (album.user_id !== userId && !isAdmin) {
+    if (album.user_id !== userId) {
       return res.status(403).json({ error: '无权操作此相册' });
     }
 
@@ -447,13 +438,12 @@ router.get('/user/:userId', async (req, res, next) => {
   try {
     const targetUserId = parseInt(req.params.userId);
     const userId = req.user ? req.user.id : null;
-    const isAdmin = req.user && req.user.role === 'admin';
 
     // 查询该用户的公开相册，或登录用户自己的所有相册
     let whereClause = 'WHERE a.is_public = TRUE';
     const params = [];
 
-    if (userId && (targetUserId === userId || isAdmin)) {
+    if (userId && targetUserId === userId) {
       whereClause = 'WHERE a.user_id = ?';
       params.push(targetUserId);
     } else {

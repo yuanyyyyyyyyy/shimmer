@@ -1,37 +1,45 @@
 import { Router } from 'express';
 import { query } from '../config/database.js';
 import { randomUUID } from 'crypto';
+import { authenticateToken } from '../middleware/auth.js';
 
 const router = Router();
 
-// 创建分享卡片
-router.post('/', async (req, res, next) => {
+// 创建分享卡片（需要登录，只能分享自己的照片）
+router.post('/', authenticateToken, async (req, res, next) => {
   try {
     const { photoIds, template = 'cinematic', customText, storyDate, storyLocation } = req.body;
+    const userId = req.user.id;
 
     if (!photoIds || (!Array.isArray(photoIds) && !photoIds.length)) {
       return res.status(400).json({ error: '请选择至少一张照片' });
     }
 
-    // 生成唯一分享 ID
-    const shareId = randomUUID().replace(/-/g, '').slice(0, 12);
+    const ids = Array.isArray(photoIds) ? photoIds : photoIds;
 
-    // 验证照片存在
+    // 验证照片存在且属于当前用户
     const photos = await query(
       `SELECT id, title, url, thumbnail_url, shot_date, location, mood, width, height
-       FROM photos WHERE id IN (${photoIds.map(() => '?').join(',')})`,
-      photoIds
+       FROM photos WHERE id IN (${ids.map(() => '?').join(',')}) AND user_id = ?`,
+      [...ids, userId]
     );
 
     if (photos.length === 0) {
       return res.status(404).json({ error: '未找到有效照片' });
     }
 
-    // 存储分享卡片数据
+    if (photos.length !== ids.length) {
+      return res.status(403).json({ error: '只能分享自己的照片' });
+    }
+
+    // 生成唯一分享 ID
+    const shareId = randomUUID().replace(/-/g, '').slice(0, 12);
+
+    // 存储分享卡片数据（记录 user_id）
     await query(
-      `INSERT INTO share_cards (share_id, photo_ids, template, custom_text, story_date, story_location)
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [shareId, JSON.stringify(photoIds), template, customText || null, storyDate || null, storyLocation || null]
+      `INSERT INTO share_cards (share_id, user_id, photo_ids, template, custom_text, story_date, story_location)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [shareId, userId, JSON.stringify(ids), template, customText || null, storyDate || null, storyLocation || null]
     );
 
     // 获取标签
@@ -39,9 +47,9 @@ router.post('/', async (req, res, next) => {
       `SELECT DISTINCT t.id, t.name, t.color
        FROM tags t
        JOIN photo_tags pt ON t.id = pt.tag_id
-       WHERE pt.photo_id IN (${photoIds.map(() => '?').join(',')})
+       WHERE pt.photo_id IN (${ids.map(() => '?').join(',')})
        LIMIT 10`,
-      photoIds
+      ids
     );
 
     res.status(201).json({
@@ -114,18 +122,19 @@ router.get('/:shareId', async (req, res, next) => {
   }
 });
 
-// 删除分享卡片
-router.delete('/:shareId', async (req, res, next) => {
+// 删除分享卡片（需要登录，只能删除自己创建的）
+router.delete('/:shareId', authenticateToken, async (req, res, next) => {
   try {
     const { shareId } = req.params;
+    const userId = req.user.id;
 
     const result = await query(
-      `UPDATE share_cards SET is_deleted = 1, deleted_at = NOW() WHERE share_id = ?`,
-      [shareId]
+      `UPDATE share_cards SET is_deleted = 1, deleted_at = NOW() WHERE share_id = ? AND user_id = ?`,
+      [shareId, userId]
     );
 
     if (result.affectedRows === 0) {
-      return res.status(404).json({ error: '分享卡片不存在' });
+      return res.status(404).json({ error: '分享卡片不存在或无权删除' });
     }
 
     res.json({ message: '分享卡片已删除' });

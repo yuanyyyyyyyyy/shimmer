@@ -199,10 +199,7 @@ const handleBatchUploading = (isUploading) => {
 const loadPhotos = async () => {
   loading.value = true
   try {
-    const apiCall = authStore.isAdmin
-      ? photos.getAdminPhotos({ page: page.value, limit: 20, sort: 'created' })
-      : photos.getMyPhotos({ page: page.value, limit: 20, sort: 'created' })
-    const res = await apiCall
+    const res = await photos.getMyPhotos({ page: page.value, limit: 20, sort: 'created' })
     photoList.value = res.data
     total.value = res.total
   } catch (e) {

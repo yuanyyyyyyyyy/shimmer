@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { query, getConnection } from '../config/database.js';
-import { authenticateToken, requireAdmin, optionalAuth, verifyHiddenAlbum } from '../middleware/auth.js';
+import { authenticateToken, optionalAuth, verifyHiddenAlbum } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error.js';
 import { generatePhotoMetadata, rewriteSearchQuery } from '../services/ai.js';
 
@@ -168,54 +168,6 @@ router.get('/', optionalAuth, async (req, res, next) => {
   }
 });
 
-// 获取所有照片（管理员专用，返回包括隐藏的所有照片）
-router.get('/admin/all', authenticateToken, async (req, res, next) => {
-  try {
-    const { page = 1, limit = 20, sort = 'created' } = req.query;
-    const safeLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
-    const safeOffset = Math.max(0, (parseInt(page) - 1) * safeLimit);
-
-    let orderBy;
-    switch (sort) {
-      case 'date':
-        orderBy = 'shot_date DESC, created_at DESC';
-        break;
-      case 'created':
-        orderBy = 'created_at DESC';
-        break;
-      case 'manual':
-        orderBy = 'sort_order DESC, created_at DESC';
-        break;
-      default:
-        orderBy = 'created_at DESC';
-    }
-
-    // 获取所有照片（包括隐藏的）
-    const photos = await query(
-      `SELECT id, title, url, thumbnail_url, original_url, mood, shot_date, location,
-               camera, lens, aperture, shutter_speed, iso,
-               width, height, file_size, sort_order, visibility,
-               created_at, user_id, latitude, longitude
-        FROM photos
-        ORDER BY ${orderBy}
-        LIMIT ${safeLimit} OFFSET ${safeOffset}`
-    );
-
-    const [countResult] = await query('SELECT COUNT(*) as total FROM photos');
-
-    res.json({
-      data: photos,
-      total: countResult.total,
-      page: parseInt(page),
-      limit: safeLimit,
-      totalPages: Math.ceil(countResult.total / safeLimit)
-    });
-  } catch (err) {
-    next(err);
-  }
-});
-
-// 获取隐藏相册照片（需要登录 + hidden_album_token）
 router.get('/hidden', authenticateToken, verifyHiddenAlbum, async (req, res, next) => {
   try {
     const { page = 1, limit = 20, sort = 'date' } = req.query;
@@ -524,11 +476,8 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
       throw new ValidationError('照片不存在');
     }
 
-    // 权限检查：只有照片所有者或管理员可以更新
-    const isOwner = existing[0].user_id === req.user.id;
-    const isAdmin = req.user.role === 'admin';
-
-    if (!isOwner && !isAdmin) {
+    // 权限检查：只有照片所有者可以更新
+    if (existing[0].user_id !== req.user.id) {
       return res.status(403).json({ error: '无权修改此照片' });
     }
 
@@ -571,7 +520,7 @@ router.put('/:id', authenticateToken, async (req, res, next) => {
   }
 });
 
-// 删除照片（需要登录，且是照片所有者或管理员）
+// 删除照片（需要登录，且是照片所有者）
 router.delete('/:id', authenticateToken, async (req, res, next) => {
   try {
     const { id } = req.params;
@@ -581,11 +530,8 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
       throw new ValidationError('照片不存在');
     }
 
-    // 权限检查：只有照片所有者或管理员可以删除
-    const isOwner = existing[0].user_id === req.user.id;
-    const isAdmin = req.user.role === 'admin';
-
-    if (!isOwner && !isAdmin) {
+    // 权限检查：只有照片所有者可以删除
+    if (existing[0].user_id !== req.user.id) {
       return res.status(403).json({ error: '无权删除此照片' });
     }
 

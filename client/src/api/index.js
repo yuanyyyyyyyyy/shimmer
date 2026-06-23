@@ -69,7 +69,6 @@ export const photos = {
   getReview: (year, options = {}) => api.get(`/review/${year}`, { params: options }),
   getReviewYears: () => api.get('/review/years'),
   getMyPhotos: (params) => api.get('/photos/my/list', { params }),
-  getAdminPhotos: (params) => api.get('/photos/admin/all', { params }),
   getHiddenPhotos: (params, hiddenToken) => api.get('/photos/hidden', {
     params: { ...params, hidden_token: hiddenToken }
   }),
@@ -141,7 +140,8 @@ export const storylines = {
 
 // 统计
 export const stats = {
-  get: () => api.get('/stats')
+  get: () => api.get('/stats'),
+  getGlobal: () => api.get('/stats/global')
 }
 
 // 分享卡片

@@ -1,23 +1,28 @@
 import express from 'express';
-import { authenticateToken, requireAdmin } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 import { query } from '../config/database.js';
 import { getAIConfig, generatePhotoMetadata, rewriteSearchQuery, getOllamaModels, makeOllamaChat, makeChatCompletion, makeChatCompletionStream } from '../services/ai.js';
 
 const router = express.Router();
 
-router.get('/config', async (req, res, next) => {
+// 获取当前用户的 AI 配置
+router.get('/config', authenticateToken, async (req, res, next) => {
   try {
-    const config = await getAIConfig();
+    const config = await getAIConfig(req.user.id);
     res.json({ config });
   } catch (err) {
     next(err);
   }
 });
 
-router.post('/config', authenticateToken, requireAdmin, async (req, res, next) => {
+// 保存当前用户的 AI 配置
+router.post('/config', authenticateToken, async (req, res, next) => {
   try {
     const { provider, model, base_url, api_key, timeout, enabled } = req.body;
-    const rows = await query('SELECT id, api_key FROM ai_settings WHERE is_active = 1 LIMIT 1');
+    const userId = req.user.id;
+
+    // 查找该用户当前活跃的配置
+    const rows = await query('SELECT id, api_key FROM ai_settings WHERE user_id = ? AND is_active = 1 LIMIT 1', [userId]);
     const currentApiKey = rows[0]?.api_key || null;
     const finalApiKey = api_key === undefined ? currentApiKey : api_key || null;
     const finalTimeout = timeout === undefined ? 120000 : timeout || 120000;
@@ -30,8 +35,8 @@ router.post('/config', authenticateToken, requireAdmin, async (req, res, next) =
       );
     } else {
       await query(
-        `INSERT INTO ai_settings (name, is_active, provider, model, base_url, api_key, timeout, enabled) VALUES (?, 1, ?, ?, ?, ?, ?, ?)`,
-        ['默认配置', provider || null, model || null, base_url || null, finalApiKey, finalTimeout, enabledValue]
+        `INSERT INTO ai_settings (user_id, name, is_active, provider, model, base_url, api_key, timeout, enabled) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+        [userId, '默认配置', provider || null, model || null, base_url || null, finalApiKey, finalTimeout, enabledValue]
       );
     }
 
@@ -41,11 +46,12 @@ router.post('/config', authenticateToken, requireAdmin, async (req, res, next) =
   }
 });
 
-// 预设管理
-router.get('/presets', authenticateToken, requireAdmin, async (req, res, next) => {
+// 获取当前用户的预设列表
+router.get('/presets', authenticateToken, async (req, res, next) => {
   try {
     const rows = await query(
-      'SELECT id, name, is_active, provider, model, base_url, api_key, timeout, enabled, updated_at FROM ai_settings ORDER BY is_active DESC, updated_at DESC'
+      'SELECT id, name, is_active, provider, model, base_url, api_key, timeout, enabled, updated_at FROM ai_settings WHERE user_id = ? ORDER BY is_active DESC, updated_at DESC',
+      [req.user.id]
     );
     res.json({ presets: rows });
   } catch (err) {
@@ -53,20 +59,22 @@ router.get('/presets', authenticateToken, requireAdmin, async (req, res, next) =
   }
 });
 
-router.post('/presets', authenticateToken, requireAdmin, async (req, res, next) => {
+// 创建当前用户的预设
+router.post('/presets', authenticateToken, async (req, res, next) => {
   try {
     const { name, provider, model, base_url, api_key, timeout, enabled } = req.body;
+    const userId = req.user.id;
     const presetName = name && name.trim() ? name.trim() : '未命名配置';
     const enabledValue = enabled ? 1 : 0;
     const timeoutValue = timeout || 120000;
 
     const result = await query(
-      `INSERT INTO ai_settings (name, is_active, provider, model, base_url, api_key, timeout, enabled) VALUES (?, 1, ?, ?, ?, ?, ?, ?)`,
-      [presetName, provider || null, model || null, base_url || null, api_key || null, timeoutValue, enabledValue]
+      `INSERT INTO ai_settings (user_id, name, is_active, provider, model, base_url, api_key, timeout, enabled) VALUES (?, ?, 1, ?, ?, ?, ?, ?, ?)`,
+      [userId, presetName, provider || null, model || null, base_url || null, api_key || null, timeoutValue, enabledValue]
     );
 
-    // 新预设创建后自动激活（其它预设取消激活）
-    await query('UPDATE ai_settings SET is_active = 0 WHERE id != ?', [result.insertId]);
+    // 新预设创建后自动激活（该用户的其它预设取消激活）
+    await query('UPDATE ai_settings SET is_active = 0 WHERE user_id = ? AND id != ?', [userId, result.insertId]);
 
     res.json({ message: '预设已创建', id: result.insertId });
   } catch (err) {
@@ -74,10 +82,18 @@ router.post('/presets', authenticateToken, requireAdmin, async (req, res, next) 
   }
 });
 
-router.put('/presets/:id', authenticateToken, requireAdmin, async (req, res, next) => {
+// 更新当前用户的预设
+router.put('/presets/:id', authenticateToken, async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, provider, model, base_url, api_key, timeout, enabled } = req.body;
+    const userId = req.user.id;
+
+    // 验证预设属于当前用户
+    const existing = await query('SELECT id FROM ai_settings WHERE id = ? AND user_id = ?', [id, userId]);
+    if (existing.length === 0) {
+      return res.status(404).json({ error: '预设不存在' });
+    }
 
     // 只更新提供的字段
     const fields = [];
@@ -103,18 +119,20 @@ router.put('/presets/:id', authenticateToken, requireAdmin, async (req, res, nex
   }
 });
 
-router.put('/presets/:id/activate', authenticateToken, requireAdmin, async (req, res, next) => {
+// 激活当前用户的预设
+router.put('/presets/:id/activate', authenticateToken, async (req, res, next) => {
   try {
     const { id } = req.params;
+    const userId = req.user.id;
 
-    // 先检查预设是否存在
-    const rows = await query('SELECT id FROM ai_settings WHERE id = ?', [id]);
+    // 先检查预设是否存在且属于当前用户
+    const rows = await query('SELECT id FROM ai_settings WHERE id = ? AND user_id = ?', [id, userId]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '预设不存在' });
     }
 
-    await query('UPDATE ai_settings SET is_active = 0');
-    await query('UPDATE ai_settings SET is_active = 1 WHERE id = ?', [id]);
+    await query('UPDATE ai_settings SET is_active = 0 WHERE user_id = ?', [userId]);
+    await query('UPDATE ai_settings SET is_active = 1 WHERE id = ? AND user_id = ?', [id, userId]);
 
     res.json({ message: '预设已激活' });
   } catch (err) {
@@ -122,21 +140,23 @@ router.put('/presets/:id/activate', authenticateToken, requireAdmin, async (req,
   }
 });
 
-router.delete('/presets/:id', authenticateToken, requireAdmin, async (req, res, next) => {
+// 删除当前用户的预设
+router.delete('/presets/:id', authenticateToken, async (req, res, next) => {
   try {
     const { id } = req.params;
+    const userId = req.user.id;
 
-    const rows = await query('SELECT id, is_active FROM ai_settings WHERE id = ?', [id]);
+    const rows = await query('SELECT id, is_active FROM ai_settings WHERE id = ? AND user_id = ?', [id, userId]);
     if (rows.length === 0) {
       return res.status(404).json({ error: '预设不存在' });
     }
 
     const wasActive = rows[0].is_active === 1;
-    await query('DELETE FROM ai_settings WHERE id = ?', [id]);
+    await query('DELETE FROM ai_settings WHERE id = ? AND user_id = ?', [id, userId]);
 
-    // 如果删除的是活跃预设，激活最新的一条
+    // 如果删除的是活跃预设，激活该用户最新的一条
     if (wasActive) {
-      const remaining = await query('SELECT id FROM ai_settings ORDER BY id DESC LIMIT 1');
+      const remaining = await query('SELECT id FROM ai_settings WHERE user_id = ? ORDER BY id DESC LIMIT 1', [userId]);
       if (remaining.length > 0) {
         await query('UPDATE ai_settings SET is_active = 1 WHERE id = ?', [remaining[0].id]);
       }
@@ -148,6 +168,7 @@ router.delete('/presets/:id', authenticateToken, requireAdmin, async (req, res, 
   }
 });
 
+// AI 元数据生成（无需登录，使用全局默认配置）
 router.post('/metadata', async (req, res, next) => {
   try {
     const { url, location, shot_date } = req.body;
@@ -162,6 +183,7 @@ router.post('/metadata', async (req, res, next) => {
   }
 });
 
+// AI 搜索重写（无需登录，使用全局默认配置）
 router.get('/search', async (req, res, next) => {
   try {
     const q = req.query.q;
@@ -176,6 +198,7 @@ router.get('/search', async (req, res, next) => {
   }
 });
 
+// Ollama 模型列表（无需登录）
 router.get('/ollama/models', async (req, res, next) => {
   try {
     const models = await getOllamaModels();
@@ -185,9 +208,10 @@ router.get('/ollama/models', async (req, res, next) => {
   }
 });
 
-router.post('/test', authenticateToken, requireAdmin, async (req, res, next) => {
+// 测试 AI 连接（使用当前用户的配置）
+router.post('/test', authenticateToken, async (req, res, next) => {
   try {
-    const aiConfig = await getAIConfig();
+    const aiConfig = await getAIConfig(req.user.id);
     if (!aiConfig.provider) {
       return res.json({ ok: false, error: '未配置 AI 提供商' });
     }
@@ -237,6 +261,7 @@ const CAT_PERSONALITIES = {
   assistant: `你是一位专业的摄影助手小猫，名叫「小影」。你精通摄影技巧、照片管理和光影知识。帮助用户管理照片、回忆生活。回答简洁专业，但会保持可爱的猫咪风格，偶尔带"喵~"。可以给出关于拍照、构图、后期处理的建议。用中文回复，控制在150字以内。`
 };
 
+// AI 聊天（无需登录，使用全局默认配置）
 router.post('/chat', async (req, res, next) => {
   try {
     const { messages, personality } = req.body;

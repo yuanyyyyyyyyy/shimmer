@@ -23,34 +23,8 @@ router.get('/:id', async (req, res, next) => {
       return res.status(404).json({ error: '用户不存在' });
     }
 
-    // 统计用户的公开照片数量
-    const [photoCount] = await query(
-      'SELECT COUNT(*) as count FROM photos WHERE user_id = ? AND visibility = "public"',
-      [userId]
-    );
-
-    // 统计总照片数量（包括私有）
-    const [totalPhotoCount] = await query(
-      'SELECT COUNT(*) as count FROM photos WHERE user_id = ?',
-      [userId]
-    );
-
-    // 统计用户照片被收藏的次数
-    const [favoriteCount] = await query(
-      `SELECT COUNT(*) as count
-       FROM favorites f
-       JOIN photos p ON f.photo_id = p.id
-       WHERE p.user_id = ?`,
-      [userId]
-    );
-
     res.json({
-      user: {
-        ...users[0],
-        photoCount: photoCount.count,
-        totalPhotoCount: totalPhotoCount.count,
-        favoriteCount: favoriteCount.count
-      }
+      user: users[0]
     });
   } catch (err) {
     next(err);

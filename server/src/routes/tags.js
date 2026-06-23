@@ -125,7 +125,7 @@ router.get('/photo/:photoId', authenticateToken, async (req, res, next) => {
     if (photos.length === 0) {
       return res.status(404).json({ error: '照片不存在' });
     }
-    if (photos[0].user_id !== userId && req.user.role !== 'admin') {
+    if (photos[0].user_id !== userId) {
       return res.status(403).json({ error: '无权访问' });
     }
     
@@ -157,7 +157,7 @@ router.post('/photo/:photoId', authenticateToken, async (req, res, next) => {
     if (photos.length === 0) {
       return res.status(404).json({ error: '照片不存在' });
     }
-    if (photos[0].user_id !== userId && req.user.role !== 'admin') {
+    if (photos[0].user_id !== userId) {
       return res.status(403).json({ error: '无权操作' });
     }
     

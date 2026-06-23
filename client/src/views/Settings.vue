@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores'
 import { ai, users, auth } from '../api'
@@ -32,6 +32,8 @@ const accountPasswordSuccess = ref('')
 const presets = ref([])
 const currentPresetId = ref(null)
 const aiForm = ref({ enabled: false, provider: '', model: '', base_url: '', api_key: '' })
+const showProviderDropdown = ref(false)
+const providerSelectRef = ref(null)
 const cleanForm = ref(null)
 const aiSaveLoading = ref(false)
 const aiTestLoading = ref(false)
@@ -433,6 +435,26 @@ async function deletePreset(preset) {
   }
 }
 
+function selectProvider(value) {
+  aiForm.value.provider = value
+  showProviderDropdown.value = false
+  handleProviderChange(value)
+}
+
+function handleClickOutside(e) {
+  if (providerSelectRef.value && !providerSelectRef.value.contains(e.target)) {
+    showProviderDropdown.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', handleClickOutside)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+})
+
 function handleProviderChange(newProvider) {
   const provider = providers.find(p => p.value === newProvider)
   if (provider && provider.url) {
@@ -618,31 +640,92 @@ function handleProviderChange(newProvider) {
             </label>
             <label>
               <span>AI 提供商</span>
-              <select v-model="aiForm.provider" @change="handleProviderChange(aiForm.provider)">
-                <option value="">请选择提供商</option>
-                <optgroup label="本地部署">
-                  <option value="ollama">Ollama (本地)</option>
-                </optgroup>
-                <optgroup label="国外主流厂商">
-                  <option value="openai">OpenAI (GPT-4o/4-Turbo)</option>
-                  <option value="anthropic">Anthropic (Claude 3.5 Sonnet/Opus)</option>
-                  <option value="google">Google (Gemini 2.0/2.5 Pro)</option>
-                  <option value="azure">Azure OpenAI</option>
-                  <option value="mistral">Mistral AI (Mistral Large)</option>
-                  <option value="groq">Groq (超高速推理)</option>
-                  <option value="openrouter">OpenRouter (多模型网关)</option>
-                </optgroup>
-                <optgroup label="国内主流厂商">
-                  <option value="deepseek">DeepSeek (V3/R1 推理)</option>
-                  <option value="zhipu">智谱 AI (GLM-4)</option>
-                  <option value="moonshot">月之暗面 (Kimi/Moonshot)</option>
-                  <option value="qwen">通义千问 (Qwen)</option>
-                  <option value="ernie">百度文心一言 (ERNIE 4.0)</option>
-                </optgroup>
-                <optgroup label="自定义">
-                  <option value="custom">自定义 / OpenAI 兼容 API</option>
-                </optgroup>
-              </select>
+              <div class="provider-select" ref="providerSelectRef">
+                <button type="button" class="provider-trigger" @click="showProviderDropdown = !showProviderDropdown">
+                  <span v-if="currentProvider" class="provider-trigger-content">
+                    <span class="provider-trigger-label">{{ currentProvider.label }}</span>
+                    <span class="provider-trigger-tag" :class="currentProvider.needKey ? 'need-key' : 'no-key'">
+                      {{ currentProvider.needKey ? '需要 Key' : '无需 Key' }}
+                    </span>
+                  </span>
+                  <span v-else class="provider-trigger-placeholder">请选择提供商</span>
+                  <svg class="provider-trigger-arrow" :class="{ open: showProviderDropdown }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </button>
+                <transition name="dropdown">
+                  <div v-if="showProviderDropdown" class="provider-dropdown">
+                    <div class="provider-group">
+                      <div class="provider-group-label">本地部署</div>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'ollama' }" @click="selectProvider('ollama')">
+                        <span class="provider-option-label">Ollama</span>
+                        <span class="provider-option-desc">本地部署，无需 API Key</span>
+                      </button>
+                    </div>
+                    <div class="provider-group">
+                      <div class="provider-group-label">国外厂商</div>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'openai' }" @click="selectProvider('openai')">
+                        <span class="provider-option-label">OpenAI</span>
+                        <span class="provider-option-desc">GPT-4o / 4-Turbo</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'anthropic' }" @click="selectProvider('anthropic')">
+                        <span class="provider-option-label">Anthropic</span>
+                        <span class="provider-option-desc">Claude 3.5 Sonnet / Opus</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'google' }" @click="selectProvider('google')">
+                        <span class="provider-option-label">Google</span>
+                        <span class="provider-option-desc">Gemini 2.0 / 2.5 Pro</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'azure' }" @click="selectProvider('azure')">
+                        <span class="provider-option-label">Azure OpenAI</span>
+                        <span class="provider-option-desc">微软 Azure 托管</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'mistral' }" @click="selectProvider('mistral')">
+                        <span class="provider-option-label">Mistral AI</span>
+                        <span class="provider-option-desc">Mistral Large</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'groq' }" @click="selectProvider('groq')">
+                        <span class="provider-option-label">Groq</span>
+                        <span class="provider-option-desc">超高速推理</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'openrouter' }" @click="selectProvider('openrouter')">
+                        <span class="provider-option-label">OpenRouter</span>
+                        <span class="provider-option-desc">多模型网关</span>
+                      </button>
+                    </div>
+                    <div class="provider-group">
+                      <div class="provider-group-label">国内厂商</div>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'deepseek' }" @click="selectProvider('deepseek')">
+                        <span class="provider-option-label">DeepSeek</span>
+                        <span class="provider-option-desc">V3 / R1 推理</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'zhipu' }" @click="selectProvider('zhipu')">
+                        <span class="provider-option-label">智谱 AI</span>
+                        <span class="provider-option-desc">GLM-4 系列</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'moonshot' }" @click="selectProvider('moonshot')">
+                        <span class="provider-option-label">月之暗面</span>
+                        <span class="provider-option-desc">Kimi / Moonshot</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'qwen' }" @click="selectProvider('qwen')">
+                        <span class="provider-option-label">通义千问</span>
+                        <span class="provider-option-desc">Qwen 系列</span>
+                      </button>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'ernie' }" @click="selectProvider('ernie')">
+                        <span class="provider-option-label">百度文心</span>
+                        <span class="provider-option-desc">ERNIE 4.0</span>
+                      </button>
+                    </div>
+                    <div class="provider-group">
+                      <div class="provider-group-label">自定义</div>
+                      <button type="button" class="provider-option" :class="{ active: aiForm.provider === 'custom' }" @click="selectProvider('custom')">
+                        <span class="provider-option-label">自定义 / OpenAI 兼容</span>
+                        <span class="provider-option-desc">任意兼容 OpenAI API 格式的服务</span>
+                      </button>
+                    </div>
+                  </div>
+                </transition>
+              </div>
             </label>
             <div class="provider-hint" v-if="currentProvider && currentProvider.desc">
               <span class="hint-icon">💡</span>
@@ -1442,6 +1525,205 @@ function handleProviderChange(newProvider) {
   width: 18px;
   height: 18px;
   accent-color: var(--secondary-color);
+}
+
+/* Provider Select Dropdown */
+.provider-select {
+  position: relative;
+}
+
+.provider-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border: 1px solid var(--input-border);
+  border-radius: 6px;
+  background: #fff;
+  color: var(--text-primary);
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.provider-trigger:hover {
+  border-color: var(--secondary-color);
+}
+
+.provider-trigger:focus {
+  outline: none;
+  border-color: var(--secondary-color);
+}
+
+.provider-trigger-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provider-trigger-placeholder {
+  color: var(--text-tertiary);
+}
+
+.provider-trigger-tag {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.provider-trigger-tag.need-key {
+  background: rgba(251, 191, 36, 0.15);
+  color: #d97706;
+}
+
+.provider-trigger-tag.no-key {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+.provider-trigger-arrow {
+  transition: transform 0.2s;
+  color: var(--text-tertiary);
+  flex-shrink: 0;
+}
+
+.provider-trigger-arrow.open {
+  transform: rotate(180deg);
+}
+
+.provider-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  background: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.provider-group {
+  padding: 4px 0;
+}
+
+.provider-group:not(:last-child) {
+  border-bottom: 1px solid var(--input-border);
+}
+
+.provider-group-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 6px 10px 4px;
+}
+
+.provider-option {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+  text-align: left;
+  color: inherit;
+}
+
+.provider-option:hover {
+  background: #f5f5f5;
+}
+
+.provider-option.active {
+  background: #2f3640;
+  color: #fff;
+}
+
+.provider-option-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.provider-option-desc {
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.provider-option.active .provider-option-desc {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+/* Dropdown animation */
+.dropdown-enter-active,
+.dropdown-leave-active {
+  transition: opacity 0.15s, transform 0.15s;
+}
+
+.dropdown-enter-from,
+.dropdown-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+/* Scrollbar */
+.provider-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.provider-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.provider-dropdown::-webkit-scrollbar-thumb {
+  background: var(--text-tertiary);
+  border-radius: 2px;
+}
+
+/* Dark mode */
+:root.dark .provider-trigger {
+  background: #2a2a2a;
+  border-color: #444;
+  color: #e0e0e0;
+}
+
+:root.dark .provider-dropdown {
+  background: #2a2a2a;
+  border-color: #444;
+}
+
+:root.dark .provider-group-label {
+  color: #888;
+}
+
+:root.dark .provider-group:not(:last-child) {
+  border-bottom-color: #444;
+}
+
+:root.dark .provider-option:hover {
+  background: #3a3a3a;
+}
+
+:root.dark .provider-option.active {
+  background: #8b95a0;
+}
+
+:root.dark .provider-trigger-tag.need-key {
+  background: rgba(251, 191, 36, 0.2);
+}
+
+:root.dark .provider-trigger-tag.no-key {
+  background: rgba(34, 197, 94, 0.2);
 }
 
 .provider-hint {

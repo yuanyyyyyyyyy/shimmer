@@ -20,20 +20,38 @@ const DEFAULT_AI_CONFIG = {
   timeout: AI_TIMEOUT
 };
 
-async function loadAiSettings() {
+async function loadAiSettings(userId) {
   try {
-    let rows = await query(
-      'SELECT provider, model, base_url, api_key, timeout, enabled FROM ai_settings WHERE is_active = 1 LIMIT 1'
-    );
+    let rows;
 
-    // 无活跃预设时回退到最新一条
-    if (rows.length === 0) {
+    if (userId) {
+      // 按用户加载配置
       rows = await query(
-        'SELECT provider, model, base_url, api_key, timeout, enabled FROM ai_settings ORDER BY id DESC LIMIT 1'
+        'SELECT provider, model, base_url, api_key, timeout, enabled FROM ai_settings WHERE user_id = ? AND is_active = 1 LIMIT 1',
+        [userId]
       );
+      // 无活跃预设时回退到该用户最新一条
+      if (rows.length === 0) {
+        rows = await query(
+          'SELECT provider, model, base_url, api_key, timeout, enabled FROM ai_settings WHERE user_id = ? ORDER BY id DESC LIMIT 1',
+          [userId]
+        );
+      }
     }
 
-    if (rows.length === 0) {
+    // 无用户或用户无配置时回退到全局默认
+    if (!rows || rows.length === 0) {
+      rows = await query(
+        'SELECT provider, model, base_url, api_key, timeout, enabled FROM ai_settings WHERE user_id IS NULL AND is_active = 1 LIMIT 1'
+      );
+      if (rows.length === 0) {
+        rows = await query(
+          'SELECT provider, model, base_url, api_key, timeout, enabled FROM ai_settings WHERE user_id IS NULL ORDER BY id DESC LIMIT 1'
+        );
+      }
+    }
+
+    if (!rows || rows.length === 0) {
       return { ...DEFAULT_AI_CONFIG };
     }
 
@@ -52,8 +70,8 @@ async function loadAiSettings() {
   }
 }
 
-async function getAIConfig() {
-  return await loadAiSettings();
+async function getAIConfig(userId) {
+  return await loadAiSettings(userId);
 }
 
 function safeParseJSON(text) {
