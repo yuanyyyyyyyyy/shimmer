@@ -8,7 +8,8 @@ const props = defineProps({
   date: { type: String, default: '' },
   location: { type: String, default: '' },
   tags: { type: Array, default: () => [] },
-  userName: { type: String, default: '光影手记' }
+  userName: { type: String, default: '光影手记' },
+  scale: { type: Number, default: 1 }
 })
 
 const cardRef = ref(null)
@@ -48,9 +49,6 @@ const getGridArea = (i) => {
           <span v-if="location">· {{ location }}</span>
         </div>
       </div>
-      <div class="brand-bar">
-        <span>✨ {{ userName }}</span>
-      </div>
     </div>
 
     <!-- 日历模板 -->
@@ -66,7 +64,6 @@ const getGridArea = (i) => {
       <div class="cal-footer">
         <p v-if="caption" class="cal-caption">{{ caption }}</p>
         <span v-if="location" class="cal-loc">📍 {{ location }}</span>
-        <span class="cal-brand">— {{ userName }}</span>
       </div>
     </div>
 
@@ -91,7 +88,6 @@ const getGridArea = (i) => {
         <div class="mag-tags" v-if="tags.length > 0">
           <span v-for="t in tags.slice(0, 4)" :key="t.id">#{{ t.name }}</span>
         </div>
-        <div class="mag-brand-line">from {{ userName }} · Shimmer</div>
       </div>
     </div>
 
@@ -107,7 +103,6 @@ const getGridArea = (i) => {
       </div>
       <div class="collage-meta">
         <span v-if="date || location">{{ [date, location].filter(Boolean).join(' · ') }}</span>
-        <span class="collage-brand">via {{ userName }}</span>
       </div>
     </div>
   </div>
@@ -121,6 +116,7 @@ const getGridArea = (i) => {
   background: white;
   box-shadow: 0 12px 40px rgba(0,0,0,0.15);
   font-family: 'Noto Sans SC', -apple-system, sans-serif;
+  zoom: v-bind(scale);
 }
 
 /* ---- 电影海报 ---- */
@@ -133,8 +129,6 @@ const getGridArea = (i) => {
 .cinema-text { position: absolute; bottom: 48px; left: 28px; right: 28px; color: white; z-index: 2; }
 .caption { font-size: 1.15rem; line-height: 1.5; margin: 0 0 12px; text-shadow: 0 2px 8px rgba(0,0,0,0.5); }
 .meta-row { font-size: 0.84rem; opacity: 0.7; letter-spacing: 0.04em; }
-.brand-bar { position: absolute; top: 20px; left: 24px; z-index: 2; }
-.brand-bar span { background: #000; color: white; padding: 5px 14px; border-radius: 14px; font-size: 0.78rem; font-weight: 600; }
 
 /* ---- 日历 ---- */
 .tmpl.calendar { padding: 24px; background: linear-gradient(160deg, #fffef8, #f8f5ee); }
@@ -147,7 +141,6 @@ const getGridArea = (i) => {
 .cal-footer { text-align: center; }
 .cal-caption { font-size: 0.98rem; color: var(--text-primary); line-height: 1.6; margin-bottom: 8px; }
 .cal-loc { font-size: 0.84rem; color: var(--text-secondary); }
-.cal-brand { display: block; margin-top: 10px; font-size: 0.78rem; color: var(--text-t); }
 
 /* ---- 杂志 ---- */
 .tmpl.magazine { padding: 28px 26px; background: #fafafa; }
@@ -162,7 +155,6 @@ const getGridArea = (i) => {
 .mag-meta span { margin-right: 8px; }
 .mag-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
 .mag-tags span { font-size: 0.76rem; color: oklch(52% 0.10 250); }
-.mag-brand-line { font-size: 0.76rem; color: var(--text-t); }
 
 /* ---- 拼图 ---- */
 .tmpl.collage { padding: 12px; background: #1a1a1a; }
@@ -174,5 +166,4 @@ const getGridArea = (i) => {
 .collage-caption { padding: 12px 8px 4px; text-align: center; }
 .collage-caption p { color: #eee; font-size: 0.95rem; margin: 0; line-height: 1.5; }
 .collage-meta { display: flex; justify-content: space-between; padding: 8px 12px 12px; font-size: 0.74rem; color: #888; }
-.collage-brand { color: #666; }
 </style>
