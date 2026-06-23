@@ -1,5 +1,5 @@
 {
-  "name": "shimmer-client",
+  "name": "shimmer-frontend",
   "version": "1.0.0",
   "type": "module",
   "scripts": {

@@ -1,5 +1,5 @@
 {
-  "name": "shimmer-server",
+  "name": "shimmer-backend",
   "version": "1.0.0",
   "description": "光影手记后端 API 服务",
   "main": "src/app.js",
