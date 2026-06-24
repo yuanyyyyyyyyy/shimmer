@@ -518,7 +518,7 @@ const deleteShare = async (item) => {
 const loadStats = async () => {
   statsLoading.value = true
   try {
-    const [overviewRes, timelineRes, visibilityRes, topTagsRes, topUsersRes, coverageRes] = await Promise.all([
+    const results = await Promise.allSettled([
       statsApi.getOverview(buildParams('overview')),
       statsApi.getTimeline(buildParams('timeline')),
       statsApi.getVisibility(buildParams('visibility')),
@@ -526,12 +526,13 @@ const loadStats = async () => {
       statsApi.getTopUsers(buildParams('topUsers')),
       statsApi.getCoverage(buildParams('coverage'))
     ])
-    statsOverview.value = overviewRes
-    statsTimeline.value = timelineRes.data || []
-    statsVisibility.value = visibilityRes.data || []
-    statsTopTags.value = topTagsRes.data || []
-    statsTopUsers.value = topUsersRes.data || []
-    statsCoverage.value = coverageRes
+    const [overview, timeline, visibility, topTags, topUsers, coverage] = results
+    if (overview.status === 'fulfilled') statsOverview.value = overview.value
+    if (timeline.status === 'fulfilled') statsTimeline.value = timeline.value.data || []
+    if (visibility.status === 'fulfilled') statsVisibility.value = visibility.value.data || []
+    if (topTags.status === 'fulfilled') statsTopTags.value = topTags.value.data || []
+    if (topUsers.status === 'fulfilled') statsTopUsers.value = topUsers.value.data || []
+    if (coverage.status === 'fulfilled') statsCoverage.value = coverage.value
   } catch (e) {
     console.error('加载统计失败:', e)
   } finally {
@@ -927,8 +928,7 @@ const handleLogout = () => {
           <StatsTimeFilter v-model="globalTimeRange" />
         </div>
         <div v-show="statsLoading" class="loading-overlay">加载中...</div>
-        <template>
-          <!-- 概览卡片 -->
+        <!-- 概览卡片 -->
           <div class="stats-overview" v-if="statsOverview">
             <div class="stat-card">
               <span class="stat-num">{{ statsOverview.users }}</span>
@@ -1059,7 +1059,6 @@ const handleLogout = () => {
               </div>
             </div>
           </div>
-        </template>
       </div>
 
       <!-- 上传/编辑表单弹窗 -->
