@@ -2,6 +2,9 @@
 import { ref, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '../stores'
+import AuthForm from '../components/AuthForm.vue'
+import FormField from '../components/FormField.vue'
+import PasswordToggle from '../components/PasswordToggle.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -17,7 +20,6 @@ const rememberMe = ref(false)
 const fieldErrors = ref({ username: '', password: '' })
 const touched = ref({ username: false, password: false })
 
-// 实时验证
 watch(username, (val) => {
   if (!touched.value.username) return
   if (!val.trim()) fieldErrors.value.username = '请输入用户名'
@@ -56,241 +58,69 @@ const handleLogin = async () => {
 </script>
 
 <template>
-  <div class="auth-page">
-    <div class="auth-card">
-      <div class="auth-header">
-        <h1 class="auth-title">欢迎回来</h1>
-        <p class="auth-subtitle">登录你的光影手记账号</p>
-      </div>
+  <AuthForm title="欢迎回来" subtitle="登录你的光影手记账号">
+    <form @submit.prevent="handleLogin" class="auth-form" novalidate>
+      <FormField
+        v-model="username"
+        label="用户名"
+        icon="user"
+        placeholder="输入用户名"
+        autocomplete="username"
+        :error="fieldErrors.username"
+        :disabled="loading"
+        @blur="touched.username = true"
+      />
 
-      <form @submit.prevent="handleLogin" class="auth-form" novalidate>
-        <div class="field" :class="{ error: fieldErrors.username }">
-          <label for="login-username">用户名</label>
-          <div class="input-wrap">
-            <svg class="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-              <circle cx="12" cy="7" r="4"/>
-            </svg>
-            <input
-              id="login-username"
-              v-model="username"
-              type="text"
-              placeholder="输入用户名"
-              :disabled="loading"
-              autocomplete="username"
-              @blur="touched.username = true"
-            >
-          </div>
-          <transition name="msg-slide">
-            <span v-if="fieldErrors.username" class="field-error">{{ fieldErrors.username }}</span>
-          </transition>
+      <FormField
+        v-model="password"
+        label="密码"
+        icon="lock"
+        type="password"
+        placeholder="输入密码"
+        autocomplete="current-password"
+        :error="fieldErrors.password"
+        :disabled="loading"
+        @blur="touched.password = true"
+      >
+        <template #suffix>
+          <PasswordToggle v-model:visible="showPassword" />
+        </template>
+      </FormField>
+
+      <label class="checkbox-label">
+        <input v-model="rememberMe" type="checkbox" :disabled="loading">
+        <span class="checkbox-custom"></span>
+        <span>记住我</span>
+      </label>
+
+      <transition name="msg-slide">
+        <div v-if="error" class="form-error">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+          {{ error }}
         </div>
+      </transition>
 
-        <div class="field" :class="{ error: fieldErrors.password }">
-          <label for="login-password">密码</label>
-          <div class="input-wrap">
-            <svg class="field-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-            <input
-              id="login-password"
-              v-model="password"
-              :type="showPassword ? 'text' : 'password'"
-              placeholder="输入密码"
-              :disabled="loading"
-              autocomplete="current-password"
-              @blur="touched.password = true"
-            >
-            <button type="button" class="toggle-pw" @click="showPassword = !showPassword" tabindex="-1">
-              <svg v-if="!showPassword" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                <circle cx="12" cy="12" r="3"/>
-              </svg>
-              <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                <line x1="1" y1="1" x2="23" y2="23"/>
-              </svg>
-            </button>
-          </div>
-          <transition name="msg-slide">
-            <span v-if="fieldErrors.password" class="field-error">{{ fieldErrors.password }}</span>
-          </transition>
-        </div>
+      <button type="submit" class="btn-submit" :disabled="loading">
+        <span v-if="loading" class="btn-spinner"></span>
+        <span v-else>登录</span>
+      </button>
+    </form>
 
-        <label class="checkbox-label">
-          <input v-model="rememberMe" type="checkbox" :disabled="loading">
-          <span class="checkbox-custom"></span>
-          <span>记住我</span>
-        </label>
-
-        <transition name="msg-slide">
-          <div v-if="error" class="form-error">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="15" y1="9" x2="9" y2="15"/>
-              <line x1="9" y1="9" x2="15" y2="15"/>
-            </svg>
-            {{ error }}
-          </div>
-        </transition>
-
-        <button type="submit" class="btn-submit" :disabled="loading">
-          <span v-if="loading" class="btn-spinner"></span>
-          <span v-else>登录</span>
-        </button>
-      </form>
-
-      <p class="auth-hint">
-        还没有账号？<router-link to="/register">立即注册</router-link>
-      </p>
-    </div>
-  </div>
+    <template #hint>
+      还没有账号？<router-link to="/register">立即注册</router-link>
+    </template>
+  </AuthForm>
 </template>
 
 <style scoped>
-.auth-page {
-  min-height: calc(100vh - 140px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2rem 1rem;
-}
-
-.auth-card {
-  width: 100%;
-  max-width: 400px;
-  background: var(--card-bg, #fff);
-  border-radius: 16px;
-  padding: 2.5rem;
-  box-shadow:
-    0 1px 3px rgba(0,0,0,0.04),
-    0 4px 12px rgba(0,0,0,0.06),
-    0 16px 48px rgba(0,0,0,0.06);
-}
-
-.auth-header {
-  text-align: center;
-  margin-bottom: 2rem;
-}
-
-.auth-title {
-  font-size: 1.5rem;
-  font-weight: 300;
-  letter-spacing: 0.02em;
-  color: var(--text-color, #1a1a1a);
-  margin: 0 0 0.5rem;
-}
-
-.auth-subtitle {
-  font-size: 0.875rem;
-  color: var(--text-secondary, #888);
-  margin: 0;
-}
-
-/* ========== Form ========== */
 .auth-form {
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
-}
-
-.field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.field > label {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-secondary, #666);
-}
-
-.input-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.field-icon {
-  position: absolute;
-  left: 12px;
-  color: var(--text-tertiary, #aaa);
-  pointer-events: none;
-  flex-shrink: 0;
-}
-
-.input-wrap input {
-  width: 100%;
-  padding: 0.75rem 0.875rem 0.75rem 2.5rem;
-  border: 1px solid var(--input-border, #e0e0e0);
-  border-radius: 10px;
-  font-size: 0.9375rem;
-  font-family: inherit;
-  color: var(--text-color, #1a1a1a);
-  background: var(--bg-primary, #fafafa);
-  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
-  outline: none;
-}
-
-.input-wrap input:focus {
-  border-color: var(--secondary-color, #8b95a0);
-  box-shadow: 0 0 0 3px rgba(139, 149, 160, 0.12);
-  background: var(--card-bg, #fff);
-}
-
-.input-wrap input:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.input-wrap input::placeholder {
-  color: var(--text-tertiary, #bbb);
-}
-
-.input-wrap input:-webkit-autofill,
-.input-wrap input:-webkit-autofill:hover,
-.input-wrap input:-webkit-autofill:focus,
-.input-wrap input:-webkit-autofill:active {
-  -webkit-box-shadow: 0 0 0 1000px var(--bg-primary, #fafafa) inset !important;
-  -webkit-text-fill-color: var(--text-color, #1a1a1a) !important;
-  border: 1px solid var(--input-border, #e0e0e0) !important;
-  transition: background-color 5000s ease-in-out 0s;
-}
-
-.field.error .input-wrap input {
-  border-color: #e74c3c;
-  box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
-}
-
-/* Password toggle */
-.toggle-pw {
-  position: absolute;
-  right: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background: none;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  color: var(--text-tertiary, #aaa);
-  transition: color 0.15s, background 0.15s;
-}
-
-.toggle-pw:hover {
-  color: var(--text-secondary, #666);
-  background: rgba(0,0,0,0.04);
-}
-
-/* Field error */
-.field-error {
-  font-size: 0.75rem;
-  color: #e74c3c;
-  padding-left: 2px;
 }
 
 /* Checkbox */
@@ -404,25 +234,7 @@ const handleLogin = async () => {
   to { transform: rotate(360deg); }
 }
 
-/* Hint */
-.auth-hint {
-  text-align: center;
-  margin-top: 1.5rem;
-  font-size: 0.875rem;
-  color: var(--text-secondary, #999);
-}
-
-.auth-hint a {
-  color: var(--secondary-color, #8b95a0);
-  text-decoration: none;
-  font-weight: 500;
-}
-
-.auth-hint a:hover {
-  text-decoration: underline;
-}
-
-/* Transition */
+/* Transitions */
 .msg-slide-enter-active {
   transition: all 0.2s ease-out;
 }
@@ -439,43 +251,12 @@ const handleLogin = async () => {
 }
 
 /* Dark mode */
-:global(.dark) .auth-card {
-  background: var(--card-bg);
-  box-shadow:
-    0 1px 3px rgba(0,0,0,0.1),
-    0 4px 12px rgba(0,0,0,0.15);
-}
-
-:global(.dark) .input-wrap input {
-  background: oklch(20% 0.008 250);
-  border-color: oklch(30% 0.01 250);
-  color: #e4e4e7;
-}
-
-:global(.dark) .input-wrap input:focus {
-  background: oklch(22% 0.008 250);
-}
-
-:global(.dark) .input-wrap input::placeholder {
-  color: #52525b;
-}
-
-:global(.dark) .toggle-pw:hover {
-  background: rgba(255,255,255,0.06);
-}
-
-:global(.dark) .checkbox-custom {
-  border-color: oklch(40% 0.01 250);
-}
-
 :global(.dark) .form-error {
   background: rgba(231, 76, 60, 0.1);
   border-color: rgba(231, 76, 60, 0.2);
 }
 
-@media (max-width: 480px) {
-  .auth-card {
-    padding: 2rem 1.5rem;
-  }
+:global(.dark) .checkbox-custom {
+  border-color: oklch(40% 0.01 250);
 }
 </style>

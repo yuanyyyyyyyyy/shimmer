@@ -1,5 +1,6 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { getProxyUrl } from '../api'
 
 const props = defineProps({
   template: { type: String, default: 'cinematic' },
@@ -36,9 +37,9 @@ const getGridArea = (i) => {
     <!-- 电影海报模板 -->
     <div v-if="template === 'cinematic'" class="tmpl cinematic">
       <div class="cinema-visual">
-        <img v-if="photos[0]" :src="photos[0].url || photos[0].thumbnail_url" class="hero-img" crossorigin="anonymous" />
+        <img v-if="photos[0]" :src="getProxyUrl(photos[0].url || photos[0].thumbnail_url)" class="hero-img" />
         <div v-if="photos.length > 1" class="film-strip">
-          <img v-for="p in photos.slice(1, 4)" :key="p.id" :src="p.url || p.thumbnail_url" crossorigin="anonymous" />
+          <img v-for="p in photos.slice(1, 4)" :key="p.id" :src="getProxyUrl(p.url || p.thumbnail_url)" />
         </div>
         <div class="cinema-overlay"></div>
       </div>
@@ -58,7 +59,7 @@ const getGridArea = (i) => {
       </div>
       <div class="cal-grid">
         <div v-for="(p, i) in photos.slice(0, 6)" :key="p.id" class="cal-cell" :class="{ 'big': i === 0 }">
-          <img :src="p.url || p.thumbnail_url" crossorigin="anonymous" />
+          <img :src="getProxyUrl(p.url || p.thumbnail_url)" />
         </div>
       </div>
       <div class="cal-footer">
@@ -74,10 +75,10 @@ const getGridArea = (i) => {
       </div>
       <div class="mag-layout">
         <div class="mag-main" v-if="photos[0]">
-          <img :src="photos[0].url || photos[0].thumbnail_url" crossorigin="anonymous" />
+          <img :src="getProxyUrl(photos[0].url || photos[0].thumbnail_url)" />
         </div>
         <div class="mag-side" v-if="photos.length > 1">
-          <img v-for="p in photos.slice(1, 3)" :key="p.id" :src="p.url || p.thumbnail_url" crossorigin="anonymous" />
+          <img v-for="p in photos.slice(1, 3)" :key="p.id" :src="getProxyUrl(p.url || p.thumbnail_url)" />
         </div>
       </div>
       <div class="mag-info">
@@ -95,7 +96,7 @@ const getGridArea = (i) => {
     <div v-else class="tmpl collage">
       <div class="collage-grid" :class="{ 'single': photos.length === 1, 'two': photos.length === 2 }">
         <div v-for="(p, i) in photos.slice(0, 9)" :key="p.id" class="collage-cell" :style="{ gridArea: getGridArea(i) }">
-          <img :src="p.url || p.thumbnail_url" crossorigin="anonymous" />
+          <img :src="getProxyUrl(p.url || p.thumbnail_url)" />
         </div>
       </div>
       <div class="collage-caption" v-if="caption">

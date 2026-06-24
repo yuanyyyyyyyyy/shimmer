@@ -26,6 +26,7 @@ const filterMode = ref('all') // 'all' | 'favorites'
 const stats = ref(null)
 const popularTags = ref([])
 const activeTagId = ref(null)
+const tagsExpanded = ref(false)
 
 const lightboxVisible = ref(false)
 const lightboxIndex = ref(0)
@@ -81,7 +82,7 @@ const loadFavoriteCount = async () => {
   try {
     const res = await favorites.list()
     const newSet = new Set()
-    ;(res.favorites || []).forEach(p => newSet.add(p.id))
+    ;(res.favorites || []).forEach(p => newSet.add(p.photo_id))
     favoriteIds.value = newSet
   } catch (e) {}
 }
@@ -105,7 +106,7 @@ const loadPhotos = async (reset = false) => {
       page.value = 1
       // 标记所有已加载照片为已收藏
       const newSet = new Set()
-      photoList.value.forEach(p => newSet.add(p.id))
+      photoList.value.forEach(p => newSet.add(p.photo_id))
       favoriteIds.value = newSet
     } else {
       // 普通模式
@@ -316,24 +317,30 @@ const getCardStyle = (photo) => {
       <!-- Category Filter -->
       <section class="filter-section">
         <div class="section-label">探索分类</div>
-        <div class="filter-pills">
-          <button
-            :class="{ active: filterMode === 'all' && !activeTagId }"
-            @click="clearFilters"
-          >全部</button>
-          <button
-            v-if="authStore.isLoggedIn"
-            :class="{ active: filterMode === 'favorites' }"
-            @click="setFilter('favorites')"
-          >收藏 <span v-if="favoriteCount > 0" class="filter-badge">{{ favoriteCount }}</span></button>
-          <template v-if="filterMode === 'all'">
+        <div class="filter-wrap" :class="{ expanded: tagsExpanded }">
+          <div class="filter-pills">
             <button
-              v-for="tag in popularTags"
-              :key="tag.id"
-              :class="{ active: activeTagId === String(tag.id) }"
-              @click="filterByTag(tag.id)"
-            >{{ tag.name }}</button>
-          </template>
+              :class="{ active: filterMode === 'all' && !activeTagId }"
+              @click="clearFilters"
+            >全部</button>
+            <button
+              v-if="authStore.isLoggedIn"
+              :class="{ active: filterMode === 'favorites' }"
+              @click="setFilter('favorites')"
+            >收藏 <span v-if="favoriteCount > 0" class="filter-badge">{{ favoriteCount }}</span></button>
+            <template v-if="filterMode === 'all'">
+              <button
+                v-for="tag in popularTags"
+                :key="tag.id"
+                :class="{ active: activeTagId === String(tag.id) }"
+                @click="filterByTag(tag.id)"
+              >{{ tag.name }}</button>
+            </template>
+          </div>
+          <div class="filter-fade" v-if="popularTags.length > 6 && !tagsExpanded"></div>
+          <button v-if="popularTags.length > 6" class="filter-expand" @click="tagsExpanded = !tagsExpanded">
+            {{ tagsExpanded ? '收起' : '查看全部' }}
+          </button>
         </div>
       </section>
 
@@ -675,6 +682,35 @@ const getCardStyle = (photo) => {
   max-width: 960px;
   margin: 0 auto;
   padding: 0 20px 32px;
+}
+.filter-wrap {
+  position: relative;
+}
+.filter-wrap:not(.expanded) .filter-pills {
+  max-height: 72px;
+  overflow: hidden;
+}
+.filter-fade {
+  position: absolute;
+  bottom: 24px;
+  left: 0;
+  right: 0;
+  height: 40px;
+  background: linear-gradient(transparent, var(--bg-color, #fafafa));
+  pointer-events: none;
+}
+.filter-expand {
+  display: block;
+  margin: 4px auto 0;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.84rem;
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.filter-expand:hover {
+  color: var(--text-color);
 }
 .filter-pills {
   display: flex;

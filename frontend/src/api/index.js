@@ -162,4 +162,10 @@ export const share = {
 // 相册
 export { albums } from './albums'
 
+// 图片代理 URL（解决 R2 跨域问题）
+export function getProxyUrl(url) {
+  if (!url) return ''
+  return `/api/image-proxy?url=${encodeURIComponent(url)}`
+}
+
 export default api

@@ -15,6 +15,7 @@ import userRoutes from './routes/users.js';
 import storylineRoutes from './routes/storyline.js';
 import shareRoutes from './routes/share.js';
 import statsRoutes from './routes/stats.js';
+import imageProxyRoutes from './routes/imageProxy.js';
 import { errorHandler, notFoundHandler } from './middleware/error.js';
 
 dotenv.config();
@@ -57,6 +58,7 @@ app.use('/api/storylines', storylineRoutes);
 app.use('/api/share', shareRoutes);
 app.use('/api/stats', statsRoutes);
 app.use('/api', uploadRoutes);
+app.use('/api', imageProxyRoutes);
 
 // 根路径
 app.get('/', (req, res) => {

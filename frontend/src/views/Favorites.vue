@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
-import { favorites } from '../api'
+import { favorites, getProxyUrl } from '../api'
 import { useAuthStore, getFingerprint } from '../stores'
 import Lightbox from '../components/Lightbox.vue'
 import DarkroomPrint from '../components/DarkroomPrint.vue'
@@ -123,11 +123,10 @@ watch(() => authStore.token, () => {
         <div class="entry-photo">
           <div class="photo-paper" :style="{ transform: `rotate(${item._rotation}deg)` }">
             <img
-              :src="item.thumbnail_url || item.url"
+              :src="getProxyUrl(item.thumbnail_url || item.url)"
               :alt="item.title"
               class="photo-img"
               loading="lazy"
-              crossorigin="anonymous"
             />
           </div>
 

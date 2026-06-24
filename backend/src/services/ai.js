@@ -87,6 +87,18 @@ function safeParseJSON(text) {
     try {
       return JSON.parse(cleaned);
     } catch (error) {
+      // Fallback: extract from natural language Chinese text
+      const titleMatch = cleaned.match(/标题[：:]\s*[《「""]?([^》」""\n]+)[》」""]?/);
+      const moodMatch = cleaned.match(/心情[：:]\s*[《「""]?([^》」""\n]+)[》」""]?/);
+      const tagsMatch = cleaned.match(/标签[：:]\s*[《「""]?([^》」""]+)[》」""]?/);
+      if (titleMatch || moodMatch || tagsMatch) {
+        const tags = tagsMatch ? tagsMatch[1].split(/[,，、\s]+/).filter(Boolean) : [];
+        return {
+          title: titleMatch ? titleMatch[1].trim() : '',
+          mood: moodMatch ? moodMatch[1].trim() : '',
+          tags
+        };
+      }
       return null;
     }
   }

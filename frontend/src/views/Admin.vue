@@ -52,6 +52,7 @@ const uploadMode = ref('single') // 'single' | 'batch'
 const editingPhoto = ref(null)
 const aiLoading = ref(false)
 const aiTags = ref([])
+const aiEnabled = ref(false)
 const form = ref({
   title: '',
   mood: '',
@@ -81,6 +82,10 @@ onMounted(async () => {
   await authStore.fetchUser()
   loadPhotos()
   loadTags()
+  try {
+    const res = await ai.getConfig()
+    aiEnabled.value = res.config?.enabled ?? false
+  } catch (e) {}
 })
 
 // 加载标签
@@ -995,7 +1000,7 @@ const handleLogout = () => {
                   <button type="button" class="btn-ai" @click="generateAiMetadata" :disabled="aiLoading || !form.url">
                     {{ aiLoading ? '生成中...' : 'AI 自动补全' }}
                   </button>
-                  <span class="ai-hint">需先在设置中启用 AI</span>
+                  <span class="ai-hint" v-if="!aiEnabled">需先在设置中启用 AI</span>
                 </div>
                 <div class="form-group" v-if="aiTags.length > 0">
                   <label>AI 建议标签 <small class="hint">(点击添加)</small></label>

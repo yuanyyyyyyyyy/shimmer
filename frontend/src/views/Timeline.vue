@@ -1,6 +1,6 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { photos } from '../api'
+import { photos, getProxyUrl } from '../api'
 import { useAuthStore } from '../stores'
 import Lightbox from '../components/Lightbox.vue'
 import DarkroomPrint from '../components/DarkroomPrint.vue'
@@ -113,10 +113,9 @@ watch(() => authStore.token, () => {
           <div class="entry-photo-wrap" @click="openLightbox(i)">
             <div class="photo-paper" :style="{ transform: `rotate(${i % 2 === 0 ? '' : '-'}${(Math.random() * 1.4 + 0.3).toFixed(1)}deg)` }">
               <img
-                :src="photo.thumbnail_url || photo.url"
+                :src="getProxyUrl(photo.thumbnail_url || photo.url)"
                 :alt="photo.title"
                 class="photo-img"
-                crossorigin="anonymous"
               />
             </div>
           </div>

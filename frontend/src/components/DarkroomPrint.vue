@@ -1,6 +1,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
-import { favorites } from '../api'
+import { favorites, getProxyUrl } from '../api'
 import { getFingerprint } from '../stores'
 import { error as showError } from '../composables/useToast'
 
@@ -92,10 +92,9 @@ watch(() => props.photo, () => {
           <div class="photo-border">
             <img
               v-if="photo"
-              :src="photo.url"
+              :src="getProxyUrl(photo.url)"
               :alt="photo.title"
               class="photo-image"
-              crossorigin="anonymous"
             />
           </div>
           <div class="paper-date">{{ formatDate(photo?.shot_date) }}</div>

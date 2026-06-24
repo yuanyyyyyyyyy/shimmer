@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { getProxyUrl } from '../../api'
 
 const props = defineProps({
   photo: { type: Object, default: null },
@@ -106,10 +107,9 @@ onUnmounted(() => {
       <img
         v-if="photo?.url"
         ref="imgRef"
-        :src="photo.url"
+        :src="getProxyUrl(photo.url)"
         class="cs-photo"
         alt=""
-        crossorigin
       />
       <div class="cs-safelight"></div>
       <div class="cs-label">接触印相 · 点击查看详情</div>
@@ -130,7 +130,7 @@ onUnmounted(() => {
         <div
           class="loupe-inner"
           :style="{
-            backgroundImage: `url(${photo?.url})`,
+            backgroundImage: `url(${getProxyUrl(photo?.url)})`,
             backgroundSize: loupeBgSize,
             backgroundPosition: loupeBgPos
           }"
@@ -146,7 +146,7 @@ onUnmounted(() => {
           <div class="photo-grid">
             <div v-for="p in photoList" :key="p.id" class="photo-thumb"
               :class="{ active: photo?.id === p.id }"
-              :style="{ backgroundImage: `url(${p.thumbnail_url || p.url})` }"
+              :style="{ backgroundImage: `url(${getProxyUrl(p.thumbnail_url || p.url)})` }"
               @click="selectPhoto(p); showPhotoSelector = false"
             ></div>
           </div>
