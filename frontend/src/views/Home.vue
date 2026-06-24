@@ -687,7 +687,7 @@ const getCardStyle = (photo) => {
   position: relative;
 }
 .filter-wrap:not(.expanded) .filter-pills {
-  max-height: 72px;
+  max-height: 80px;
   overflow: hidden;
 }
 .filter-fade {

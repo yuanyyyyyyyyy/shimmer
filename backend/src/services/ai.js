@@ -535,25 +535,37 @@ async function generatePhotoMetadata(photoUrls, options = {}, userId) {
       return { title: '', mood: '', tags: [] };
     }
 
-    let userText = isMulti ? `请综合分析这 ${urls.length} 张照片，生成标题、心情和标签` : '请分析这张照片，生成标题、心情和标签';
-    if (textParts.length > 0) {
-      userText += '\n\n附加信息:\n' + textParts.join('\n');
-    }
-
     const model = aiConfig.model || 'llama2';
     const ollamaUrl = `${aiConfig.baseUrl.replace(/\/$/, '')}/api/chat`;
 
-    try {
-      const raw = await makeOllamaChat(ollamaUrl, {
+    const ollamaRejectPattern = /无法分析|没有能力|没有.*能力|不具备|don.t have the capability|can.t (?:analyze|process|see|view)/i;
+
+    const callOllama = async (images, text) => {
+      return makeOllamaChat(ollamaUrl, {
         model,
         messages: [
           { role: 'system', content: prompt },
-          { role: 'user', content: userText, images: base64Images }
+          { role: 'user', content: text, images }
         ],
         stream: false,
         think: false
       });
+    };
+
+    try {
+      let raw = await callOllama(base64Images, isMulti
+        ? `请综合分析这 ${urls.length} 张照片，生成标题、心情和标签`
+        : '请分析这张照片，生成标题、心情和标签'
+      );
       console.log(`[AI] generatePhotoMetadata raw (${provider}):`, raw.slice(0, 200));
+
+      // 多图被拒绝时，降级为单图重试
+      if (isMulti && ollamaRejectPattern.test(raw)) {
+        console.log(`[AI] Ollama 拒绝多图分析，降级为单图重试`);
+        raw = await callOllama([base64Images[0]], '请分析这张照片，生成标题、心情和标签');
+        console.log(`[AI] generatePhotoMetadata raw fallback (${provider}):`, raw.slice(0, 200));
+      }
+
       const parsed = safeParseJSON(raw);
       if (!parsed) {
         return { title: '', mood: '', tags: [] };
