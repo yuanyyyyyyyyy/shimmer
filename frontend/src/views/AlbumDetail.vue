@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { albums, photos } from '../api'
 import { useAuthStore } from '../stores'
@@ -14,6 +14,10 @@ const album = ref(null)
 const photoList = ref([])
 const loading = ref(false)
 const showAddPhotoDialog = ref(false)
+
+watch(showAddPhotoDialog, (val) => {
+  if (val) loadBrowsePhotos(true)
+})
 const showEditDialog = ref(false)
 
 // 编辑表单
@@ -38,8 +42,40 @@ const searchLoading = ref(false)
 let debounceTimer = null
 
 // 添加照片弹窗 Tab
-const addPhotoActiveTab = ref('search')
+const addPhotoActiveTab = ref('browse')
 const selectedCount = computed(() => selectedPhotos.value.size)
+
+// 合并搜索和浏览的照片列表，用于已选 tab
+const allAvailablePhotos = computed(() => {
+  const map = new Map()
+  for (const p of searchResults.value) map.set(p.id, p)
+  for (const p of browsePhotos.value) map.set(p.id, p)
+  return Array.from(map.values())
+})
+
+// 浏览照片相关
+const browsePhotos = ref([])
+const browseLoading = ref(false)
+const browsePage = ref(1)
+const browseHasMore = ref(true)
+
+const loadBrowsePhotos = async (reset = false) => {
+  if (reset) { browsePage.value = 1; browsePhotos.value = []; browseHasMore.value = true }
+  if (!browseHasMore.value && !reset) return
+  browseLoading.value = true
+  try {
+    const res = await photos.getMyPhotos({ page: browsePage.value, limit: 30 })
+    const list = res.data || []
+    if (reset) browsePhotos.value = list
+    else browsePhotos.value.push(...list)
+    browseHasMore.value = browsePhotos.value.length < (res.total || 0)
+    browsePage.value++
+  } catch (e) {
+    console.error(e)
+  } finally {
+    browseLoading.value = false
+  }
+}
 
 // 照片预览
 const showPreviewModal = ref(false)
@@ -536,6 +572,12 @@ onMounted(() => {
               <button
                 type="button"
                 class="modal-tab"
+                :class="{ active: addPhotoActiveTab === 'browse' }"
+                @click="addPhotoActiveTab = 'browse'"
+              >浏览</button>
+              <button
+                type="button"
+                class="modal-tab"
                 :class="{ active: addPhotoActiveTab === 'search' }"
                 @click="addPhotoActiveTab = 'search'"
               >搜索</button>
@@ -552,6 +594,39 @@ onMounted(() => {
 
             <!-- Tab 面板 -->
             <div class="tab-panel">
+              <!-- 浏览 Tab -->
+              <div v-show="addPhotoActiveTab === 'browse'" class="tab-pane">
+                <div v-if="browsePhotos.length > 0" class="picker-grid">
+                  <div
+                    v-for="photo in browsePhotos"
+                    :key="photo.id"
+                    class="pick-card"
+                    :class="{ picked: selectedPhotos.has(photo.id) }"
+                    @click="toggleSelectPhoto(photo.id)"
+                  >
+                    <img :src="photo.thumbnail_url || photo.url" :alt="photo.title" loading="lazy">
+                    <span v-if="selectedPhotos.has(photo.id)" class="pick-check">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </span>
+                    <span class="pick-name">{{ photo.title }}</span>
+                  </div>
+                </div>
+                <div v-if="browseLoading" class="picker-loading">
+                  <div class="picker-spinner"></div>
+                  <span>加载中...</span>
+                </div>
+                <div v-if="!browseLoading && browsePhotos.length === 0" class="picker-empty">
+                  <p>暂无照片</p>
+                </div>
+                <button
+                  v-if="!browseLoading && browseHasMore && browsePhotos.length > 0"
+                  class="btn-load-more"
+                  @click="loadBrowsePhotos(false)"
+                >加载更多</button>
+              </div>
+
               <!-- 搜索 Tab -->
               <div v-show="addPhotoActiveTab === 'search'" class="tab-pane add-photo-search-pane">
                 <div class="search-bar">
@@ -636,7 +711,7 @@ onMounted(() => {
                 </div>
                 <div v-else class="selected-list">
                   <div
-                    v-for="photo in searchResults.filter(p => selectedPhotos.has(p.id))"
+                    v-for="photo in allAvailablePhotos.filter(p => selectedPhotos.has(p.id))"
                     :key="photo.id"
                     class="selected-item"
                   >
@@ -1823,6 +1898,23 @@ onMounted(() => {
 .picker-empty svg,
 .picker-hint svg {
   opacity: 0.4;
+}
+
+.btn-load-more {
+  display: block;
+  margin: 1rem auto;
+  padding: 0.5rem 1.5rem;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-accent);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.btn-load-more:hover {
+  background: var(--color-surface);
+  border-color: var(--color-accent);
 }
 
 /* ========== Selected List (Add Photo Modal) ========== */
