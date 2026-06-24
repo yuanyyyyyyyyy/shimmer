@@ -465,13 +465,30 @@ function makeOllamaChat(url, body, options = {}) {
   });
 }
 
-async function generatePhotoMetadata(photoUrl, options = {}, userId) {
+async function generatePhotoMetadata(photoUrls, options = {}, userId) {
   const aiConfig = await loadAiSettings(userId);
   if (!aiConfig.enabled || !aiConfig.provider) {
     return { title: '', mood: '', tags: [] };
   }
 
-  const prompt = `你是一个中文照片日记助手。你将收到一张图片，请仔细观察图片内容，生成一个精炼的中文标题、一句心情文字和 3 到 5 个标签。
+  const urls = Array.isArray(photoUrls) ? photoUrls.filter(Boolean).slice(0, 5) : [photoUrls].filter(Boolean);
+  if (urls.length === 0) {
+    return { title: '', mood: '', tags: [] };
+  }
+
+  const isMulti = urls.length > 1;
+  const prompt = isMulti
+    ? `你是一个中文照片日记助手。你将收到一组（${urls.length}张）照片，请综合分析这些照片的内容、场景和氛围，生成一个精炼的中文标题、一句心情文字和 3 到 5 个标签。
+
+请仅返回一个合法 JSON 对象，格式如下：
+{
+  "title": "...",
+  "mood": "...",
+  "tags": ["...", "...", "..."]
+}
+
+不要添加额外的说明文字，也不要输出 markdown。`
+    : `你是一个中文照片日记助手。你将收到一张图片，请仔细观察图片内容，生成一个精炼的中文标题、一句心情文字和 3 到 5 个标签。
 
 请仅返回一个合法 JSON 对象，格式如下：
 {
@@ -493,18 +510,20 @@ async function generatePhotoMetadata(photoUrl, options = {}, userId) {
 
   if (provider === 'ollama') {
     // Ollama：使用原生 /api/chat 端点，支持 base64 图片
-    let base64;
+    let base64Images;
     try {
-      const imageResponse = await fetch(photoUrl);
-      if (!imageResponse.ok) throw new Error(`下载图片失败: ${imageResponse.status}`);
-      const arrayBuffer = await imageResponse.arrayBuffer();
-      base64 = Buffer.from(arrayBuffer).toString('base64');
+      base64Images = await Promise.all(urls.map(async (u) => {
+        const imageResponse = await fetch(u);
+        if (!imageResponse.ok) throw new Error(`下载图片失败: ${imageResponse.status}`);
+        const arrayBuffer = await imageResponse.arrayBuffer();
+        return Buffer.from(arrayBuffer).toString('base64');
+      }));
     } catch (err) {
       console.error('[AI] 下载图片转 base64 失败:', err.message);
       return { title: '', mood: '', tags: [] };
     }
 
-    let userText = '请分析这张照片，生成标题、心情和标签';
+    let userText = isMulti ? `请综合分析这 ${urls.length} 张照片，生成标题、心情和标签` : '请分析这张照片，生成标题、心情和标签';
     if (textParts.length > 0) {
       userText += '\n\n附加信息:\n' + textParts.join('\n');
     }
@@ -517,7 +536,7 @@ async function generatePhotoMetadata(photoUrl, options = {}, userId) {
         model,
         messages: [
           { role: 'system', content: prompt },
-          { role: 'user', content: userText, images: [base64] }
+          { role: 'user', content: userText, images: base64Images }
         ],
         stream: false,
         think: false
@@ -539,11 +558,11 @@ async function generatePhotoMetadata(photoUrl, options = {}, userId) {
   }
 
   // 其他 provider：使用 OpenAI 兼容的 /v1/chat/completions
-  const imageContent = { type: 'image_url', image_url: { url: photoUrl } };
+  const imageContents = urls.map(u => ({ type: 'image_url', image_url: { url: u } }));
 
   const content = [
-    { type: 'text', text: '请分析这张照片，生成标题、心情和标签' },
-    imageContent
+    { type: 'text', text: isMulti ? `请综合分析这 ${urls.length} 张照片，生成标题、心情和标签` : '请分析这张照片，生成标题、心情和标签' },
+    ...imageContents
   ];
 
   if (textParts.length > 0) {

@@ -171,12 +171,13 @@ router.delete('/presets/:id', authenticateToken, async (req, res, next) => {
 // AI 元数据生成（使用当前用户的 AI 配置）
 router.post('/metadata', authenticateToken, async (req, res, next) => {
   try {
-    const { url, location, shot_date } = req.body;
-    if (!url) {
+    const { url, urls, location, shot_date } = req.body;
+    const imageUrls = urls || (url ? [url] : []);
+    if (imageUrls.length === 0) {
       return res.status(400).json({ error: '缺少图片 URL' });
     }
 
-    const metadata = await generatePhotoMetadata(url, { location, shot_date }, req.user.id);
+    const metadata = await generatePhotoMetadata(imageUrls, { location, shot_date }, req.user.id);
     res.json({ metadata });
   } catch (err) {
     next(err);

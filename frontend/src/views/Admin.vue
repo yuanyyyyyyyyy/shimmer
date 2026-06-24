@@ -114,7 +114,12 @@ const createTag = async () => {
 
 // AI 自动补全标题、心情和标签建议（需要先在设置页面启用 AI）
 const generateAiMetadata = async () => {
-  if (!form.value.url) {
+  const isBatch = uploadMode.value === 'batch'
+  const urls = isBatch
+    ? uploadedPhotos.value.slice(0, 5).map(p => p.url).filter(Boolean)
+    : [form.value.url].filter(Boolean)
+
+  if (urls.length === 0) {
     error('请先上传图片后再生成 AI 建议')
     return
   }
@@ -124,7 +129,7 @@ const generateAiMetadata = async () => {
 
   try {
     const res = await ai.generateMetadata({
-      url: form.value.url,
+      urls,
       location: form.value.location,
       shot_date: form.value.shot_date
     })
@@ -139,7 +144,7 @@ const generateAiMetadata = async () => {
     }
     aiTags.value = Array.isArray(metadata.tags) ? metadata.tags : []
     if (hasContent) {
-      success('AI 建议已生成，可自行调整后保存')
+      success(isBatch ? `AI 已综合分析 ${urls.length} 张照片，建议已生成` : 'AI 建议已生成，可自行调整后保存')
     } else {
       error('AI 未能识别照片内容，请手动填写')
     }
@@ -997,7 +1002,7 @@ const handleLogout = () => {
                   AI 助手
                 </div>
                 <div class="ai-action">
-                  <button type="button" class="btn-ai" @click="generateAiMetadata" :disabled="aiLoading || !form.url">
+                  <button type="button" class="btn-ai" @click="generateAiMetadata" :disabled="aiLoading || (uploadMode === 'single' ? !form.url : uploadedPhotos.length === 0)">
                     {{ aiLoading ? '生成中...' : 'AI 自动补全' }}
                   </button>
                   <span class="ai-hint" v-if="!aiEnabled">需先在设置中启用 AI</span>
