@@ -79,29 +79,41 @@ function safeParseJSON(text) {
   let cleaned = text.replace(/```(?:json)?\s*\n?/g, '').replace(/```\s*$/g, '').trim();
   const first = cleaned.indexOf('{');
   const last = cleaned.lastIndexOf('}');
-  if (first === -1 || last === -1) return null;
-  const maybeJson = cleaned.slice(first, last + 1);
-  try {
-    return JSON.parse(maybeJson);
-  } catch (err) {
+  if (first !== -1 && last !== -1) {
+    const maybeJson = cleaned.slice(first, last + 1);
     try {
-      return JSON.parse(cleaned);
-    } catch (error) {
-      // Fallback: extract from natural language Chinese text
-      const titleMatch = cleaned.match(/标题[：:]\s*[《「""]?([^》」""\n]+)[》」""]?/);
-      const moodMatch = cleaned.match(/心情[：:]\s*[《「""]?([^》」""\n]+)[》」""]?/);
-      const tagsMatch = cleaned.match(/标签[：:]\s*[《「""]?([^》」""]+)[》」""]?/);
-      if (titleMatch || moodMatch || tagsMatch) {
-        const tags = tagsMatch ? tagsMatch[1].split(/[,，、\s]+/).filter(Boolean) : [];
-        return {
-          title: titleMatch ? titleMatch[1].trim() : '',
-          mood: moodMatch ? moodMatch[1].trim() : '',
-          tags
-        };
+      return JSON.parse(maybeJson);
+    } catch (err) {
+      try {
+        return JSON.parse(cleaned);
+      } catch (error) {
+        // JSON parse failed, fall through to Chinese text extraction
       }
-      return null;
     }
   }
+  // Fallback: extract from natural language Chinese text
+  const titleMatch = cleaned.match(/标题[：:]\s*[《「""]?([^》」""\n]+)[》」""]?/);
+  const moodMatch = cleaned.match(/心情[：:]\s*[《「""]?([^》」""\n]+)[》」""]?/);
+  // 标签支持两种格式：单行逗号分隔 或 多行编号列表
+  let tags = [];
+  const tagsBlock = cleaned.match(/标签[：:]\s*([\s\S]*?)(?=\n\n|$)/);
+  if (tagsBlock) {
+    const block = tagsBlock[1].trim();
+    const numberedItems = block.match(/^\d+[.、）)]\s*(.+)$/gm);
+    if (numberedItems) {
+      tags = numberedItems.map(item => item.replace(/^\d+[.、）)]\s*/, '').trim()).filter(Boolean);
+    } else {
+      tags = block.split(/[,，、\s]+/).filter(Boolean);
+    }
+  }
+  if (titleMatch || moodMatch || tags.length > 0) {
+    return {
+      title: titleMatch ? titleMatch[1].trim() : '',
+      mood: moodMatch ? moodMatch[1].trim() : '',
+      tags
+    };
+  }
+  return null;
 }
 
 async function makeChatCompletion(messages, options = {}, userId) {
@@ -547,9 +559,9 @@ async function generatePhotoMetadata(photoUrls, options = {}, userId) {
         return { title: '', mood: '', tags: [] };
       }
       return {
-        title: parsed.title || '',
-        mood: parsed.mood || '',
-        tags: Array.isArray(parsed.tags) ? parsed.tags.map(tag => String(tag).trim()).filter(Boolean) : []
+        title: parsed.title || parsed.标题 || '',
+        mood: parsed.mood || parsed.心情 || '',
+        tags: Array.isArray(parsed.tags || parsed.标签) ? (parsed.tags || parsed.标签).map(tag => String(tag).trim()).filter(Boolean) : []
       };
     } catch (error) {
       console.error('[AI] generatePhotoMetadata error:', error.message || error);
