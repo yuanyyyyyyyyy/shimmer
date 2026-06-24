@@ -5,33 +5,21 @@ import { ValidationError } from '../middleware/error.js';
 
 const router = Router();
 
-// 获取相册列表（公开接口，登录后可看自己的私有相册）
+// 获取相册列表（需登录，只返回当前用户的相册）
 router.get('/', async (req, res, next) => {
   try {
-    const { page = 1, limit = 20, user_id } = req.query;
+    const { page = 1, limit = 20 } = req.query;
     const safeLimit = Math.max(1, Math.min(100, parseInt(limit) || 20));
     const safeOffset = Math.max(0, (parseInt(page) - 1) * safeLimit);
 
     const userId = req.user ? req.user.id : null;
 
-    let whereClause = '';
-    const params = [];
-
-    // 构建查询条件
-    if (userId) {
-      // 登录用户：可以看到公开相册 + 自己的私有相册
-      whereClause = 'WHERE (a.is_public = TRUE OR a.user_id = ?)';
-      params.push(userId);
-    } else {
-      // 未登录：只能看到公开相册
-      whereClause = 'WHERE a.is_public = TRUE';
+    if (!userId) {
+      return res.json({ albums: [], pagination: { page: 1, limit: safeLimit, total: 0, totalPages: 0 } });
     }
 
-    // 如果指定了用户ID，只显示该用户的相册
-    if (user_id) {
-      whereClause += ' AND a.user_id = ?';
-      params.push(parseInt(user_id));
-    }
+    const whereClause = 'WHERE a.user_id = ?';
+    const params = [userId];
 
     // 查询相册列表
     const albumsQuery = `
@@ -101,8 +89,8 @@ router.get('/:id', async (req, res, next) => {
 
     const album = albums[0];
 
-    // 权限检查：私有相册只能作者查看
-    if (!album.is_public && album.user_id !== userId) {
+    // 权限检查：只有相册作者可以查看
+    if (album.user_id !== userId) {
       return res.status(403).json({ error: '无权访问此相册' });
     }
 
@@ -439,15 +427,16 @@ router.get('/user/:userId', async (req, res, next) => {
     const targetUserId = parseInt(req.params.userId);
     const userId = req.user ? req.user.id : null;
 
-    // 查询该用户的公开相册，或登录用户自己的所有相册
-    let whereClause = 'WHERE a.is_public = TRUE';
+    let whereClause = '';
     const params = [];
 
     if (userId && targetUserId === userId) {
+      // 查看自己的：返回所有相册
       whereClause = 'WHERE a.user_id = ?';
       params.push(targetUserId);
     } else {
-      params.push(targetUserId);
+      // 查看别人的：无权查看
+      return res.json({ albums: [] });
     }
 
     const albums = await query(`

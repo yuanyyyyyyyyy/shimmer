@@ -3,6 +3,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 
+import { optionalAuth } from './middleware/auth.js';
 import authRoutes from './routes/auth.js';
 import photoRoutes from './routes/photos.js';
 import albumRoutes from './routes/albums.js';
@@ -48,7 +49,7 @@ app.use((req, res, next) => {
 // API 路由
 app.use('/api/auth', authRoutes);
 app.use('/api/photos', photoRoutes);
-app.use('/api/albums', albumRoutes);
+app.use('/api/albums', optionalAuth, albumRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/tags', tagRoutes);
 app.use('/api/review', reviewRoutes);
