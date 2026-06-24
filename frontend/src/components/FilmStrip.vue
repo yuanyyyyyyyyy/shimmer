@@ -47,6 +47,7 @@ const stripPhotos = computed(() => {
 }
 .film-strip-track {
   overflow: hidden;
+  padding: 10px 0;
   mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
   -webkit-mask-image: linear-gradient(to right, transparent, #000 6%, #000 94%, transparent);
 }

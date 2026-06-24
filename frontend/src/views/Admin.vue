@@ -537,23 +537,24 @@ const timelinePath = computed(() => {
 const timelineLabels = computed(() => {
   const data = statsTimeline.value
   if (!data.length) return []
-  const w = 600, pad = 30
-  const step = (w - pad * 2) / Math.max(data.length - 1, 1)
   const years = [...new Set(data.map(d => d.month.slice(0, 4)))]
   const multiYear = years.length > 1
-  return data.map((d, i) => {
-    const year = d.month.slice(0, 4)
-    const month = parseInt(d.month.slice(5), 10)
-    let label
-    if (multiYear) {
-      // 跨年：每年1月显示年份，其余显示月
-      label = month === 1 ? `${year.slice(2)}/1` : `${month}`
-    } else {
-      // 同年：显示 "1月", "2月" ...
-      label = `${month}月`
-    }
-    return { x: pad + i * step, label }
-  })
+
+  // 数据点多时跳过中间标签，避免拥挤
+  const skip = data.length > 12 ? Math.ceil(data.length / 12) : 1
+
+  return data
+    .map((d, i) => {
+      const month = parseInt(d.month.slice(5), 10)
+      let label
+      if (multiYear) {
+        label = month === 1 ? `${d.month.slice(0, 4)}/1` : `${month}`
+      } else {
+        label = `${month}月`
+      }
+      return { index: i, label }
+    })
+    .filter((_, i) => i % skip === 0 || i === data.length - 1)
 })
 
 const timelineMax = computed(() => {
@@ -944,7 +945,7 @@ const handleLogout = () => {
                 <line v-for="i in 4" :key="'g'+i" x1="30" :y1="30 + (i-1) * 35" x2="570" :y2="30 + (i-1) * 35" stroke="#f0f0f0" stroke-width="1"/>
                 <polyline :points="timelinePath" fill="none" stroke="#2f3640" stroke-width="2" stroke-linejoin="round"/>
                 <circle v-for="(pt, i) in timelinePath.split(' ')" :key="'p'+i" :cx="pt.split(',')[0]" :cy="pt.split(',')[1]" r="3" fill="#2f3640"/>
-                <text v-for="(l, i) in timelineLabels" :key="'l'+i" :x="l.x" y="195" text-anchor="middle" fill="#999" font-size="10">{{ l.label }}</text>
+                <text v-for="(l, i) in timelineLabels" :key="'l'+i" :x="30 + l.index * (540 / Math.max(statsTimeline.length - 1, 1))" y="195" text-anchor="middle" fill="#999" font-size="10">{{ l.label }}</text>
                 <text x="25" y="35" text-anchor="end" fill="#bbb" font-size="9">{{ timelineMax }} 张</text>
                 <text x="25" y="170" text-anchor="end" fill="#bbb" font-size="9">0</text>
               </svg>
@@ -2207,8 +2208,8 @@ const handleLogout = () => {
 
 .timeline-svg {
   width: 100%;
-  max-width: 600px;
   height: auto;
+  display: block;
 }
 
 /* 图表并排布局 */
@@ -2295,6 +2296,7 @@ const handleLogout = () => {
 
 .tag-bar-track {
   flex: 1;
+  min-width: 0;
   height: 16px;
   background: var(--n-100);
   border-radius: 3px;
@@ -2309,10 +2311,12 @@ const handleLogout = () => {
 }
 
 .tag-count {
-  width: 30px;
+  min-width: 110px;
   font-size: 0.78rem;
   color: var(--text-tertiary);
   text-align: right;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .coverage-bars { display: flex; flex-direction: column; gap: 10px; }
