@@ -37,7 +37,8 @@ const usersTotal = ref(0)
 // 统计数据
 const statsOverview = ref(null)
 const statsTimeline = ref([])
-const statsHeatmap = ref([])
+const statsVisibility = ref([])
+const statsTopTags = ref([])
 const statsLoading = ref(false)
 
 // 分享管理
@@ -479,14 +480,16 @@ const deleteShare = async (item) => {
 const loadStats = async () => {
   statsLoading.value = true
   try {
-    const [overviewRes, timelineRes, heatmapRes] = await Promise.all([
+    const [overviewRes, timelineRes, visibilityRes, topTagsRes] = await Promise.all([
       statsApi.getOverview(),
       statsApi.getTimeline(),
-      statsApi.getHeatmap()
+      statsApi.getVisibility(),
+      statsApi.getTopTags()
     ])
     statsOverview.value = overviewRes
     statsTimeline.value = timelineRes.data || []
-    statsHeatmap.value = heatmapRes.data || []
+    statsVisibility.value = visibilityRes.data || []
+    statsTopTags.value = topTagsRes.data || []
   } catch (e) {
     console.error('加载统计失败:', e)
   } finally {
@@ -524,27 +527,34 @@ const timelineMax = computed(() => {
   return Math.max(...statsTimeline.value.map(d => d.count), 1)
 })
 
-// 热力图颜色
-const heatmapMax = computed(() => {
-  let max = 0
-  for (const row of statsHeatmap.value) {
-    for (const v of row) {
-      if (v > max) max = v
-    }
-  }
-  return max || 1
+// 公开/私密比例
+const visibilityTotal = computed(() => {
+  return statsVisibility.value.reduce((sum, d) => sum + d.count, 0) || 1
 })
 
-const heatColor = (value) => {
-  if (!value) return 'transparent'
-  const ratio = value / heatmapMax.value
-  if (ratio < 0.25) return 'rgba(47,54,64,0.15)'
-  if (ratio < 0.5) return 'rgba(47,54,64,0.35)'
-  if (ratio < 0.75) return 'rgba(47,54,64,0.6)'
-  return 'rgba(47,54,64,0.85)'
-}
+const visibilityData = computed(() => {
+  const colors = { public: '#2f3640', private: '#8b95a0' }
+  return statsVisibility.value.map(d => ({
+    ...d,
+    label: d.visibility === 'public' ? '公开' : '私密',
+    color: colors[d.visibility] || '#ccc',
+    percent: Math.round((d.count / visibilityTotal.value) * 100)
+  }))
+})
 
-const dayLabels = ['一', '二', '三', '四', '五', '六', '日']
+// Top 5 标签
+const tagMaxCount = computed(() => {
+  return Math.max(...statsTopTags.value.map(d => d.count), 1)
+})
+
+// 格式化存储大小
+const formatStorage = (bytes) => {
+  if (!bytes) return '0 B'
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB'
+  if (bytes < 1073741824) return (bytes / 1048576).toFixed(1) + ' MB'
+  return (bytes / 1073741824).toFixed(2) + ' GB'
+}
 
 // 用户管理
 const loadUsers = async (reset = false) => {
@@ -843,59 +853,57 @@ const handleLogout = () => {
               <span class="stat-lbl">照片</span>
             </div>
             <div class="stat-card">
-              <span class="stat-num">{{ statsOverview.albums }}</span>
-              <span class="stat-lbl">相册</span>
+              <span class="stat-num">{{ formatStorage(statsOverview.storage) }}</span>
+              <span class="stat-lbl">存储</span>
             </div>
             <div class="stat-card">
-              <span class="stat-num">{{ statsOverview.publicPhotos }}</span>
-              <span class="stat-lbl">公开照片</span>
+              <span class="stat-num">{{ statsOverview.activeDays }}</span>
+              <span class="stat-lbl">活跃天数</span>
             </div>
           </div>
 
-          <!-- 折线图 -->
+          <!-- 月度上传趋势 -->
           <div class="chart-section" v-if="statsTimeline.length">
-            <h3 class="chart-title">月度照片趋势</h3>
+            <h3 class="chart-title">月度上传趋势</h3>
             <div class="chart-wrap">
               <svg viewBox="0 0 600 200" class="timeline-svg">
-                <!-- 网格线 -->
                 <line v-for="i in 4" :key="'g'+i" x1="30" :y1="30 + (i-1) * 35" x2="570" :y2="30 + (i-1) * 35" stroke="#f0f0f0" stroke-width="1"/>
-                <!-- 折线 -->
                 <polyline :points="timelinePath" fill="none" stroke="#2f3640" stroke-width="2" stroke-linejoin="round"/>
-                <!-- 数据点 -->
                 <circle v-for="(pt, i) in timelinePath.split(' ')" :key="'p'+i" :cx="pt.split(',')[0]" :cy="pt.split(',')[1]" r="3" fill="#2f3640"/>
-                <!-- X 轴标签 -->
                 <text v-for="(l, i) in timelineLabels" :key="'l'+i" :x="l.x" y="195" text-anchor="middle" fill="#999" font-size="10">{{ l.label }}</text>
-                <!-- Y 轴标签 -->
                 <text x="25" y="35" text-anchor="end" fill="#bbb" font-size="9">{{ timelineMax }}</text>
                 <text x="25" y="170" text-anchor="end" fill="#bbb" font-size="9">0</text>
               </svg>
             </div>
           </div>
 
-          <!-- 热力图 -->
-          <div class="chart-section" v-if="statsHeatmap.length">
-            <h3 class="chart-title">拍摄热力图</h3>
-            <div class="heatmap-wrap">
-              <div class="heatmap-grid">
-                <template v-for="(row, di) in statsHeatmap" :key="'d'+di">
-                  <div class="heatmap-day">{{ dayLabels[di] }}</div>
-                  <div v-for="(val, hi) in row" :key="'h'+di+'-'+hi"
-                    class="heatmap-cell"
-                    :style="{ background: heatColor(val) }"
-                    :title="`${dayLabels[di]} ${hi}:00 — ${val} 张`">
+          <div class="chart-row">
+            <!-- 公开/私密比例 -->
+            <div class="chart-section chart-half" v-if="statsVisibility.length">
+              <h3 class="chart-title">公开 / 私密</h3>
+              <div class="visibility-bars">
+                <div v-for="item in visibilityData" :key="item.visibility" class="vis-bar-row">
+                  <span class="vis-label">{{ item.label }}</span>
+                  <div class="vis-bar-track">
+                    <div class="vis-bar-fill" :style="{ width: item.percent + '%', background: item.color }"></div>
                   </div>
-                </template>
+                  <span class="vis-count">{{ item.count }} ({{ item.percent }}%)</span>
+                </div>
               </div>
-              <div class="heatmap-hours">
-                <span v-for="h in [0,3,6,9,12,15,18,21]" :key="h">{{ h }}时</span>
-              </div>
-              <div class="heatmap-legend">
-                <span>少</span>
-                <span class="legend-cell" style="background:rgba(47,54,64,0.1)"></span>
-                <span class="legend-cell" style="background:rgba(47,54,64,0.3)"></span>
-                <span class="legend-cell" style="background:rgba(47,54,64,0.55)"></span>
-                <span class="legend-cell" style="background:rgba(47,54,64,0.85)"></span>
-                <span>多</span>
+            </div>
+
+            <!-- Top 5 标签 -->
+            <div class="chart-section chart-half" v-if="statsTopTags.length">
+              <h3 class="chart-title">热门标签 Top 5</h3>
+              <div class="tag-bars">
+                <div v-for="(tag, i) in statsTopTags" :key="tag.name" class="tag-bar-row">
+                  <span class="tag-rank">{{ i + 1 }}</span>
+                  <span class="tag-name">{{ tag.name }}</span>
+                  <div class="tag-bar-track">
+                    <div class="tag-bar-fill" :style="{ width: (tag.count / tagMaxCount * 100) + '%' }"></div>
+                  </div>
+                  <span class="tag-count">{{ tag.count }}</span>
+                </div>
               </div>
             </div>
           </div>
@@ -2114,74 +2122,116 @@ const handleLogout = () => {
   height: auto;
 }
 
-/* 热力图 */
-.heatmap-wrap {
+/* 图表并排布局 */
+.chart-row {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.chart-half {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+/* 公开/私密比例 */
+.visibility-bars {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 6px;
+  gap: 14px;
 }
 
-.heatmap-grid {
-  display: grid;
-  grid-template-columns: 24px repeat(24, 1fr);
-  gap: 2px;
-}
-
-.heatmap-day {
-  font-size: 0.72rem;
-  color: var(--text-tertiary);
+.vis-bar-row {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  padding-right: 4px;
+  gap: 10px;
 }
 
-.heatmap-cell {
-  aspect-ratio: 1;
-  border-radius: 2px;
-  min-width: 12px;
-  transition: transform 0.1s;
+.vis-label {
+  width: 36px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  text-align: right;
 }
 
-.heatmap-cell:hover {
-  transform: scale(1.3);
-  z-index: 1;
+.vis-bar-track {
+  flex: 1;
+  height: 20px;
+  background: var(--n-100);
+  border-radius: 4px;
+  overflow: hidden;
 }
 
-.heatmap-hours {
-  display: grid;
-  grid-template-columns: 24px repeat(24, 1fr);
-  gap: 2px;
-  width: 100%;
-  max-width: 500px;
+.vis-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
 }
 
-.heatmap-hours span {
-  font-size: 0.65rem;
+.vis-count {
+  width: 80px;
+  font-size: 0.78rem;
   color: var(--text-tertiary);
-  text-align: center;
 }
 
-.heatmap-legend {
+/* Top 5 标签 */
+.tag-bars {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.tag-bar-row {
   display: flex;
   align-items: center;
-  gap: 4px;
-  font-size: 0.72rem;
-  color: var(--text-tertiary);
-  margin-top: 8px;
+  gap: 8px;
 }
 
-.legend-cell {
-  display: inline-block;
-  width: 14px;
-  height: 14px;
-  border-radius: 2px;
+.tag-rank {
+  width: 18px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  text-align: right;
+}
+
+.tag-name {
+  width: 60px;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-bar-track {
+  flex: 1;
+  height: 16px;
+  background: var(--n-100);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.tag-bar-fill {
+  height: 100%;
+  background: #2f3640;
+  border-radius: 3px;
+  transition: width 0.4s ease;
+}
+
+.tag-count {
+  width: 30px;
+  font-size: 0.78rem;
+  color: var(--text-tertiary);
+  text-align: right;
 }
 
 @media (max-width: 700px) {
   .stats-overview {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .chart-row {
+    flex-direction: column;
   }
 }
 </style>
