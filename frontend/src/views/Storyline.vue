@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { storylines } from '../api'
+import { storylines, photos } from '../api'
 import { useAuthStore } from '../stores'
 
 const router = useRouter()
@@ -17,8 +17,7 @@ const hasMore = computed(() => stories.value.length < total.value)
 
 const loadYears = async () => {
   try {
-    const reviewData = await import('../api')
-    const res = await reviewData.photos.getReviewYears()
+    const res = await photos.getReviewYears()
     years.value = res.years || []
     if (years.value.length > 0 && !selectedYear.value) {
       selectedYear.value = years.value[0]

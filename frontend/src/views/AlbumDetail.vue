@@ -436,12 +436,12 @@ onMounted(() => {
       </section>
 
       <!-- Lightbox -->
-      <Lightbox
-        v-if="lightboxVisible"
-        :photos="photoList"
-        :initial-index="lightboxIndex"
-        @close="lightboxVisible = false"
-      />
+            <Lightbox
+              :photos="photoList"
+              :start-index="lightboxIndex"
+              :visible="lightboxVisible"
+              @close="lightboxVisible = false"
+            />
 
       <!-- 编辑对话框 -->
       <Teleport to="body">

@@ -203,9 +203,9 @@ onMounted(checkSession)
     </div>
 
     <Lightbox
-      v-if="lightboxVisible"
       :photos="photoList"
-      :index="lightboxIndex"
+      :start-index="lightboxIndex"
+      :visible="lightboxVisible"
       @close="lightboxVisible = false"
     />
   </div>

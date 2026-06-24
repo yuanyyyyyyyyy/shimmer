@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted, watch, computed } from 'vue'
 import { photos, getProxyUrl } from '../api'
 import { useAuthStore } from '../stores'
 import Lightbox from '../components/Lightbox.vue'
@@ -48,6 +48,15 @@ const formatDate = (d) => {
   const m = d.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (m) return `${m[2]}.${m[3]}`
   return d.slice(0, 10)
+}
+
+const seededRotation = (id) => {
+  let h = 0
+  const s = String(id)
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0
+  }
+  return (Math.abs(h) % 14 + 3) / 10
 }
 
 const openLightbox = (index) => {
@@ -111,7 +120,7 @@ watch(() => authStore.token, () => {
           <div class="entry-dot"></div>
 
           <div class="entry-photo-wrap" @click="openLightbox(i)">
-            <div class="photo-paper" :style="{ transform: `rotate(${i % 2 === 0 ? '' : '-'}${(Math.random() * 1.4 + 0.3).toFixed(1)}deg)` }">
+            <div class="photo-paper" :style="{ transform: `rotate(${i % 2 === 0 ? '' : '-'}${seededRotation(photo.id).toFixed(1)}deg)` }">
               <img
                 :src="getProxyUrl(photo.thumbnail_url || photo.url)"
                 :alt="photo.title"

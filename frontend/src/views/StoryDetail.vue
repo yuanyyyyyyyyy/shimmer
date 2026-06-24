@@ -2,6 +2,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { storylines } from '../api'
+import Lightbox from '../components/Lightbox.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -17,6 +18,14 @@ const date = computed(() => route.params.date)
 const location = computed(() => decodeURIComponent(route.params.location))
 
 const coverPhoto = computed(() => photos.value[0] || null)
+
+const lightboxVisible = ref(false)
+const lightboxIndex = ref(0)
+
+const viewPhoto = (index) => {
+  lightboxIndex.value = index
+  lightboxVisible.value = true
+}
 
 const loadDetail = async () => {
   loading.value = true
@@ -151,7 +160,7 @@ onMounted(loadDetail)
         <section class="photos-block">
           <h2 class="photos-heading">全部照片</h2>
           <div class="photo-strip">
-              <figure v-for="photo in photos" :key="photo.id" class="photo-item">
+              <figure v-for="(photo, index) in photos" :key="photo.id" class="photo-item" @click="viewPhoto(index)">
                 <div class="photo-img">
                   <img :src="photo.original_url || photo.url || photo.thumbnail_url" :alt="photo.title || ''" loading="lazy" />
                 </div>
@@ -164,6 +173,13 @@ onMounted(loadDetail)
         </section>
       </div>
     </template>
+
+    <Lightbox
+      :photos="photos"
+      :start-index="lightboxIndex"
+      :visible="lightboxVisible"
+      @close="lightboxVisible = false"
+    />
   </div>
 </template>
 
@@ -446,6 +462,7 @@ onMounted(loadDetail)
 .photo-item {
   margin: 0;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .photo-item .photo-img {
