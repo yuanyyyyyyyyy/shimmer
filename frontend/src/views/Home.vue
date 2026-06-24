@@ -72,7 +72,7 @@ const loadStats = async () => {
 
 const loadPopularTags = async () => {
   try {
-    const res = await tagApi.getPopular(8)
+    const res = await tagApi.list()
     popularTags.value = res.tags || []
   } catch (e) {}
 }
