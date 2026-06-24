@@ -540,15 +540,18 @@ const timelineLabels = computed(() => {
   const years = [...new Set(data.map(d => d.month.slice(0, 4)))]
   const multiYear = years.length > 1
 
-  // 找出每年第一个出现的月份
   const firstMonthOfYear = {}
   data.forEach((d, i) => {
     const y = d.month.slice(0, 4)
     if (!(y in firstMonthOfYear)) firstMonthOfYear[y] = i
   })
 
-  // 数据点多时跳过中间标签，避免拥挤
-  const skip = data.length > 12 ? Math.ceil(data.length / 12) : 1
+  // 按数据量逐步降级
+  const len = data.length
+  const showAll = len <= 24
+  const showHalfYear = len <= 36          // 7月标记
+  const showEveryYear = len <= 60         // 每年1月
+  const showEvery2Year = len > 120        // 每2年1月
 
   return data
     .map((d, i) => {
@@ -556,14 +559,26 @@ const timelineLabels = computed(() => {
       const month = parseInt(d.month.slice(5), 10)
       let label
       if (multiYear && firstMonthOfYear[year] === i) {
-        // 每年第一个月份显示年份
         label = `${year}/${month}`
       } else {
         label = `${month}`
       }
-      return { index: i, label }
+      return { index: i, label, month, year: parseInt(year) }
     })
-    .filter((_, i) => i % skip === 0 || i === data.length - 1)
+    .filter((item) => {
+      if (item.index === data.length - 1) return true
+      if (showAll) return true
+      // 1月：根据降级策略决定是否显示
+      if (item.month === 1) {
+        if (showEvery2Year) return item.year % 2 === 0
+        return true
+      }
+      // 7月：仅数据量≤36时显示
+      if (item.month === 7 && showHalfYear) return true
+      // 每年首月（数据从非1月开始时）
+      if (multiYear && firstMonthOfYear[item.year] === item.index && showEveryYear) return true
+      return false
+    })
 })
 
 const timelineMax = computed(() => {
