@@ -731,4 +731,53 @@ watch(() => authStore.token, async () => {
 }
 .loc-name { font-weight: 500; color: var(--text-p); flex-shrink: 0; }
 .loc-count { color: var(--text-t); font-size: 0.82rem; margin-left: auto; }
+
+</style>
+
+<style>
+.dark .review-page {
+  --bg-card: oklch(18% 0.008 260);
+  --bg-section: oklch(14% 0.008 260);
+  --border-light: oklch(30% 0.01 260);
+  --border-divider: oklch(25% 0.01 260);
+  --text-p: oklch(90% 0.003 260);
+  --text-s: oklch(70% 0.005 260);
+  --text-t: oklch(65% 0.005 260);
+}
+.dark .year-pills button.active {
+  background: #fff;
+  border-color: #fff;
+  color: #000;
+}
+.dark .year-pills button:hover:not(.active) {
+  border-color: #fff;
+  color: var(--text-p);
+}
+.dark .full-loader .loader-ring {
+  border-top-color: #fff;
+}
+.dark .error-block button {
+  background: #fff;
+  color: #000;
+}
+.dark .empty-action {
+  background: #fff;
+  color: #000;
+}
+.dark .regen-btn:hover:not(:disabled) {
+  border-color: #fff;
+  color: #fff;
+}
+.dark .mini-spinner {
+  border-top-color: #fff;
+}
+.dark .ai-err {
+  border-left-color: #fff;
+}
+.dark .err-title {
+  color: #fff;
+}
+.dark .tag-item:hover {
+  border-color: #fff;
+}
 </style>
