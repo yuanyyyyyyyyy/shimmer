@@ -228,6 +228,7 @@ watch(showUserMenu, (newVal) => {
                       {{ authStore.user?.role === 'admin' ? '管理员' : '用户' }}
                     </span>
                   </div>
+                  <router-link to="/profile" class="dropdown-item" @click="closeUserMenu">个人中心</router-link>
                   <router-link to="/favorites" class="dropdown-item" @click="closeUserMenu">我的收藏</router-link>
                   <router-link to="/hidden-album" class="dropdown-item" @click="closeUserMenu">隐藏相册</router-link>
                   <router-link to="/admin" class="dropdown-item" @click="closeUserMenu">{{ authStore.isAdmin ? '管理后台' : '我的照片' }}</router-link>
