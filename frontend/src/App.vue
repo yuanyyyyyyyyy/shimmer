@@ -44,7 +44,6 @@ const handleSearch = () => {
     router.push({ path: '/', query: { search: query } })
     showTags.value = false
     searchSuggestions.value = []
-    closeSearch()
   }
 }
 
@@ -53,7 +52,6 @@ const selectSuggestion = (value) => {
   router.push({ path: '/', query: { search: value } })
   searchSuggestions.value = []
   showTags.value = false
-  closeSearch()
 }
 
 const fetchSearchSuggestions = async (query) => {
@@ -93,7 +91,9 @@ const filterByTag = (tagId) => {
 
 const clearFilters = () => {
   searchQuery.value = ''
+  searchSuggestions.value = []
   router.push({ path: '/' })
+  closeSearch()
 }
 
 const toggleDarkMode = () => {
@@ -121,13 +121,19 @@ const openSearch = async () => {
 
 const closeSearch = () => {
   showSearchBar.value = false
-  searchQuery.value = ''
   searchSuggestions.value = []
   showTags.value = false
 }
 
 const handleSearchKeydown = (e) => {
-  if (e.key === 'Escape') closeSearch()
+  if (e.key === 'Escape') {
+    if (searchQuery.value.trim()) {
+      searchQuery.value = ''
+      searchSuggestions.value = []
+    } else {
+      closeSearch()
+    }
+  }
 }
 
 const handleClickOutside = (e) => {
@@ -168,9 +174,18 @@ onMounted(async () => {
 
 let cleanupScroll = null
 
+let lastSearchedQuery = ''
+
 watch(() => route.query.search, (newSearch) => {
   searchQuery.value = newSearch || ''
-  fetchSearchSuggestions(searchQuery.value)
+  // 只在搜索词真正变化时才调用 AI，避免重复请求
+  if (newSearch && newSearch !== lastSearchedQuery) {
+    lastSearchedQuery = newSearch
+    fetchSearchSuggestions(newSearch)
+  } else if (!newSearch) {
+    lastSearchedQuery = ''
+    searchSuggestions.value = []
+  }
 })
 
 let searchDebounceTimer = null

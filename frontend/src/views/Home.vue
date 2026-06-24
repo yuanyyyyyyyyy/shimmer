@@ -16,6 +16,8 @@ const authStore = useAuthStore()
 const fp = getFingerprint()
 
 const photoList = ref([])
+const heroPhotos = ref([])
+const filmStripPhotos = ref([])
 const loading = ref(false)
 const page = ref(1)
 const total = ref(0)
@@ -30,16 +32,17 @@ const tagsExpanded = ref(false)
 
 const lightboxVisible = ref(false)
 const lightboxIndex = ref(0)
+const lightboxPhotos = ref([])
 
 const darkroomPhoto = ref(null)
 const showDarkroom = ref(false)
 
 const featuredPhoto = computed(() => {
-  if (photoList.value.length === 0) return null
-  return photoList.value[0]
+  if (heroPhotos.value.length === 0) return null
+  return heroPhotos.value[0]
 })
 
-const decoPhotos = computed(() => photoList.value.slice(1, 6))
+const decoPhotos = computed(() => heroPhotos.value.slice(1, 6))
 
 const getWallStyle = (photo, index) => {
   const anchors = [
@@ -84,6 +87,20 @@ const loadFavoriteCount = async () => {
     const newSet = new Set()
     ;(res.favorites || []).forEach(p => newSet.add(p.photo_id))
     favoriteIds.value = newSet
+  } catch (e) {}
+}
+
+const loadHeroPhotos = async () => {
+  try {
+    const res = await photos.list({ page: 1, limit: 6, sort: 'random' })
+    heroPhotos.value = res.data
+  } catch (e) {}
+}
+
+const loadFilmStripPhotos = async () => {
+  try {
+    const res = await photos.list({ page: 1, limit: 500, sort: 'date' })
+    filmStripPhotos.value = res.data
   } catch (e) {}
 }
 
@@ -168,8 +185,9 @@ const loadMore = () => {
   loadPhotos()
 }
 
-const viewDetail = (index) => {
+const viewDetail = (index, source) => {
   lightboxIndex.value = index
+  lightboxPhotos.value = source || photoList.value
   lightboxVisible.value = true
 }
 
@@ -215,10 +233,14 @@ watch(() => route.query, () => {
 }, { immediate: true })
 
 watch(() => authStore.token, () => {
+  loadHeroPhotos()
+  loadFilmStripPhotos()
   loadPhotos(true)
 })
 
 onMounted(() => {
+  loadHeroPhotos()
+  loadFilmStripPhotos()
   loadStats()
   loadPopularTags()
   loadFavoriteCount()
@@ -307,9 +329,9 @@ const getCardStyle = (photo) => {
       </section>
 
       <!-- Film Strip -->
-      <section v-if="photoList.length > 0" class="film-section">
+      <section v-if="filmStripPhotos.length > 0" class="film-section">
         <div class="section-label">光影长廊</div>
-        <FilmStrip :photos="photoList" @select="viewDetail(photoList.indexOf($event))" />
+        <FilmStrip :photos="filmStripPhotos" @select="viewDetail(filmStripPhotos.indexOf($event), filmStripPhotos)" />
       </section>
 
       <!-- Category Filter -->
@@ -372,7 +394,7 @@ const getCardStyle = (photo) => {
               :key="photo.id"
               class="f-card"
               :style="getCardStyle(photo)"
-              @click="viewDetail(index)"
+              @click="viewDetail(index, photoList)"
             >
               <div class="f-card-img">
                 <img
@@ -398,7 +420,7 @@ const getCardStyle = (photo) => {
       </section>
 
       <Lightbox
-        :photos="photoList"
+        :photos="lightboxPhotos"
         :start-index="lightboxIndex"
         :visible="lightboxVisible"
         @close="handleLightboxClose"
