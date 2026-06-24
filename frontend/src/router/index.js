@@ -17,7 +17,6 @@ import ShareCard from '../views/ShareCard.vue'
 import SharePreview from '../views/SharePreview.vue'
 import ShareManage from '../views/ShareManage.vue'
 import HiddenAlbum from '../views/HiddenAlbum.vue'
-import Profile from '../views/Profile.vue'
 import { useAuthStore } from '../stores'
 
 const routes = [
@@ -38,8 +37,7 @@ const routes = [
   { path: '/share/create', name: 'ShareCard', component: ShareCard, meta: { requiresAuth: true } },
   { path: '/shares', name: 'ShareManage', component: ShareManage, meta: { requiresAuth: true } },
   { path: '/share/:shareId', name: 'SharePreview', component: SharePreview },
-  { path: '/hidden-album', name: 'HiddenAlbum', component: HiddenAlbum, meta: { requiresAuth: true } },
-  { path: '/profile', name: 'Profile', component: Profile, meta: { requiresAuth: true } }
+  { path: '/hidden-album', name: 'HiddenAlbum', component: HiddenAlbum, meta: { requiresAuth: true } }
 ]
 
 const router = createRouter({
