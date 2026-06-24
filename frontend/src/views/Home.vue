@@ -21,6 +21,8 @@ const page = ref(1)
 const total = ref(0)
 const hasMore = computed(() => photoList.value.length < total.value)
 const favoriteIds = ref(new Set())
+const favoriteCount = computed(() => favoriteIds.value.size)
+const filterMode = ref('all') // 'all' | 'favorites'
 const stats = ref(null)
 const popularTags = ref([])
 const activeTagId = ref(null)
@@ -74,32 +76,57 @@ const loadPopularTags = async () => {
   } catch (e) {}
 }
 
+const loadFavoriteCount = async () => {
+  if (!authStore.isLoggedIn) return
+  try {
+    const res = await favorites.list()
+    const newSet = new Set()
+    ;(res.favorites || []).forEach(p => newSet.add(p.id))
+    favoriteIds.value = newSet
+  } catch (e) {}
+}
+
 const loadPhotos = async (reset = false) => {
   if (loading.value) return
   loading.value = true
 
   const search = route.query.search || ''
   const tag = route.query.tag || ''
-  activeTagId.value = tag || null
+  const filter = route.query.filter || 'all'
+  filterMode.value = filter
+  activeTagId.value = (filter === 'all' && tag) ? tag : null
 
   try {
-    const params = {
-      page: reset ? 1 : page.value,
-      limit: 20,
-      sort: 'random'
-    }
-    if (search) params.search = search
-    if (tag) params.tag = tag
-
-    const res = await photos.list(params)
-    if (reset) {
-      photoList.value = res.data
+    if (filter === 'favorites') {
+      // 收藏模式：加载收藏列表
+      const res = await favorites.list()
+      photoList.value = res.favorites || []
+      total.value = photoList.value.length
       page.value = 1
+      // 标记所有已加载照片为已收藏
+      const newSet = new Set()
+      photoList.value.forEach(p => newSet.add(p.id))
+      favoriteIds.value = newSet
     } else {
-      photoList.value = [...photoList.value, ...res.data]
+      // 普通模式
+      const params = {
+        page: reset ? 1 : page.value,
+        limit: 20,
+        sort: 'random'
+      }
+      if (search) params.search = search
+      if (tag) params.tag = tag
+
+      const res = await photos.list(params)
+      if (reset) {
+        photoList.value = res.data
+        page.value = 1
+      } else {
+        photoList.value = [...photoList.value, ...res.data]
+      }
+      total.value = res.total
+      checkFavorites(res.data)
     }
-    total.value = res.total
-    checkFavorites(res.data)
   } catch (e) {
     console.error(e)
   } finally {
@@ -169,6 +196,17 @@ const filterByTag = (tagId) => {
   }
 }
 
+const setFilter = (mode) => {
+  if (mode === 'favorites') {
+    router.push({ path: '/', query: { filter: 'favorites' } })
+  } else {
+    // 回到全部模式，保留搜索参数
+    const query = {}
+    if (route.query.search) query.search = route.query.search
+    router.push({ path: '/', query })
+  }
+}
+
 const clearFilters = () => {
   router.push({ path: '/' })
 }
@@ -184,6 +222,7 @@ watch(() => authStore.token, () => {
 onMounted(() => {
   loadStats()
   loadPopularTags()
+  loadFavoriteCount()
 })
 
 const getCardStyle = (photo) => {
@@ -275,27 +314,35 @@ const getCardStyle = (photo) => {
       </section>
 
       <!-- Category Filter -->
-      <section v-if="popularTags.length > 0" class="filter-section">
+      <section class="filter-section">
         <div class="section-label">探索分类</div>
         <div class="filter-pills">
           <button
-            :class="{ active: !activeTagId }"
+            :class="{ active: filterMode === 'all' && !activeTagId }"
             @click="clearFilters"
           >全部</button>
           <button
-            v-for="tag in popularTags"
-            :key="tag.id"
-            :class="{ active: activeTagId === String(tag.id) }"
-            @click="filterByTag(tag.id)"
-          >{{ tag.name }}</button>
+            v-if="authStore.isLoggedIn"
+            :class="{ active: filterMode === 'favorites' }"
+            @click="setFilter('favorites')"
+          >收藏 <span v-if="favoriteCount > 0" class="filter-badge">{{ favoriteCount }}</span></button>
+          <template v-if="filterMode === 'all'">
+            <button
+              v-for="tag in popularTags"
+              :key="tag.id"
+              :class="{ active: activeTagId === String(tag.id) }"
+              @click="filterByTag(tag.id)"
+            >{{ tag.name }}</button>
+          </template>
         </div>
       </section>
 
       <!-- Waterfall Gallery -->
       <section class="gallery-section">
-        <div v-if="route.query.search || route.query.tag" class="filter-status">
+        <div v-if="route.query.search || route.query.tag || route.query.filter === 'favorites'" class="filter-status">
           <span v-if="route.query.search">搜索: "{{ route.query.search }}"</span>
-          <span v-if="route.query.tag">标签筛选</span>
+          <span v-if="route.query.filter === 'favorites'">我的收藏</span>
+          <span v-else-if="route.query.tag">标签筛选</span>
           <button @click="clearFilters">清除</button>
         </div>
 
@@ -653,6 +700,27 @@ const getCardStyle = (photo) => {
   background: #000;
   color: #fff;
   border-color: #000;
+}
+.filter-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 4px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  line-height: 1;
+}
+.filter-pills button.active .filter-badge {
+  background: rgba(255, 255, 255, 0.3);
+}
+.filter-pills button:not(.active) .filter-badge {
+  background: var(--n-300);
+  color: var(--text-secondary);
 }
 
 .filter-status {

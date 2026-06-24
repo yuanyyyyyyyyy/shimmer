@@ -23,7 +23,7 @@ const routes = [
   { path: '/', name: 'Home', component: Home },
   { path: '/timeline', name: 'Timeline', component: Timeline },
   { path: '/darkroom', name: 'Darkroom', component: Darkroom },
-  { path: '/favorites', name: 'Favorites', component: Favorites },
+  { path: '/favorites', redirect: () => ({ path: '/', query: { filter: 'favorites' } }) },
   { path: '/albums', name: 'Albums', component: Albums },
   { path: '/albums/:id', name: 'AlbumDetail', component: AlbumDetail },
   { path: '/login', name: 'Login', component: Login },
