@@ -55,6 +55,9 @@ coverage/
 .graphify_*.txt
 graphify-out/
 
+# OpenCode
+.opencode/
+
 # Docker
 docker-compose.yml
 Dockerfile
