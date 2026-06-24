@@ -1,10 +1,11 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores'
 import { photos, upload, tags, ai, users, stats as statsApi, share } from '../api'
 import { success, error, confirm } from '../composables/useToast'
 import DragDropUpload from '../components/DragDropUpload.vue'
+import StatsTimeFilter from '../components/StatsTimeFilter.vue'
 import { extractExif } from '../composables/useExif'
 
 const router = useRouter()
@@ -42,6 +43,20 @@ const statsTopTags = ref([])
 const statsTopUsers = ref([])
 const statsCoverage = ref(null)
 const statsLoading = ref(false)
+
+// 时间筛选
+const globalTimeRange = ref({ preset: 'all' })
+const chartOverrides = ref({})
+
+function getTimeRange(key) {
+  return chartOverrides.value[key] || globalTimeRange.value
+}
+
+function buildParams(key) {
+  const range = getTimeRange(key)
+  if (!range || range.preset === 'all') return {}
+  return { start: range.start || undefined, end: range.end || undefined }
+}
 
 // 分享管理
 const shareList = ref([])
@@ -88,6 +103,11 @@ onMounted(async () => {
     const res = await ai.getConfig()
     aiEnabled.value = res.config?.enabled ?? false
   } catch (e) {}
+})
+
+// 全局时间筛选变化时重新加载统计
+watch(globalTimeRange, () => {
+  if (activeTab.value === 'stats') loadStats()
 })
 
 // 加载标签
@@ -499,12 +519,12 @@ const loadStats = async () => {
   statsLoading.value = true
   try {
     const [overviewRes, timelineRes, visibilityRes, topTagsRes, topUsersRes, coverageRes] = await Promise.all([
-      statsApi.getOverview(),
-      statsApi.getTimeline(),
-      statsApi.getVisibility(),
-      statsApi.getTopTags(),
-      statsApi.getTopUsers(),
-      statsApi.getCoverage()
+      statsApi.getOverview(buildParams('overview')),
+      statsApi.getTimeline(buildParams('timeline')),
+      statsApi.getVisibility(buildParams('visibility')),
+      statsApi.getTopTags(buildParams('topTags')),
+      statsApi.getTopUsers(buildParams('topUsers')),
+      statsApi.getCoverage(buildParams('coverage'))
     ])
     statsOverview.value = overviewRes
     statsTimeline.value = timelineRes.data || []
@@ -903,8 +923,11 @@ const handleLogout = () => {
 
       <!-- 统计 -->
       <div v-if="activeTab === 'stats'" class="stats-dashboard">
-        <div v-if="statsLoading" class="loading">加载中...</div>
-        <template v-else>
+        <div class="stats-global-filter">
+          <StatsTimeFilter v-model="globalTimeRange" />
+        </div>
+        <div v-show="statsLoading" class="loading-overlay">加载中...</div>
+        <template>
           <!-- 概览卡片 -->
           <div class="stats-overview" v-if="statsOverview">
             <div class="stat-card">
@@ -935,7 +958,10 @@ const handleLogout = () => {
 
           <!-- 数据覆盖率 -->
           <div class="chart-section" v-if="statsCoverage && statsCoverage.total > 0">
-            <h3 class="chart-title">数据覆盖率</h3>
+            <div class="chart-title-row">
+              <h3 class="chart-title">数据覆盖率</h3>
+              <StatsTimeFilter v-model="chartOverrides.coverage" show-reset @update:model-value="loadStats" />
+            </div>
             <div class="coverage-bars">
               <div class="coverage-row">
                 <span class="coverage-label">EXIF 信息</span>
@@ -963,7 +989,10 @@ const handleLogout = () => {
 
           <!-- 月度拍摄趋势 -->
           <div class="chart-section" v-if="statsTimeline.length">
-            <h3 class="chart-title">月度拍摄趋势</h3>
+            <div class="chart-title-row">
+              <h3 class="chart-title">月度拍摄趋势</h3>
+              <StatsTimeFilter v-model="chartOverrides.timeline" show-reset @update:model-value="loadStats" />
+            </div>
             <div class="chart-wrap">
               <svg viewBox="0 0 600 200" class="timeline-svg">
                 <line v-for="i in 4" :key="'g'+i" x1="30" :y1="30 + (i-1) * 35" x2="570" :y2="30 + (i-1) * 35" stroke="#f0f0f0" stroke-width="1"/>
@@ -979,7 +1008,10 @@ const handleLogout = () => {
           <div class="chart-row">
             <!-- 公开/私密比例 -->
             <div class="chart-section chart-half" v-if="statsVisibility.length">
-              <h3 class="chart-title">公开 / 私密</h3>
+              <div class="chart-title-row">
+                <h3 class="chart-title">公开 / 私密</h3>
+                <StatsTimeFilter v-model="chartOverrides.visibility" show-reset @update:model-value="loadStats" />
+              </div>
               <div class="visibility-bars">
                 <div v-for="item in visibilityData" :key="item.visibility" class="vis-bar-row">
                   <span class="vis-label">{{ item.label }}</span>
@@ -993,7 +1025,10 @@ const handleLogout = () => {
 
             <!-- Top 5 标签 -->
             <div class="chart-section chart-half" v-if="statsTopTags.length">
-              <h3 class="chart-title">热门标签 Top 5</h3>
+              <div class="chart-title-row">
+                <h3 class="chart-title">热门标签 Top 5</h3>
+                <StatsTimeFilter v-model="chartOverrides.topTags" show-reset @update:model-value="loadStats" />
+              </div>
               <div class="tag-bars">
                 <div v-for="(tag, i) in statsTopTags" :key="tag.name" class="tag-bar-row">
                   <span class="tag-rank">{{ i + 1 }}</span>
@@ -1009,7 +1044,10 @@ const handleLogout = () => {
 
           <!-- 用户贡献 Top 10 -->
           <div class="chart-section" v-if="statsTopUsers.length">
-            <h3 class="chart-title">用户贡献 Top 10</h3>
+            <div class="chart-title-row">
+              <h3 class="chart-title">用户贡献 Top 10</h3>
+              <StatsTimeFilter v-model="chartOverrides.topUsers" show-reset @update:model-value="loadStats" />
+            </div>
             <div class="tag-bars">
               <div v-for="(user, i) in statsTopUsers" :key="user.username" class="tag-bar-row">
                 <span class="tag-rank">{{ i + 1 }}</span>
@@ -1506,6 +1544,19 @@ const handleLogout = () => {
   text-align: center;
   padding: 40px;
   color: var(--text-tertiary);
+}
+
+.loading-overlay {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-tertiary);
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  background: rgba(255, 255, 255, 0.85);
+  z-index: 10;
+  border-radius: 10px;
 }
 
 /* 弹窗 */
@@ -2180,6 +2231,7 @@ const handleLogout = () => {
 /* 统计仪表盘 */
 .stats-dashboard {
   padding: 20px 0;
+  position: relative;
 }
 
 .stats-overview {
@@ -2223,7 +2275,20 @@ const handleLogout = () => {
   font-size: 0.95rem;
   font-weight: 600;
   color: var(--text-color);
-  margin: 0 0 16px;
+  margin: 0;
+}
+
+.chart-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+
+.stats-global-filter {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 16px;
 }
 
 .chart-wrap {

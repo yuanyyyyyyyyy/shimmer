@@ -2,7 +2,12 @@ import { Router } from 'express';
 import { query, getConnection } from '../config/database.js';
 import { authenticateToken, optionalAuth, verifyHiddenAlbum } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error.js';
-import { generatePhotoMetadata, rewriteSearchQuery } from '../services/ai.js';
+import { generatePhotoMetadata } from '../services/ai.js';
+
+// 转义 SQL LIKE 通配符
+function escapeLike(str) {
+  return str.replace(/\\/g, '\\\\').replace(/%/g, '\\%').replace(/_/g, '\\_');
+}
 
 const router = Router();
 
@@ -54,34 +59,44 @@ router.get('/', optionalAuth, async (req, res, next) => {
     }
 
     // 搜索支持（标题、心情、地点的模糊搜索）
-    if (search) {
+    if (search && search.trim().length > 0) {
+      // 输入校验：最大 100 字符
+      if (search.length > 100) {
+        return res.status(400).json({ error: '搜索词过长，最多 100 个字符' });
+      }
+
+      const escapedSearch = escapeLike(search.trim());
       let searchClause = '(p.title LIKE ? OR p.mood LIKE ? OR p.location LIKE ?)';
-      const searchPattern = `%${search}%`;
+      const searchPattern = `%${escapedSearch}%`;
       params.push(searchPattern, searchPattern, searchPattern);
 
-      try {
-        const aiResult = await rewriteSearchQuery(search, {}, req.user?.id);
-        const aiKeywords = Array.isArray(aiResult.keywords) ? aiResult.keywords.filter(Boolean) : [];
-        const aiTagNames = Array.isArray(aiResult.tags) ? aiResult.tags.filter(Boolean) : [];
+      // 使用前端传来的 AI 搜索结果（keywords 和 tags），不再重复调用 AI
+      const aiKeywords = Array.isArray(req.query.ai_keywords)
+        ? req.query.ai_keywords.filter(Boolean)
+        : typeof req.query.ai_keywords === 'string' && req.query.ai_keywords
+          ? [req.query.ai_keywords]
+          : [];
+      const aiTagNames = Array.isArray(req.query.ai_tags)
+        ? req.query.ai_tags.filter(Boolean)
+        : typeof req.query.ai_tags === 'string' && req.query.ai_tags
+          ? [req.query.ai_tags]
+          : [];
 
-        if (aiKeywords.length > 0) {
-          const keywordConditions = aiKeywords
-            .map(() => '(p.title LIKE ? OR p.mood LIKE ? OR p.location LIKE ?)')
-            .join(' OR ');
-          searchClause += ` OR ${keywordConditions}`;
-          aiKeywords.forEach(keyword => {
-            const pattern = `%${keyword}%`;
-            params.push(pattern, pattern, pattern);
-          });
-        }
+      if (aiKeywords.length > 0) {
+        const keywordConditions = aiKeywords
+          .map(() => '(p.title LIKE ? OR p.mood LIKE ? OR p.location LIKE ?)')
+          .join(' OR ');
+        searchClause += ` OR ${keywordConditions}`;
+        aiKeywords.forEach(keyword => {
+          const pattern = `%${escapeLike(String(keyword))}%`;
+          params.push(pattern, pattern, pattern);
+        });
+      }
 
-        if (aiTagNames.length > 0) {
-          const tagPlaceholders = aiTagNames.map(() => '?').join(',');
-          searchClause += ` OR p.id IN (SELECT DISTINCT pt.photo_id FROM photo_tags pt JOIN tags t ON pt.tag_id = t.id WHERE t.name IN (${tagPlaceholders}))`;
-          params.push(...aiTagNames);
-        }
-      } catch (err) {
-        console.error('[AI] rewriteSearchQuery error:', err.message || err);
+      if (aiTagNames.length > 0) {
+        const tagPlaceholders = aiTagNames.map(() => '?').join(',');
+        searchClause += ` OR p.id IN (SELECT DISTINCT pt.photo_id FROM photo_tags pt JOIN tags t ON pt.tag_id = t.id WHERE t.name IN (${tagPlaceholders}))`;
+        params.push(...aiTagNames);
       }
 
       whereClause += ` AND (${searchClause})`;
@@ -110,6 +125,13 @@ router.get('/', optionalAuth, async (req, res, next) => {
       params.push(month);
     }
 
+    // 搜索时：标题匹配优先，再按时间排序
+    if (search && search.trim().length > 0) {
+      const escapedSearch = escapeLike(search.trim());
+      const likePattern = `%${escapedSearch}%`;
+      orderBy = `CASE WHEN p.title LIKE '${likePattern}' THEN 0 ELSE 1 END, shot_date DESC, create_time DESC`;
+    }
+
     // 获取总数
     const [countResult] = await query(
       `SELECT COUNT(DISTINCT p.id) as total FROM photos p ${whereClause}`,
@@ -124,7 +146,6 @@ router.get('/', optionalAuth, async (req, res, next) => {
                p.width, p.height,
                p.created_at as create_time, p.latitude, p.longitude
         FROM photos p ${whereClause}
-        GROUP BY p.id
         ORDER BY ${orderBy}
         LIMIT ${safeLimit} OFFSET ${safeOffset}`,
       params

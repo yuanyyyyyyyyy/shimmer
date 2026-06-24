@@ -16,6 +16,8 @@ const authStore = useAuthStore()
 const fp = getFingerprint()
 
 const photoList = ref([])
+const heroPhotos = ref([])
+const filmStripPhotos = ref([])
 const loading = ref(false)
 const page = ref(1)
 const total = ref(0)
@@ -30,16 +32,17 @@ const tagsExpanded = ref(false)
 
 const lightboxVisible = ref(false)
 const lightboxIndex = ref(0)
+const lightboxPhotos = ref([])
 
 const darkroomPhoto = ref(null)
 const showDarkroom = ref(false)
 
 const featuredPhoto = computed(() => {
-  if (photoList.value.length === 0) return null
-  return photoList.value[0]
+  if (heroPhotos.value.length === 0) return null
+  return heroPhotos.value[0]
 })
 
-const decoPhotos = computed(() => photoList.value.slice(1, 6))
+const decoPhotos = computed(() => heroPhotos.value.slice(1, 6))
 
 const getWallStyle = (photo, index) => {
   const anchors = [
@@ -87,6 +90,20 @@ const loadFavoriteCount = async () => {
   } catch (e) {}
 }
 
+const loadHeroPhotos = async () => {
+  try {
+    const res = await photos.list({ page: 1, limit: 6, sort: 'random' })
+    heroPhotos.value = res.data
+  } catch (e) {}
+}
+
+const loadFilmStripPhotos = async () => {
+  try {
+    const res = await photos.list({ page: 1, limit: 500, sort: 'date' })
+    filmStripPhotos.value = res.data
+  } catch (e) {}
+}
+
 const loadPhotos = async (reset = false) => {
   if (loading.value) return
   loading.value = true
@@ -118,6 +135,15 @@ const loadPhotos = async (reset = false) => {
       if (search) params.search = search
       if (tag) params.tag = tag
 
+      // 读取缓存的 AI 搜索结果，传递给后端避免重复调用 AI
+      if (search) {
+        try {
+          const aiResult = JSON.parse(sessionStorage.getItem('aiSearchResult') || '{}')
+          if (aiResult.keywords?.length) params.ai_keywords = aiResult.keywords
+          if (aiResult.tags?.length) params.ai_tags = aiResult.tags
+        } catch (e) {}
+      }
+
       const res = await photos.list(params)
       if (reset) {
         photoList.value = res.data
@@ -126,25 +152,14 @@ const loadPhotos = async (reset = false) => {
         photoList.value = [...photoList.value, ...res.data]
       }
       total.value = res.total
-      checkFavorites(res.data)
+
+      // 刷新收藏状态（替代 N+1 逐个 check）
+      await loadFavoriteCount()
     }
   } catch (e) {
     console.error(e)
   } finally {
     loading.value = false
-  }
-}
-
-const checkFavorites = async (list) => {
-  for (const p of list) {
-    try {
-      const res = await favorites.check(p.id, fp)
-      if (res.isFavorited) {
-        const newSet = new Set(favoriteIds.value)
-        newSet.add(p.id)
-        favoriteIds.value = newSet
-      }
-    } catch (e) {}
   }
 }
 
@@ -170,8 +185,9 @@ const loadMore = () => {
   loadPhotos()
 }
 
-const viewDetail = (index) => {
+const viewDetail = (index, source) => {
   lightboxIndex.value = index
+  lightboxPhotos.value = source || photoList.value
   lightboxVisible.value = true
 }
 
@@ -217,10 +233,14 @@ watch(() => route.query, () => {
 }, { immediate: true })
 
 watch(() => authStore.token, () => {
+  loadHeroPhotos()
+  loadFilmStripPhotos()
   loadPhotos(true)
 })
 
 onMounted(() => {
+  loadHeroPhotos()
+  loadFilmStripPhotos()
   loadStats()
   loadPopularTags()
   loadFavoriteCount()
@@ -309,9 +329,9 @@ const getCardStyle = (photo) => {
       </section>
 
       <!-- Film Strip -->
-      <section v-if="photoList.length > 0" class="film-section">
+      <section v-if="filmStripPhotos.length > 0" class="film-section">
         <div class="section-label">光影长廊</div>
-        <FilmStrip :photos="photoList" @select="viewDetail(photoList.indexOf($event))" />
+        <FilmStrip :photos="filmStripPhotos" @select="viewDetail(filmStripPhotos.indexOf($event), filmStripPhotos)" />
       </section>
 
       <!-- Category Filter -->
@@ -356,7 +376,15 @@ const getCardStyle = (photo) => {
         <div v-if="loading && photoList.length === 0" class="loading">加载中...</div>
 
         <div v-else-if="photoList.length === 0" class="empty">
-          <p>暂无照片</p>
+          <template v-if="route.query.search">
+            <p>未找到 "{{ route.query.search }}" 相关照片</p>
+            <p class="empty-hint">试试其他关键词，或
+              <button class="link-btn" @click="clearFilters">清除筛选</button>
+            </p>
+          </template>
+          <template v-else>
+            <p>暂无照片</p>
+          </template>
         </div>
 
         <template v-else>
@@ -366,7 +394,7 @@ const getCardStyle = (photo) => {
               :key="photo.id"
               class="f-card"
               :style="getCardStyle(photo)"
-              @click="viewDetail(index)"
+              @click="viewDetail(index, photoList)"
             >
               <div class="f-card-img">
                 <img
@@ -392,7 +420,7 @@ const getCardStyle = (photo) => {
       </section>
 
       <Lightbox
-        :photos="photoList"
+        :photos="lightboxPhotos"
         :start-index="lightboxIndex"
         :visible="lightboxVisible"
         @close="handleLightboxClose"
@@ -870,6 +898,22 @@ const getCardStyle = (photo) => {
   padding: 40px 20px;
   color: var(--text-tertiary);
   font-size: 0.9rem;
+}
+.empty-hint {
+  margin-top: 8px;
+  font-size: 0.82rem;
+}
+.empty-hint .link-btn {
+  background: none;
+  border: none;
+  color: #000;
+  text-decoration: underline;
+  cursor: pointer;
+  font-size: inherit;
+  padding: 0;
+}
+:root.dark .empty-hint .link-btn {
+  color: #e0e0e0;
 }
 .load-more button {
   background: #000;

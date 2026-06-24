@@ -693,7 +693,33 @@ async function summarizeReview(reviewStats = {}, options = {}, userId) {
   }
 }
 
+// 搜索结果缓存（5 分钟 TTL，最多 200 条）
+const searchCache = new Map();
+const SEARCH_CACHE_TTL = 5 * 60 * 1000;
+const SEARCH_CACHE_MAX = 200;
+
+function cleanupSearchCache() {
+  const now = Date.now();
+  for (const [key, entry] of searchCache) {
+    if (now - entry.time > SEARCH_CACHE_TTL) {
+      searchCache.delete(key);
+    }
+  }
+  // 超过上限时删除最早的
+  if (searchCache.size > SEARCH_CACHE_MAX) {
+    const oldest = searchCache.keys().next().value;
+    searchCache.delete(oldest);
+  }
+}
+
 async function rewriteSearchQuery(query, options = {}, userId) {
+  // 检查缓存
+  const cacheKey = `${userId || 'anon'}:${query}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached && Date.now() - cached.time < SEARCH_CACHE_TTL) {
+    return cached.data;
+  }
+
   const aiConfig = await loadAiSettings(userId);
   if (!aiConfig.enabled || !aiConfig.provider) {
     return { keywords: [], tags: [] };
@@ -715,16 +741,29 @@ async function rewriteSearchQuery(query, options = {}, userId) {
   ];
 
   try {
-    const raw = await makeChatCompletion(messages, { maxTokens: 200 }, userId);
+    // 5 秒超时，避免 AI 服务不可用时搜索卡住
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('AI search timeout')), 5000)
+    );
+    const raw = await Promise.race([
+      makeChatCompletion(messages, { maxTokens: 200 }, userId),
+      timeoutPromise
+    ]);
     const parsed = safeParseJSON(raw);
     if (!parsed) {
       return { keywords: [], tags: [] };
     }
 
-    return {
+    const result = {
       keywords: Array.isArray(parsed.keywords) ? parsed.keywords.map(k => String(k).trim()).filter(Boolean) : [],
       tags: Array.isArray(parsed.tags) ? parsed.tags.map(t => String(t).trim()).filter(Boolean) : []
     };
+
+    // 写入缓存
+    cleanupSearchCache();
+    searchCache.set(cacheKey, { data: result, time: Date.now() });
+
+    return result;
   } catch (error) {
     console.error('[AI] rewriteSearchQuery error:', error.message || error);
     return { keywords: [], tags: [] };

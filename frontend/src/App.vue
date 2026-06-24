@@ -59,6 +59,7 @@ const selectSuggestion = (value) => {
 const fetchSearchSuggestions = async (query) => {
   if (!query) {
     searchSuggestions.value = []
+    sessionStorage.removeItem('aiSearchResult')
     return
   }
   suggestionsLoading.value = true
@@ -71,8 +72,15 @@ const fetchSearchSuggestions = async (query) => {
       .map(item => String(item).trim())
       .filter(Boolean)
     searchSuggestions.value = [...new Set(suggestions)].slice(0, 6)
+
+    // 缓存 AI 结果供 Home.vue 使用
+    sessionStorage.setItem('aiSearchResult', JSON.stringify({
+      keywords: Array.isArray(res.keywords) ? res.keywords : [],
+      tags: Array.isArray(res.tags) ? res.tags : []
+    }))
   } catch (e) {
     searchSuggestions.value = []
+    sessionStorage.removeItem('aiSearchResult')
   } finally {
     suggestionsLoading.value = false
   }

@@ -145,12 +145,12 @@ export const storylines = {
 export const stats = {
   get: () => api.get('/stats'),
   getGlobal: () => api.get('/stats/global'),
-  getOverview: () => api.get('/stats/overview'),
-  getTimeline: () => api.get('/stats/timeline'),
-  getVisibility: () => api.get('/stats/visibility'),
-  getTopTags: () => api.get('/stats/top-tags'),
-  getTopUsers: () => api.get('/stats/top-users'),
-  getCoverage: () => api.get('/stats/coverage')
+  getOverview: (params) => api.get('/stats/overview', { params }),
+  getTimeline: (params) => api.get('/stats/timeline', { params }),
+  getVisibility: (params) => api.get('/stats/visibility', { params }),
+  getTopTags: (params) => api.get('/stats/top-tags', { params }),
+  getTopUsers: (params) => api.get('/stats/top-users', { params }),
+  getCoverage: (params) => api.get('/stats/coverage', { params })
 }
 
 // 分享卡片
