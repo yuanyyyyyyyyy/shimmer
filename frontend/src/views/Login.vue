@@ -249,6 +249,16 @@ const handleLogin = async () => {
   color: var(--text-tertiary, #bbb);
 }
 
+.input-wrap input:-webkit-autofill,
+.input-wrap input:-webkit-autofill:hover,
+.input-wrap input:-webkit-autofill:focus,
+.input-wrap input:-webkit-autofill:active {
+  -webkit-box-shadow: 0 0 0 1000px var(--bg-primary, #fafafa) inset !important;
+  -webkit-text-fill-color: var(--text-color, #1a1a1a) !important;
+  border: 1px solid var(--input-border, #e0e0e0) !important;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
 .field.error .input-wrap input {
   border-color: #e74c3c;
   box-shadow: 0 0 0 3px rgba(231, 76, 60, 0.1);
