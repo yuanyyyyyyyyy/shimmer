@@ -168,30 +168,30 @@ router.delete('/presets/:id', authenticateToken, async (req, res, next) => {
   }
 });
 
-// AI 元数据生成（无需登录，使用全局默认配置）
-router.post('/metadata', async (req, res, next) => {
+// AI 元数据生成（使用当前用户的 AI 配置）
+router.post('/metadata', authenticateToken, async (req, res, next) => {
   try {
     const { url, location, shot_date } = req.body;
     if (!url) {
       return res.status(400).json({ error: '缺少图片 URL' });
     }
 
-    const metadata = await generatePhotoMetadata(url, { location, shot_date });
+    const metadata = await generatePhotoMetadata(url, { location, shot_date }, req.user.id);
     res.json({ metadata });
   } catch (err) {
     next(err);
   }
 });
 
-// AI 搜索重写（无需登录，使用全局默认配置）
-router.get('/search', async (req, res, next) => {
+// AI 搜索重写（使用当前用户的 AI 配置）
+router.get('/search', authenticateToken, async (req, res, next) => {
   try {
     const q = req.query.q;
     if (!q) {
       return res.status(400).json({ error: '缺少搜索关键词' });
     }
 
-    const result = await rewriteSearchQuery(q);
+    const result = await rewriteSearchQuery(q, {}, req.user.id);
     res.json(result);
   } catch (err) {
     next(err);
