@@ -594,6 +594,18 @@ onMounted(() => {
 }
 
 .modal-panel {
+  /* Teleport 到 body 后 .albums-page 的变量无法继承，在此重新声明 */
+  --color-accent: var(--secondary-color, #3498db);
+  --color-surface: var(--card-bg, #fff);
+  --color-bg: var(--bg-color, #fafafa);
+  --color-text: var(--text-color, #1a1a1a);
+  --color-muted: var(--text-secondary, #666);
+  --color-faint: var(--text-tertiary, #999);
+  --color-border: oklch(90% 0.008 250);
+  --color-border-hover: oklch(80% 0.015 250);
+  --color-danger: oklch(55% 0.18 25);
+  --color-no-cover: oklch(93% 0.015 250);
+
   width: 100%;
   max-width: 440px;
   background: var(--color-surface);

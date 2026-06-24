@@ -1,5 +1,5 @@
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { albums, photos } from '../api'
 import { useAuthStore } from '../stores'
@@ -23,6 +23,9 @@ const editForm = ref({
   is_public: true
 })
 
+// 编辑弹窗 Tab
+const editActiveTab = ref('cover')
+
 // 封面选择器
 const coverPickerVisible = ref(false)
 const selectedCoverId = ref(null)
@@ -33,6 +36,10 @@ const searchResults = ref([])
 const selectedPhotos = ref(new Set())
 const searchLoading = ref(false)
 let debounceTimer = null
+
+// 添加照片弹窗 Tab
+const addPhotoActiveTab = ref('search')
+const selectedCount = computed(() => selectedPhotos.value.size)
 
 // 照片预览
 const showPreviewModal = ref(false)
@@ -68,6 +75,10 @@ const loadAlbum = async () => {
 
 // 更新相册
 const updateAlbum = async () => {
+  if (!editForm.value.title.trim()) {
+    error('请输入相册名称')
+    return
+  }
   try {
     const res = await albums.update(album.value.id, editForm.value)
     album.value = { ...album.value, ...res.album }
@@ -117,12 +128,12 @@ const searchPhotos = async () => {
   }, 300)
 }
 
-// 切换封面选择器
+// 切换封面选择器（Tab 模式下封面选择器始终可见，仅初始化选中状态）
 const toggleCoverPicker = () => {
-  coverPickerVisible.value = !coverPickerVisible.value
-  if (coverPickerVisible.value) {
+  if (!coverPickerVisible.value) {
     selectedCoverId.value = album.value?.cover_id || null
   }
+  coverPickerVisible.value = !coverPickerVisible.value
 }
 
 // 选择封面照片
@@ -410,74 +421,98 @@ onMounted(() => {
               </button>
             </header>
 
-            <!-- 封面预览/更换 -->
-            <div class="cover-section">
-              <div class="cover-preview" :class="{ 'no-cover': !album?.cover_url }">
-                <img v-if="album?.cover_url" :src="album.cover_url" alt="封面预览">
-                <div v-else class="cover-placeholder">
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                    <circle cx="8.5" cy="8.5" r="1.5"/>
-                    <polyline points="21 15 16 10 5 21"/>
-                  </svg>
-                  <span>暂无封面</span>
+            <!-- Tab 栏 -->
+            <div class="modal-tabs">
+              <button
+                type="button"
+                class="modal-tab"
+                :class="{ active: editActiveTab === 'cover' }"
+                @click="editActiveTab = 'cover'"
+              >封面</button>
+              <button
+                type="button"
+                class="modal-tab"
+                :class="{ active: editActiveTab === 'info' }"
+                @click="editActiveTab = 'info'"
+              >信息</button>
+            </div>
+
+            <!-- Tab 面板 -->
+            <div class="tab-panel">
+              <!-- 封面 Tab -->
+              <div v-show="editActiveTab === 'cover'" class="tab-pane">
+                <div class="cover-preview" :class="{ 'no-cover': !album?.cover_url }">
+                  <img v-if="album?.cover_url" :src="album.cover_url" alt="封面预览">
+                  <div v-else class="cover-placeholder">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    <span>暂无封面</span>
+                  </div>
+                </div>
+
+                <div class="cover-actions">
+                  <button type="button" class="btn-cover-change" @click="toggleCoverPicker">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                      <circle cx="8.5" cy="8.5" r="1.5"/>
+                      <polyline points="21 15 16 10 5 21"/>
+                    </svg>
+                    {{ coverPickerVisible ? '收起' : '更换封面' }}
+                  </button>
+                </div>
+
+                <!-- 封面选择器 -->
+                <div v-if="coverPickerVisible" class="cover-picker">
+                  <div v-if="photoList.length === 0" class="cover-picker-empty">
+                    相册内暂无照片
+                  </div>
+                  <div v-else class="cover-picker-grid">
+                    <button
+                      v-for="photo in photoList"
+                      :key="photo.id"
+                      type="button"
+                      class="cover-pick-card"
+                      :class="{ active: selectedCoverId === photo.id }"
+                      @click="selectCover(photo.id)"
+                    >
+                      <img :src="photo.thumbnail_url || photo.url" :alt="photo.title" loading="lazy">
+                      <span v-if="selectedCoverId === photo.id" class="cover-pick-check">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      </span>
+                    </button>
+                  </div>
                 </div>
               </div>
-              <button type="button" class="btn-cover-change" @click="toggleCoverPicker">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                  <circle cx="8.5" cy="8.5" r="1.5"/>
-                  <polyline points="21 15 16 10 5 21"/>
-                </svg>
-                {{ coverPickerVisible ? '收起' : '更换封面' }}
-              </button>
 
-              <!-- 封面选择器 -->
-              <div v-if="coverPickerVisible" class="cover-picker">
-                <div v-if="photoList.length === 0" class="cover-picker-empty">
-                  相册内暂无照片
+              <!-- 信息 Tab -->
+              <div v-show="editActiveTab === 'info'" class="tab-pane">
+                <div class="field">
+                  <label for="edit-title">名称</label>
+                  <input id="edit-title" v-model="editForm.title" type="text" required maxlength="100" placeholder="相册名称">
                 </div>
-                <div v-else class="cover-picker-grid">
-                  <button
-                    v-for="photo in photoList"
-                    :key="photo.id"
-                    type="button"
-                    class="cover-pick-card"
-                    :class="{ active: selectedCoverId === photo.id }"
-                    @click="selectCover(photo.id)"
-                  >
-                    <img :src="photo.thumbnail_url || photo.url" :alt="photo.title" loading="lazy">
-                    <span v-if="selectedCoverId === photo.id" class="cover-pick-check">
-                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                    </span>
-                  </button>
+                <div class="field">
+                  <label for="edit-desc">描述</label>
+                  <textarea id="edit-desc" v-model="editForm.description" rows="3" placeholder="为相册添加描述（可选）"></textarea>
+                </div>
+                <div class="field field-checkbox">
+                  <label class="toggle-label">
+                    <input v-model="editForm.is_public" type="checkbox">
+                    <span class="toggle-custom"></span>
+                    <span>公开相册</span>
+                  </label>
                 </div>
               </div>
             </div>
 
-            <form @submit.prevent="updateAlbum">
-              <div class="field">
-                <label for="edit-title">名称</label>
-                <input id="edit-title" v-model="editForm.title" type="text" required maxlength="100" placeholder="相册名称">
-              </div>
-              <div class="field">
-                <label for="edit-desc">描述</label>
-                <textarea id="edit-desc" v-model="editForm.description" rows="3" placeholder="为相册添加描述（可选）"></textarea>
-              </div>
-              <div class="field field-checkbox">
-                <label class="toggle-label">
-                  <input v-model="editForm.is_public" type="checkbox">
-                  <span class="toggle-custom"></span>
-                  <span>公开相册</span>
-                </label>
-              </div>
-              <footer class="modal-footer">
-                <button type="button" class="btn-text" @click="showEditDialog = false">取消</button>
-                <button type="submit" class="btn-primary">保存更改</button>
-              </footer>
-            </form>
+            <footer class="modal-footer">
+              <button type="button" class="btn-text" @click="showEditDialog = false">取消</button>
+              <button type="button" class="btn-primary" @click="updateAlbum">保存更改</button>
+            </footer>
           </div>
         </div>
       </Teleport>
@@ -495,74 +530,131 @@ onMounted(() => {
                 </svg>
               </button>
             </header>
-            <div class="add-photo-body">
-              <div class="search-bar">
-                <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="8"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-                <input
-                  v-model="searchQuery"
-                  type="text"
-                  placeholder="搜索标题、心情、地点..."
-                  @input="searchPhotos"
-                  autocomplete="off"
-                >
-                <div v-if="searchLoading" class="search-spinner"></div>
-              </div>
 
-              <!-- 搜索结果 -->
-              <div v-if="searchResults.length > 0" class="picker-grid">
-                <div
-                  v-for="photo in searchResults"
-                  :key="photo.id"
-                  class="pick-card"
-                  :class="{ picked: selectedPhotos.has(photo.id) }"
-                  @click="toggleSelectPhoto(photo.id)"
-                >
-                  <img :src="photo.thumbnail_url || photo.url" :alt="photo.title" loading="lazy">
-                  <span v-if="selectedPhotos.has(photo.id)" class="pick-check">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                      <polyline points="20 6 9 17 4 12"/>
-                    </svg>
-                  </span>
-                  <span class="pick-name">{{ photo.title }}</span>
-                  <button
-                    type="button"
-                    class="pick-preview-btn"
-                    title="预览"
-                    @click.stop="openPreview(photo, $event)"
+            <!-- Tab 栏 -->
+            <div class="modal-tabs">
+              <button
+                type="button"
+                class="modal-tab"
+                :class="{ active: addPhotoActiveTab === 'search' }"
+                @click="addPhotoActiveTab = 'search'"
+              >搜索</button>
+              <button
+                type="button"
+                class="modal-tab"
+                :class="{ active: addPhotoActiveTab === 'selected' }"
+                @click="addPhotoActiveTab = 'selected'"
+              >
+                已选
+                <span v-if="selectedCount > 0" class="tab-badge">{{ selectedCount }}</span>
+              </button>
+            </div>
+
+            <!-- Tab 面板 -->
+            <div class="tab-panel">
+              <!-- 搜索 Tab -->
+              <div v-show="addPhotoActiveTab === 'search'" class="tab-pane add-photo-search-pane">
+                <div class="search-bar">
+                  <svg class="search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  <input
+                    v-model="searchQuery"
+                    type="text"
+                    placeholder="搜索标题、心情、地点..."
+                    @input="searchPhotos"
+                    autocomplete="off"
                   >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                      <circle cx="11" cy="11" r="8"/>
-                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                    </svg>
-                  </button>
+                  <div v-if="searchLoading" class="search-spinner"></div>
+                </div>
+
+                <!-- 搜索结果 -->
+                <div v-if="searchResults.length > 0" class="picker-grid">
+                  <div
+                    v-for="photo in searchResults"
+                    :key="photo.id"
+                    class="pick-card"
+                    :class="{ picked: selectedPhotos.has(photo.id) }"
+                    @click="toggleSelectPhoto(photo.id)"
+                  >
+                    <img :src="photo.thumbnail_url || photo.url" :alt="photo.title" loading="lazy">
+                    <span v-if="selectedPhotos.has(photo.id)" class="pick-check">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </span>
+                    <span class="pick-name">{{ photo.title }}</span>
+                    <button
+                      type="button"
+                      class="pick-preview-btn"
+                      title="预览"
+                      @click.stop="openPreview(photo, $event)"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="11" cy="11" r="8"/>
+                        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 搜索中 -->
+                <div v-else-if="searchLoading" class="picker-loading">
+                  <div class="picker-spinner"></div>
+                  <span>搜索中...</span>
+                </div>
+
+                <!-- 空结果 / 提示 -->
+                <div v-else-if="searchQuery" class="picker-empty">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    <line x1="8" y1="8" x2="14" y2="14"/>
+                    <line x1="14" y1="8" x2="8" y2="14"/>
+                  </svg>
+                  没有找到匹配的照片
+                </div>
+                <div v-else class="picker-hint">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="11" cy="11" r="8"/>
+                    <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                  </svg>
+                  输入关键词搜索要添加的照片
                 </div>
               </div>
 
-              <!-- 搜索中 -->
-              <div v-else-if="searchLoading" class="picker-loading">
-                <div class="picker-spinner"></div>
-                <span>搜索中...</span>
-              </div>
-
-              <!-- 空结果 / 提示 -->
-              <div v-else-if="searchQuery" class="picker-empty">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="8"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                  <line x1="8" y1="8" x2="14" y2="14"/>
-                  <line x1="14" y1="8" x2="8" y2="14"/>
-                </svg>
-                没有找到匹配的照片
-              </div>
-              <div v-else class="picker-hint">
-                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <circle cx="11" cy="11" r="8"/>
-                  <line x1="21" y1="21" x2="16.65" y2="16.65"/>
-                </svg>
-                输入关键词搜索要添加的照片
+              <!-- 已选 Tab -->
+              <div v-show="addPhotoActiveTab === 'selected'" class="tab-pane">
+                <div v-if="selectedCount === 0" class="picker-empty">
+                  <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    <circle cx="8.5" cy="8.5" r="1.5"/>
+                    <polyline points="21 15 16 10 5 21"/>
+                  </svg>
+                  还没有选择照片
+                </div>
+                <div v-else class="selected-list">
+                  <div
+                    v-for="photo in searchResults.filter(p => selectedPhotos.has(p.id))"
+                    :key="photo.id"
+                    class="selected-item"
+                  >
+                    <img :src="photo.thumbnail_url || photo.url" :alt="photo.title" class="selected-thumb">
+                    <span class="selected-name">{{ photo.title }}</span>
+                    <button
+                      type="button"
+                      class="selected-remove"
+                      title="移除"
+                      @click="toggleSelectPhoto(photo.id)"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -626,8 +718,8 @@ onMounted(() => {
   --color-text: var(--text-color, #18181b);
   --color-muted: var(--text-secondary, #52525b);
   --color-faint: var(--text-tertiary, #a1a1aa);
-  --color-border: oklch(90% 0.008 250);
-  --color-border-hover: oklch(80% 0.015 250);
+  --color-border: oklch(82% 0.012 250);
+  --color-border-hover: oklch(75% 0.015 250);
   --color-danger: oklch(55% 0.18 25);
   --color-success: oklch(60% 0.14 155);
   --color-no-cover: oklch(94% 0.015 250);
@@ -641,8 +733,8 @@ onMounted(() => {
 :global(.dark) .detail-page {
   --color-surface: oklch(14% 0.008 250);
   --color-bg: oklch(18% 0.008 250);
-  --color-border: oklch(25% 0.01 250);
-  --color-border-hover: oklch(32% 0.015 250);
+  --color-border: oklch(30% 0.01 250);
+  --color-border-hover: oklch(38% 0.015 250);
   --color-no-cover: oklch(22% 0.015 250);
 }
 
@@ -651,14 +743,34 @@ onMounted(() => {
   background: oklch(16% 0.008 250);
   --color-surface: oklch(14% 0.008 250);
   --color-bg: oklch(18% 0.008 250);
-  --color-border: oklch(25% 0.01 250);
-  --color-border-hover: oklch(32% 0.015 250);
+  --color-border: oklch(30% 0.01 250);
+  --color-border-hover: oklch(38% 0.015 250);
   --color-faint: #71717a;
   --color-muted: #a1a1aa;
 }
 
 :global(.dark) .modal-header h2 {
   color: #e4e4e7;
+}
+
+:global(.dark) .modal-tab {
+  color: #a1a1aa;
+}
+
+:global(.dark) .modal-tab:hover {
+  color: #d4d4d8;
+}
+
+:global(.dark) .modal-tab.active {
+  color: var(--color-accent);
+}
+
+:global(.dark) .modal-footer {
+  background: oklch(16% 0.008 250);
+}
+
+:global(.dark) .modal-footer.modal-sticky {
+  background: oklch(16% 0.008 250);
 }
 
 :global(.dark) .field > label {
@@ -688,6 +800,22 @@ onMounted(() => {
 :global(.dark) .picker-empty,
 :global(.dark) .picker-hint {
   color: #71717a;
+}
+
+:global(.dark) .selected-item {
+  background: oklch(20% 0.008 250);
+}
+
+:global(.dark) .selected-item:hover {
+  background: oklch(25% 0.01 250);
+}
+
+:global(.dark) .selected-name {
+  color: #e4e4e7;
+}
+
+:global(.dark) .selected-remove:hover {
+  background: oklch(25% 0.06 25);
 }
 
 /* Dark mode - button/interaction overrides */
@@ -1187,6 +1315,18 @@ onMounted(() => {
 }
 
 .modal-panel {
+  /* Teleport 到 body 后 .detail-page 的变量无法继承，在此重新声明 */
+  --color-accent: var(--secondary-color, #3498db);
+  --color-surface: #ffffff;
+  --color-bg: oklch(98% 0.005 250);
+  --color-text: var(--text-color, #18181b);
+  --color-muted: var(--text-secondary, #52525b);
+  --color-faint: var(--text-tertiary, #a1a1aa);
+  --color-border: oklch(82% 0.012 250);
+  --color-border-hover: oklch(75% 0.015 250);
+  --color-danger: oklch(55% 0.18 25);
+  --color-no-cover: oklch(94% 0.015 250);
+
   width: 100%;
   max-width: 480px;
   background: #ffffff;
@@ -1217,7 +1357,7 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1.25rem 1.5rem 0;
+  padding: 1.25rem 1.5rem 0.75rem;
   flex-shrink: 0;
 }
 
@@ -1228,11 +1368,74 @@ onMounted(() => {
   margin: 0;
 }
 
-/* ========== Cover Section (Edit Modal) ========== */
-.cover-section {
-  padding: 1rem 1.5rem 0;
+/* ========== Modal Tabs ========== */
+.modal-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 1.5rem;
+  flex-shrink: 0;
 }
 
+.modal-tab {
+  padding: 0.75rem 1.25rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-muted);
+  border: none;
+  background: none;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+  display: inline-flex;
+  align-items: center;
+}
+
+.modal-tab:hover {
+  color: var(--color-text);
+}
+
+.modal-tab.active {
+  color: var(--color-accent);
+}
+
+.modal-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2.5px;
+  background: var(--color-accent);
+  border-radius: 1px;
+}
+
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  margin-left: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  background: var(--color-accent);
+  color: #fff;
+  border-radius: 9px;
+}
+
+/* Tab Panel */
+.tab-panel {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.tab-pane {
+  padding: 1rem 1.5rem;
+}
+
+/* ========== Cover Section (Edit Modal) ========== */
 .cover-preview {
   width: 100%;
   aspect-ratio: 16 / 9;
@@ -1266,6 +1469,10 @@ onMounted(() => {
 
 .cover-placeholder svg {
   opacity: 0.5;
+}
+
+.cover-actions {
+  margin-bottom: 0.75rem;
 }
 
 .btn-cover-change {
@@ -1362,11 +1569,6 @@ onMounted(() => {
 @keyframes scaleIn {
   from { transform: scale(0.5); opacity: 0; }
   to { transform: scale(1); opacity: 1; }
-}
-
-.modal-panel form {
-  padding: 1.25rem 1.5rem 1.5rem;
-  flex-shrink: 0;
 }
 
 .field {
@@ -1474,26 +1676,20 @@ onMounted(() => {
   display: flex;
   justify-content: flex-end;
   gap: 0.5rem;
-  padding: 1rem 1.5rem 1.5rem;
+  padding: 1rem 1.5rem 1.25rem;
   border-top: 1px solid var(--color-border);
   flex-shrink: 0;
+  background: #ffffff;
 }
 
 .modal-footer.modal-sticky {
   margin-top: auto;
   border-top: 1px solid var(--color-border);
   padding: 1rem 1.5rem;
+  background: #ffffff;
 }
 
-/* ========== Add Photo Body ========== */
-.add-photo-body {
-  padding: 0 1.5rem;
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
+/* ========== Search Bar (Add Photo Modal) ========== */
 .search-bar {
   position: relative;
   margin-bottom: 1rem;
@@ -1681,6 +1877,69 @@ onMounted(() => {
   opacity: 0.4;
 }
 
+/* ========== Selected List (Add Photo Modal) ========== */
+.add-photo-search-pane {
+  display: flex;
+  flex-direction: column;
+}
+
+.selected-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.selected-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  background: var(--color-bg);
+  transition: background 0.15s ease;
+}
+
+.selected-item:hover {
+  background: var(--color-border);
+}
+
+.selected-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.selected-name {
+  flex: 1;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--color-faint);
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.selected-remove:hover {
+  background: oklch(90% 0.02 25);
+  color: var(--color-danger);
+}
+
 /* ========== Photo Preview Modal ========== */
 .preview-backdrop {
   z-index: 10000;
@@ -1799,6 +2058,11 @@ onMounted(() => {
 
   .modal-panel.modal-wide {
     max-width: 100%;
+  }
+
+  .modal-tab {
+    padding: 0.625rem 1rem;
+    font-size: 0.8125rem;
   }
 
   .picker-grid {
