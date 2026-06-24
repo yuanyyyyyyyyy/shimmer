@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { createHash } from 'crypto';
 import { query } from '../config/database.js';
 import { optionalAuth, authenticateToken } from '../middleware/auth.js';
 import { generateStorySummary } from '../services/ai.js';
@@ -188,11 +189,28 @@ router.get('/:date/:location', optionalAuth, async (req, res, next) => {
       photoIds
     );
 
-    // 查询已缓存的 AI 摘要
+    // 查询已缓存的 AI 摘要，并比较 photo_hash 判断是否过期
     const summaryRows = await query(
-      `SELECT summary_text FROM story_summaries WHERE story_date = ?`,
+      `SELECT summary_text, photo_hash FROM story_summaries WHERE story_date = ?`,
       [date]
     );
+
+    // 计算当前照片集合的 hash
+    const currentPhotoHash = createHash('sha256')
+      .update(photoIds.sort((a, b) => a - b).join(','))
+      .digest('hex')
+      .slice(0, 16);
+
+    let aiSummary = null;
+    let aiSummaryOutdated = false;
+
+    if (summaryRows.length > 0 && summaryRows[0].summary_text) {
+      aiSummary = summaryRows[0].summary_text;
+      // 如果有缓存但照片集合变了，标记为过期
+      if (summaryRows[0].photo_hash && summaryRows[0].photo_hash !== currentPhotoHash) {
+        aiSummaryOutdated = true;
+      }
+    }
 
     res.json({
       date,
@@ -200,7 +218,8 @@ router.get('/:date/:location', optionalAuth, async (req, res, next) => {
       photos: fullPhotos,
       tags,
       photoCount: fullPhotos.length,
-      aiSummary: summaryRows.length > 0 ? summaryRows[0].summary_text : null
+      aiSummary,
+      aiSummaryOutdated
     });
   } catch (err) {
     next(err);
@@ -270,6 +289,12 @@ router.post('/:date/:location/summary', authenticateToken, async (req, res, next
     const { photos, matchedLevel } = result;
     console.log(`[StorySummary] Level${matchedLevel} 匹配成功，共 ${photos.length} 张照片`);
 
+    // 计算当前照片集合的 hash
+    const photoHash = createHash('sha256')
+      .update(photos.map(p => p.id).sort((a, b) => a - b).join(','))
+      .digest('hex')
+      .slice(0, 16);
+
     // 调用 AI 生成叙事摘要
     const aiResult = await generateStorySummary({
       date,
@@ -287,8 +312,8 @@ router.post('/:date/:location/summary', authenticateToken, async (req, res, next
           await query(
             `INSERT INTO story_summaries (story_date, summary_text, photo_hash)
              VALUES (?, ?, ?)
-             ON DUPLICATE KEY UPDATE summary_text = VALUES(summary_text), updated_at = CURRENT_TIMESTAMP`,
-            [date, summaryText, null]
+             ON DUPLICATE KEY UPDATE summary_text = VALUES(summary_text), photo_hash = VALUES(photo_hash), updated_at = CURRENT_TIMESTAMP`,
+            [date, summaryText, photoHash]
           );
           console.log('[StorySummary] AI 结果已持久化');
         } catch (dbErr) {

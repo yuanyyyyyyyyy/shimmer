@@ -4,16 +4,17 @@ import { authenticateToken, requireAdmin } from '../middleware/auth.js';
 
 const router = Router();
 
+const safeCount = async (sql, params = []) => {
+  try {
+    const [row] = await query(sql, params);
+    return row.total;
+  } catch { return 0; }
+};
+
 // 获取当前用户的统计
 router.get('/', authenticateToken, async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const safeCount = async (sql, params = []) => {
-      try {
-        const [row] = await query(sql, params);
-        return row.total;
-      } catch { return 0; }
-    };
     res.json({
       photos: await safeCount('SELECT COUNT(*) AS total FROM photos WHERE user_id = ?', [userId]),
       albums: await safeCount('SELECT COUNT(*) AS total FROM albums WHERE user_id = ?', [userId]),
@@ -28,12 +29,6 @@ router.get('/', authenticateToken, async (req, res, next) => {
 // 获取全局统计（仅管理员）
 router.get('/global', authenticateToken, requireAdmin, async (req, res, next) => {
   try {
-    const safeCount = async (sql, params = []) => {
-      try {
-        const [row] = await query(sql, params);
-        return row.total;
-      } catch { return 0; }
-    };
     res.json({
       users: await safeCount('SELECT COUNT(*) AS total FROM users'),
       photos: await safeCount('SELECT COUNT(*) AS total FROM photos'),
@@ -48,31 +43,50 @@ router.get('/global', authenticateToken, requireAdmin, async (req, res, next) =>
 // 管理后台概览统计
 router.get('/overview', authenticateToken, requireAdmin, async (req, res, next) => {
   try {
-    const safeCount = async (sql, params = []) => {
-      try {
-        const [row] = await query(sql, params);
-        return row.total;
-      } catch { return 0; }
-    };
     const [storageRow] = await query('SELECT COALESCE(SUM(file_size), 0) AS total FROM photos');
+    const totalPhotos = await safeCount('SELECT COUNT(*) AS total FROM photos');
+    const totalStorage = storageRow.total || 0;
     res.json({
       users: await safeCount('SELECT COUNT(*) AS total FROM users'),
-      photos: await safeCount('SELECT COUNT(*) AS total FROM photos'),
-      storage: storageRow.total || 0,
-      activeDays: await safeCount('SELECT COUNT(DISTINCT DATE(created_at)) AS total FROM photos')
+      photos: totalPhotos,
+      albums: await safeCount('SELECT COUNT(*) AS total FROM albums'),
+      storage: totalStorage,
+      avgStorage: totalPhotos > 0 ? Math.round(totalStorage / totalPhotos) : 0,
+      activeDays: await safeCount('SELECT COUNT(DISTINCT DATE(shot_date)) AS total FROM photos WHERE shot_date IS NOT NULL')
     });
   } catch (err) {
     next(err);
   }
 });
 
-// 月度上传趋势（折线图）
+// 月度拍摄趋势（折线图）— 基于 shot_date，自动补全缺失月份
 router.get('/timeline', authenticateToken, requireAdmin, async (req, res, next) => {
   try {
     const rows = await query(
-      "SELECT DATE_FORMAT(created_at, '%Y-%m') AS month, COUNT(*) AS count FROM photos GROUP BY month ORDER BY month DESC LIMIT 12"
+      "SELECT DATE_FORMAT(shot_date, '%Y-%m') AS month, COUNT(*) AS count FROM photos WHERE shot_date IS NOT NULL GROUP BY month ORDER BY month ASC"
     );
-    res.json({ data: rows.reverse() });
+
+    // 补全缺失月份：生成连续月份序列
+    if (rows.length < 2) {
+      return res.json({ data: rows });
+    }
+
+    const firstMonth = rows[0].month;
+    const lastMonth = rows[rows.length - 1].month;
+    const countMap = new Map(rows.map(r => [r.month, r.count]));
+
+    const filled = [];
+    let [y, m] = firstMonth.split('-').map(Number);
+    const [endY, endM] = lastMonth.split('-').map(Number);
+
+    while (y < endY || (y === endY && m <= endM)) {
+      const key = `${y}-${String(m).padStart(2, '0')}`;
+      filled.push({ month: key, count: countMap.get(key) || 0 });
+      m++;
+      if (m > 12) { m = 1; y++; }
+    }
+
+    res.json({ data: filled });
   } catch (err) {
     next(err);
   }
@@ -102,6 +116,44 @@ router.get('/top-tags', authenticateToken, requireAdmin, async (req, res, next) 
        LIMIT 5`
     );
     res.json({ data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 用户贡献 Top 10
+router.get('/top-users', authenticateToken, requireAdmin, async (req, res, next) => {
+  try {
+    const rows = await query(
+      `SELECT u.username, COUNT(p.id) AS photo_count, COALESCE(SUM(p.file_size), 0) AS storage
+       FROM users u
+       LEFT JOIN photos p ON u.id = p.user_id
+       GROUP BY u.id
+       ORDER BY photo_count DESC
+       LIMIT 10`
+    );
+    res.json({ data: rows });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// 照片数据覆盖率（EXIF / GPS）
+router.get('/coverage', authenticateToken, requireAdmin, async (req, res, next) => {
+  try {
+    const [row] = await query(
+      `SELECT COUNT(*) AS total,
+              SUM(CASE WHEN camera IS NOT NULL AND camera != '' THEN 1 ELSE 0 END) AS has_exif,
+              SUM(CASE WHEN lens IS NOT NULL AND lens != '' THEN 1 ELSE 0 END) AS has_lens,
+              SUM(CASE WHEN latitude IS NOT NULL THEN 1 ELSE 0 END) AS has_gps
+       FROM photos`
+    );
+    res.json({
+      total: row.total || 0,
+      hasExif: row.has_exif || 0,
+      hasLens: row.has_lens || 0,
+      hasGps: row.has_gps || 0
+    });
   } catch (err) {
     next(err);
   }

@@ -13,6 +13,7 @@ const loading = ref(true)
 const aiSummary = ref('')
 const aiLoading = ref(false)
 const aiError = ref(null)
+const aiOutdated = ref(false)
 
 const date = computed(() => route.params.date)
 const location = computed(() => decodeURIComponent(route.params.location))
@@ -36,6 +37,7 @@ const loadDetail = async () => {
     tags.value = res.tags || []
     // 如果后端已缓存了 AI 叙事，直接填充
     aiSummary.value = res.aiSummary || ''
+    aiOutdated.value = !!res.aiSummaryOutdated
   } catch (e) {
     console.error('加载失败:', e)
     if (e.response?.status === 404) {
@@ -82,7 +84,13 @@ const goBack = () => {
   router.push({ name: 'Storyline' })
 }
 
-onMounted(loadDetail)
+onMounted(async () => {
+  await loadDetail()
+  // 照片变化导致叙事过期时，自动重新生成
+  if (aiOutdated.value && !aiSummary.value) {
+    generateAiSummary()
+  }
+})
 </script>
 
 <template>
@@ -126,12 +134,14 @@ onMounted(loadDetail)
             <div class="mini-spinner"></div>
             <p>AI 正在回忆这段故事...</p>
           </div>
-          <p v-else-if="aiSummary" class="narrative-text">{{ aiSummary }}</p>
-          <div v-else class="ai-prompt">
-            <button @click="generateAiSummary" :disabled="aiLoading" class="narrative-btn">
-              {{ aiSummary ? '重新生成叙事' : '让 AI 讲述这个故事' }}
-            </button>
-          </div>
+          <template v-else>
+            <p v-if="aiSummary" class="narrative-text">{{ aiSummary }}</p>
+            <div class="ai-prompt">
+              <button @click="generateAiSummary" class="narrative-btn">
+                {{ aiSummary ? '重新生成叙事' : '让 AI 讲述这个故事' }}
+              </button>
+            </div>
+          </template>
           <p v-if="aiError" class="ai-error">{{ aiError.message || '生成失败' }}</p>
         </section>
 

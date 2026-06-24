@@ -148,7 +148,9 @@ export const stats = {
   getOverview: () => api.get('/stats/overview'),
   getTimeline: () => api.get('/stats/timeline'),
   getVisibility: () => api.get('/stats/visibility'),
-  getTopTags: () => api.get('/stats/top-tags')
+  getTopTags: () => api.get('/stats/top-tags'),
+  getTopUsers: () => api.get('/stats/top-users'),
+  getCoverage: () => api.get('/stats/coverage')
 }
 
 // 分享卡片

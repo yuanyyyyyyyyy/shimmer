@@ -39,6 +39,8 @@ const statsOverview = ref(null)
 const statsTimeline = ref([])
 const statsVisibility = ref([])
 const statsTopTags = ref([])
+const statsTopUsers = ref([])
+const statsCoverage = ref(null)
 const statsLoading = ref(false)
 
 // 分享管理
@@ -496,16 +498,20 @@ const deleteShare = async (item) => {
 const loadStats = async () => {
   statsLoading.value = true
   try {
-    const [overviewRes, timelineRes, visibilityRes, topTagsRes] = await Promise.all([
+    const [overviewRes, timelineRes, visibilityRes, topTagsRes, topUsersRes, coverageRes] = await Promise.all([
       statsApi.getOverview(),
       statsApi.getTimeline(),
       statsApi.getVisibility(),
-      statsApi.getTopTags()
+      statsApi.getTopTags(),
+      statsApi.getTopUsers(),
+      statsApi.getCoverage()
     ])
     statsOverview.value = overviewRes
     statsTimeline.value = timelineRes.data || []
     statsVisibility.value = visibilityRes.data || []
     statsTopTags.value = topTagsRes.data || []
+    statsTopUsers.value = topUsersRes.data || []
+    statsCoverage.value = coverageRes
   } catch (e) {
     console.error('加载统计失败:', e)
   } finally {
@@ -533,10 +539,21 @@ const timelineLabels = computed(() => {
   if (!data.length) return []
   const w = 600, pad = 30
   const step = (w - pad * 2) / Math.max(data.length - 1, 1)
-  return data.map((d, i) => ({
-    x: pad + i * step,
-    label: d.month.slice(5) // 只显示月份
-  }))
+  const years = [...new Set(data.map(d => d.month.slice(0, 4)))]
+  const multiYear = years.length > 1
+  return data.map((d, i) => {
+    const year = d.month.slice(0, 4)
+    const month = parseInt(d.month.slice(5), 10)
+    let label
+    if (multiYear) {
+      // 跨年：每年1月显示年份，其余显示月
+      label = month === 1 ? `${year.slice(2)}/1` : `${month}`
+    } else {
+      // 同年：显示 "1月", "2月" ...
+      label = `${month}月`
+    }
+    return { x: pad + i * step, label }
+  })
 })
 
 const timelineMax = computed(() => {
@@ -561,6 +578,11 @@ const visibilityData = computed(() => {
 // Top 5 标签
 const tagMaxCount = computed(() => {
   return Math.max(...statsTopTags.value.map(d => d.count), 1)
+})
+
+// 用户贡献 Top 10
+const userMaxCount = computed(() => {
+  return Math.max(...statsTopUsers.value.map(d => d.photo_count), 1)
 })
 
 // 格式化存储大小
@@ -869,8 +891,16 @@ const handleLogout = () => {
               <span class="stat-lbl">照片</span>
             </div>
             <div class="stat-card">
+              <span class="stat-num">{{ statsOverview.albums }}</span>
+              <span class="stat-lbl">相册</span>
+            </div>
+            <div class="stat-card">
               <span class="stat-num">{{ formatStorage(statsOverview.storage) }}</span>
               <span class="stat-lbl">存储</span>
+            </div>
+            <div class="stat-card">
+              <span class="stat-num">{{ formatStorage(statsOverview.avgStorage) }}</span>
+              <span class="stat-lbl">平均/张</span>
             </div>
             <div class="stat-card">
               <span class="stat-num">{{ statsOverview.activeDays }}</span>
@@ -878,16 +908,44 @@ const handleLogout = () => {
             </div>
           </div>
 
-          <!-- 月度上传趋势 -->
+          <!-- 数据覆盖率 -->
+          <div class="chart-section" v-if="statsCoverage && statsCoverage.total > 0">
+            <h3 class="chart-title">数据覆盖率</h3>
+            <div class="coverage-bars">
+              <div class="coverage-row">
+                <span class="coverage-label">EXIF 信息</span>
+                <div class="coverage-track">
+                  <div class="coverage-fill" :style="{ width: (statsCoverage.hasExif / statsCoverage.total * 100) + '%', background: '#2f3640' }"></div>
+                </div>
+                <span class="coverage-count">{{ statsCoverage.hasExif }} / {{ statsCoverage.total }} ({{ Math.round(statsCoverage.hasExif / statsCoverage.total * 100) }}%)</span>
+              </div>
+              <div class="coverage-row">
+                <span class="coverage-label">镜头信息</span>
+                <div class="coverage-track">
+                  <div class="coverage-fill" :style="{ width: (statsCoverage.hasLens / statsCoverage.total * 100) + '%', background: '#576574' }"></div>
+                </div>
+                <span class="coverage-count">{{ statsCoverage.hasLens }} / {{ statsCoverage.total }} ({{ Math.round(statsCoverage.hasLens / statsCoverage.total * 100) }}%)</span>
+              </div>
+              <div class="coverage-row">
+                <span class="coverage-label">GPS 定位</span>
+                <div class="coverage-track">
+                  <div class="coverage-fill" :style="{ width: (statsCoverage.hasGps / statsCoverage.total * 100) + '%', background: '#8395a7' }"></div>
+                </div>
+                <span class="coverage-count">{{ statsCoverage.hasGps }} / {{ statsCoverage.total }} ({{ Math.round(statsCoverage.hasGps / statsCoverage.total * 100) }}%)</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 月度拍摄趋势 -->
           <div class="chart-section" v-if="statsTimeline.length">
-            <h3 class="chart-title">月度上传趋势</h3>
+            <h3 class="chart-title">月度拍摄趋势</h3>
             <div class="chart-wrap">
               <svg viewBox="0 0 600 200" class="timeline-svg">
                 <line v-for="i in 4" :key="'g'+i" x1="30" :y1="30 + (i-1) * 35" x2="570" :y2="30 + (i-1) * 35" stroke="#f0f0f0" stroke-width="1"/>
                 <polyline :points="timelinePath" fill="none" stroke="#2f3640" stroke-width="2" stroke-linejoin="round"/>
                 <circle v-for="(pt, i) in timelinePath.split(' ')" :key="'p'+i" :cx="pt.split(',')[0]" :cy="pt.split(',')[1]" r="3" fill="#2f3640"/>
                 <text v-for="(l, i) in timelineLabels" :key="'l'+i" :x="l.x" y="195" text-anchor="middle" fill="#999" font-size="10">{{ l.label }}</text>
-                <text x="25" y="35" text-anchor="end" fill="#bbb" font-size="9">{{ timelineMax }}</text>
+                <text x="25" y="35" text-anchor="end" fill="#bbb" font-size="9">{{ timelineMax }} 张</text>
                 <text x="25" y="170" text-anchor="end" fill="#bbb" font-size="9">0</text>
               </svg>
             </div>
@@ -920,6 +978,21 @@ const handleLogout = () => {
                   </div>
                   <span class="tag-count">{{ tag.count }}</span>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 用户贡献 Top 10 -->
+          <div class="chart-section" v-if="statsTopUsers.length">
+            <h3 class="chart-title">用户贡献 Top 10</h3>
+            <div class="tag-bars">
+              <div v-for="(user, i) in statsTopUsers" :key="user.username" class="tag-bar-row">
+                <span class="tag-rank">{{ i + 1 }}</span>
+                <span class="tag-name">{{ user.username }}</span>
+                <div class="tag-bar-track">
+                  <div class="tag-bar-fill" :style="{ width: (user.photo_count / userMaxCount * 100) + '%' }"></div>
+                </div>
+                <span class="tag-count">{{ user.photo_count }} 张 · {{ formatStorage(user.storage) }}</span>
               </div>
             </div>
           </div>
@@ -2086,7 +2159,7 @@ const handleLogout = () => {
 
 .stats-overview {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
   margin-bottom: 32px;
 }
@@ -2241,6 +2314,13 @@ const handleLogout = () => {
   color: var(--text-tertiary);
   text-align: right;
 }
+
+.coverage-bars { display: flex; flex-direction: column; gap: 10px; }
+.coverage-row { display: flex; align-items: center; gap: 10px; }
+.coverage-label { width: 80px; font-size: 0.84rem; color: var(--text-secondary); flex-shrink: 0; }
+.coverage-track { flex: 1; height: 8px; background: var(--n-200); border-radius: 4px; overflow: hidden; }
+.coverage-fill { height: 100%; border-radius: 4px; transition: width 0.5s ease; }
+.coverage-count { font-size: 0.82rem; color: var(--text-tertiary); white-space: nowrap; min-width: 140px; text-align: right; }
 
 @media (max-width: 700px) {
   .stats-overview {

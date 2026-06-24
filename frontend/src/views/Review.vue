@@ -74,6 +74,11 @@ const loadReview = async () => {
     await nextTick()
     setTimeout(() => { showContent.value = true }, 80)
     if (res.totalPhotos > 0) animateNumber(res.totalPhotos, 1500)
+
+    // 照片变化导致回顾过期时，自动重新生成
+    if (res.aiSummaryOutdated && !res.aiSummary) {
+      regenerateAiSummary()
+    }
   } catch (e) {
     reviewData.value = null
     reviewError.value = e.response?.data?.error || e.message || '加载失败'

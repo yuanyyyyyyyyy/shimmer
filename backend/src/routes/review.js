@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { createHash } from 'crypto';
 import { query } from '../config/database.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { summarizeReview, getAIConfig } from '../services/ai.js';
@@ -150,15 +151,29 @@ router.get('/:year', optionalAuth, async (req, res, next) => {
 
     // 检查缓存（非重新生成时）
     const cacheUserId = userId || 0;
+
+    // 计算当前年度照片 hash（用于检测照片变化）
+    const hashRow = await query(
+      `SELECT COUNT(*) as cnt, MAX(id) as max_id FROM photos p WHERE ${vis.where} AND YEAR(p.shot_date) = ?`,
+      [...vis.params, yearInt]
+    );
+    const currentPhotoHash = createHash('sha256')
+      .update(`${hashRow[0].cnt}-${hashRow[0].max_id}`)
+      .digest('hex')
+      .slice(0, 16);
+
     if (!shouldRegenerate) {
       const cached = await query(
-        'SELECT ai_summary, generated_at FROM review_cache WHERE year = ? AND user_id = ?',
+        'SELECT ai_summary, generated_at, photo_hash FROM review_cache WHERE year = ? AND user_id = ?',
         [yearInt, cacheUserId]
       );
       
       if (cached.length > 0 && cached[0].ai_summary) {
-        console.log(`[Review] 使用缓存的回顾 (year=${yearInt}, generated_at=${cached[0].generated_at})`);
+        // 检查照片是否变化
+        const outdated = cached[0].photo_hash && cached[0].photo_hash !== currentPhotoHash;
+        console.log(`[Review] 使用缓存的回顾 (year=${yearInt}, generated_at=${cached[0].generated_at}, outdated=${outdated})`);
         const reviewData = await buildReviewData(yearInt, cached[0].ai_summary, null, userId);
+        if (outdated) reviewData.aiSummaryOutdated = true;
         return res.json(reviewData);
       }
     }
@@ -274,14 +289,15 @@ router.get('/:year', optionalAuth, async (req, res, next) => {
       try {
         const aiConfig = await getAIConfig();
         await query(
-          `INSERT INTO review_cache (year, user_id, ai_summary, model, provider) 
-           VALUES (?, ?, ?, ?, ?)
+          `INSERT INTO review_cache (year, user_id, ai_summary, model, provider, photo_hash) 
+           VALUES (?, ?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE 
            ai_summary = VALUES(ai_summary), 
            model = VALUES(model), 
            provider = VALUES(provider),
+           photo_hash = VALUES(photo_hash),
            updated_at = CURRENT_TIMESTAMP`,
-          [yearInt, cacheUserId, aiSummary, aiConfig.model, aiConfig.provider]
+          [yearInt, cacheUserId, aiSummary, aiConfig.model, aiConfig.provider, currentPhotoHash]
         );
         console.log(`[Review] 已缓存回顾 (year=${yearInt}, user_id=${cacheUserId})`);
       } catch (cacheErr) {
