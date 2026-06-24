@@ -540,17 +540,26 @@ const timelineLabels = computed(() => {
   const years = [...new Set(data.map(d => d.month.slice(0, 4)))]
   const multiYear = years.length > 1
 
+  // 找出每年第一个出现的月份
+  const firstMonthOfYear = {}
+  data.forEach((d, i) => {
+    const y = d.month.slice(0, 4)
+    if (!(y in firstMonthOfYear)) firstMonthOfYear[y] = i
+  })
+
   // 数据点多时跳过中间标签，避免拥挤
   const skip = data.length > 12 ? Math.ceil(data.length / 12) : 1
 
   return data
     .map((d, i) => {
+      const year = d.month.slice(0, 4)
       const month = parseInt(d.month.slice(5), 10)
       let label
-      if (multiYear) {
-        label = month === 1 ? `${d.month.slice(0, 4)}/1` : `${month}`
+      if (multiYear && firstMonthOfYear[year] === i) {
+        // 每年第一个月份显示年份
+        label = `${year}/${month}`
       } else {
-        label = `${month}月`
+        label = `${month}`
       }
       return { index: i, label }
     })
