@@ -105,8 +105,14 @@ const createTag = async () => {
   
   try {
     const res = await tags.create({ name })
-    allTags.value.push(res.tag)
-    success('标签创建成功')
+    const existing = allTags.value.find(t => t.id === res.tag.id)
+    if (!existing) {
+      allTags.value.push(res.tag)
+    }
+    if (!selectedTags.value.includes(res.tag.id)) {
+      selectedTags.value.push(res.tag.id)
+    }
+    success(res.message === '标签已存在' ? `标签「${res.tag.name}」已存在，已自动选中` : '标签创建成功')
   } catch (e) {
     error(e.response?.data?.error || '创建失败')
   }

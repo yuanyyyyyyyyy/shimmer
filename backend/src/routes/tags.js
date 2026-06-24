@@ -88,27 +88,34 @@ router.delete('/:id', authenticateToken, async (req, res, next) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    
-    // 检查是否有自己的照片使用此标签
-    const [usage] = await db.query(`
-      SELECT 1 FROM photo_tags pt
-      JOIN photos p ON pt.photo_id = p.id
-      WHERE pt.tag_id = ? AND p.user_id = ?
-      LIMIT 1
-    `, [id, userId]);
-    
-    if (usage.length === 0) {
-      return res.status(404).json({ error: '标签不存在或无权删除' });
+
+    // 检查标签是否存在
+    const [tagRows] = await db.query('SELECT id, name FROM tags WHERE id = ?', [id]);
+    if (tagRows.length === 0) {
+      return res.status(404).json({ error: '标签不存在' });
     }
 
-    // 只删除自己照片上的标签关联，不删除标签本身（可能其他用户也在用）
+    // 删除当前用户照片上该标签的所有关联
     await db.query(`
       DELETE pt FROM photo_tags pt
       JOIN photos p ON pt.photo_id = p.id
       WHERE pt.tag_id = ? AND p.user_id = ?
     `, [id, userId]);
-    
-    res.json({ message: '标签已移除' });
+
+    // 检查是否还有其他用户的照片在使用此标签
+    const [otherUsage] = await db.query(`
+      SELECT 1 FROM photo_tags pt
+      JOIN photos p ON pt.photo_id = p.id
+      WHERE pt.tag_id = ? AND p.user_id != ?
+      LIMIT 1
+    `, [id, userId]);
+
+    // 没人用了，从 tags 表彻底删除
+    if (otherUsage.length === 0) {
+      await db.query('DELETE FROM tags WHERE id = ?', [id]);
+    }
+
+    res.json({ message: '标签已删除' });
   } catch (error) {
     next(error);
   }
